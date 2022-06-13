@@ -37,9 +37,19 @@ Zyklus:
 #define ENCODER_CLK_PIN 3
 #define ENCODER_DT_PIN 4
 
+//library stuff
+LiquidCrystal_I2C lcd(0x27,16,2);
+
+
+//umlaute graphics
+const byte gfx_uml_s[8] = {B01100, B10010, B10010, B11100, B10010, B10010, B10100, B10000};
+const byte gfx_uml_a[8] = {B01010, B00000, B01110, B00001, B01111, B10001, B01111, B00000};
+const byte gfx_uml_o[8] = {B01010, B00000, B01110, B10001, B10001, B10001, B01110, B00000};
+const byte gfx_uml_u[8] = {B01010, B00000, B10001, B10001, B10001, B10011, B01101, B00000};
+
 //structs are used to save to EEPROM more easily
 struct settings_s {
-  uint8_t tank_capacity = 0; //in L
+  uint8_t tank_capacity = 10; //in L
   int16_t max_mins_per_refill = -1; //error is thrown if the pump takes longer than that to fill the tank (5L/min pump wont take more than 5 minutes to fill a 20L tank)
 } settings;
 
@@ -73,11 +83,15 @@ tmElements_t current_time;
 uint8_t tank_fillings_remaining = 0; //if over 0, run pumping stuff til 0
 
 //global menu variables
-int8_t menu_page = 0; //-1 -> not in menu system, 0-> main page, 1 -> Timer Setup, 2 -> Tank Setup, 3 -> Clock Setup
+int8_t menu_page = 0; // 0-> main page, 1 -> Timer Setup, 2 -> Tank Setup, 3 -> Clock Setup
 int8_t menu_entry_cursor = 0; //-2 -> not in menu system, 0 -> page selection, 1-255 differs per page
 bool menu_editing = false;
 uint32_t last_display_update = 0; //this is a global var to allow calling for immediate update by setting this to 0
 uint32_t btn_down_time = 0;
+
+//menu vars for each page
+//1 manuell
+uint16_t page_1_irrigate_order = 0;
 
 //pages
 
@@ -85,16 +99,59 @@ uint32_t btn_down_time = 0;
 const char* page_names[N_OF_PAGES] = {"Status", "Manuell", "Timer", "Tank", "Uhr"};
 const uint8_t page_max_cursor[N_OF_PAGES] = {0, 1, 0, 0, 0};
 
-LiquidCrystal_I2C lcd(0x27,16,2);
+
+int16_t literToTanks(uint16_t liters_to_convert) {
+  if (liters_to_convert % settings.tank_capacity == 0) {
+    return liters_to_convert / settings.tank_capacity;
+  }
+  else {
+    return ((float)liters_to_convert / (float)settings.tank_capacity)+1;
+  }
+}
 
 
 void change_menu_entry(bool dir) { //true is up
   if (menu_entry_cursor == 0) {
-    menu_page += dir ? 1 : -1;
+      menu_page += dir ? 1 : -1;
+      if (menu_page >= N_OF_PAGES) menu_page = N_OF_PAGES-1;
+      if (menu_page < 0) menu_page = 0;
     return;
   }
   switch (menu_page) {
+    case 1: //manual
+      if (menu_entry_cursor == 0) {
+        page_1_irrigate_order += dir ? 10 : -10;
+        if (page_1_irrigate_order > 1000) page_1_irrigate_order = 1000;
+        if (page_1_irrigate_order < 0) page_1_irrigate_order = 0;
+      }
+      break;
+    case 2:
+      break;
+    case 3:
+      break;
+    case 4:
+      break;
+
+
+    default:
+    case -1:
+      break;
+  }
+}
+
+void edit_change_callback() {
+  switch (menu_page) {
     case 1:
+      if (!menu_editing) {
+        tank_fillings_remaining = literToTanks(page_1_irrigate_order);
+      }
+      break;
+    case 2:
+      break;
+    case 3:
+      break;
+    case 4:
+      break;
 
 
     default:
@@ -127,6 +184,7 @@ void down_callback() {
 
 void btn_callback() {
   menu_editing = !menu_editing;
+  edit_change_callback();
   last_display_update = 0;
 }
 
@@ -170,9 +228,13 @@ void setup() {
 
   Serial.begin(9600);
 
+  Serial.println(F("LCD setup..."));
   lcd.init();
   lcd.backlight();
-
+  lcd.createChar(4, gfx_uml_s);
+  lcd.createChar(5, gfx_uml_a);
+  lcd.createChar(6, gfx_uml_o);
+  lcd.createChar(7, gfx_uml_u);
 
   //rtc setup
   Serial.println(F("Setting up RTC..."));
@@ -231,13 +293,14 @@ void update_display() {
       print_page_basics();
       switch (menu_page) {
         default:
-          menu_page = 0;
-        case -1:
+          Serial.println(F("Unknown Menu Entry Selected!"));
+          lcd.print(F("PAGE UNKNOWN!!"));
+          //menu_page = 0;
           break;
         case 0:
             switch (system_state) {
               case STATUS_IDLE:
-                lcd.print(F("Stby. bis "));
+                lcd.print(F("Stby. bis"));
                 lcd.setCursor(11,1);
                 char til_buf[5];
                 sprintf(til_buf, "%02u:%02u", irrigation_timer.start_hour, irrigation_timer.start_minute);
@@ -269,9 +332,9 @@ void update_display() {
             }
           break;
         case 1:
-          lcd.print(F("Gieße "));
+          lcd.print(F("Gie"));lcd.write(byte(4));lcd.print(F("e "));
           lcd.print(menu_entry_cursor == 1 ? (menu_editing ? F("{") : F("[")) : F("("));
-          lcd.print(" ");
+          lcd.print(page_1_irrigate_order);
           lcd.print(menu_entry_cursor == 1 ? (menu_editing ? F("}") : F("]")) : F(")"));
           lcd.print(F("L"));
           break;
@@ -373,8 +436,20 @@ void read_clock_and_stuff() {
   }
 }
 
+void handle_serial() {
+  if (Serial.available()) {
+    uint8_t controlCharacter = Serial.read();
+
+    if (controlCharacter == 'd') up_callback();
+    if (controlCharacter == 'a') down_callback();
+    if (controlCharacter == 's') btn_callback();
+  }
+}
+
 void loop() {
   read_clock_and_stuff();
   handle_pump_stuff();
   update_display();
+
+  handle_serial();
 }
