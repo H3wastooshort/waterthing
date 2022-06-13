@@ -223,6 +223,7 @@ void edit_change_callback() {
     case PAGE_TIMER:
       if (!menu_editing) { //if leaving edit mode
         if (menu_entry_cursor > 1) {
+          irrigation_timer.last_watering_day = 0;
           EEPROM.put(0+sizeof(settings), irrigation_timer); //save timer settings when leaving
         }
       }
@@ -437,13 +438,13 @@ void update_display() {
                 break;
               case STATUS_EMPTYING:
                 lcd.print(F("Leere Tank  "));
-                lcd.print(irrigation_timer.fillings_to_irrigate - tank_fillings_remaining +1);
+                lcd.print(tank_fillings_remaining);
                 lcd.print(F("/"));
                 lcd.print(irrigation_timer.fillings_to_irrigate);
                 break;
               case STATUS_PUMPING:
-                lcd.print(F("Fülle Tank  "));
-                lcd.print(irrigation_timer.fillings_to_irrigate - tank_fillings_remaining +1);
+                lcd.print(F("F"));lcd.write(byte(GFX_ID_UML_U));lcd.print(F("lle Tank  "));
+                lcd.print(tank_fillings_remaining);
                 lcd.print(F("/"));
                 lcd.print(irrigation_timer.fillings_to_irrigate);
                 break;
@@ -536,7 +537,7 @@ void handle_pump_stuff() {
       if (component_errors.rtc_missing) {system_state = STATUS_GENERAL_FAIL; return;}
       if (component_errors.rtc_unset) {system_state = STATUS_NO_TIME; return;}
 
-      if((irrigation_timer.start_hour < current_time.Hour and irrigation_timer.start_minute < current_time.Minute) and (irrigation_timer.last_watering_day != current_time.Day)) { //
+      if((irrigation_timer.start_hour <= current_time.Hour and irrigation_timer.start_minute <= current_time.Minute) and (irrigation_timer.last_watering_day != current_time.Day)) { //
         tank_fillings_remaining = irrigation_timer.fillings_to_irrigate;
         irrigation_timer.last_watering_day = current_time.Day;
         EEPROM.put(0+sizeof(settings),irrigation_timer);
@@ -549,7 +550,7 @@ void handle_pump_stuff() {
     case STATUS_EMPTYING:
       digitalWrite(PUMP_PIN, LOW);
       digitalWrite(VALVE_PIN, HIGH);
-      if (!digitalRead(TANK_EMPTY_PIN)) {
+      if (digitalRead(TANK_EMPTY_PIN)) {
         tank_fillings_remaining--;
         if (!digitalRead(LOW_WATER_PIN)) {
           system_state = STATUS_NO_WATER;
@@ -586,7 +587,9 @@ void handle_pump_stuff() {
 
      default:
      case STATUS_GENERAL_FAIL:
-       break;
+      digitalWrite(PUMP_PIN, LOW);
+      digitalWrite(VALVE_PIN, LOW);
+      break;
   }
 }
 
