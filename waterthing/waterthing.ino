@@ -37,13 +37,16 @@ Zyklus:
 #define ENCODER_CLK_PIN 3
 #define ENCODER_DT_PIN 4
 
+#define EEPROM_MAGIC_NUMBER 42
+
 //library stuff
 LiquidCrystal_I2C lcd(0x27,16,2);
 
 
 //const byte gfx_drop[8] = {B00100, B00100, B01110, B01110, B10111, B11111, B01110, B00000};
 const byte gfx_no_water[8] = {B00001, B00001, B01000, B01101, B01100, B10110, B11110, B01100};
-const byte gfx_idle[8] = {B00100, B00100, B01110, B10111, B11111, B01110, B00000, B10101};
+const byte gfx_idle[8] = {B00100, B00100, B01110, B10111, B11111, B01110, B00000, B10101}; //drop with ... version
+//const byte gfx_idle[8] = {B00110, B00011, B01100, B00110, B11000, B01000, B10000, B11000}; //zZZ version
 const byte gfx_fill[8] = {B00100, B10101, B01110, B00100, B00000, B10001, B10001, B11111};
 const byte gfx_drain[8] = {B10001, B10001, B11111, B00000, B00100, B10101, B01110, B00100};
 
@@ -71,8 +74,8 @@ struct settings_s {
 } settings;
 
 struct i_timer_s {
-  uint8_t start_hour = 0;
-  uint8_t start_minute = 0;
+  int8_t start_hour = 0;
+  int8_t start_minute = 0;
   uint16_t fillings_to_irrigate = 0;
   uint8_t last_watering_day = 0;
 } irrigation_timer;
@@ -122,7 +125,7 @@ enum pages_enum {
 
 #define N_OF_PAGES 6
 const char* page_names[N_OF_PAGES] = {"Status", "Manuell", "Timer", "Tank", "Uhr1", "Uhr2"};
-const uint8_t page_max_cursor[N_OF_PAGES] = {0, 1, 0, 0, 2, 3};
+const uint8_t page_max_cursor[N_OF_PAGES] = {0, 1, 3, 1, 2, 3};
 
 
 int16_t literToTanks(uint16_t liters_to_convert) {
@@ -134,6 +137,10 @@ int16_t literToTanks(uint16_t liters_to_convert) {
   }
 }
 
+void lcd_print_menu_bracket(uint8_t for_menu_entry, bool ending_bracket) {
+  if (ending_bracket) lcd.print(menu_entry_cursor == for_menu_entry ? (menu_editing ? F("}") : F("]")) : F(")"));
+  else lcd.print(menu_entry_cursor == for_menu_entry ? (menu_editing ? F("{") : F("[")) : F("("));
+}
 
 void change_menu_entry(bool dir) { //true is up
   if (menu_entry_cursor == 0) {
@@ -153,8 +160,31 @@ void change_menu_entry(bool dir) { //true is up
       }
       break;
     case PAGE_TIMER:
+      switch (menu_entry_cursor) {
+        case 1:
+          irrigation_timer.start_hour += dir ? 1 : -1;
+          if (irrigation_timer.start_hour >= 23) irrigation_timer.start_hour = 23;
+          if (irrigation_timer.start_hour < 0) irrigation_timer.start_hour = 0;
+          break;
+        case 2:
+          irrigation_timer.start_minute += dir ? 1 : -1;
+          if (irrigation_timer.start_minute >= 59) irrigation_timer.start_minute = 59;
+          if (irrigation_timer.start_minute < 1) irrigation_timer.start_minute = 1;
+          break;
+        case 3:
+          irrigation_timer.fillings_to_irrigate += dir ? 1 : -1;
+          if (irrigation_timer.fillings_to_irrigate >= literToTanks(900)) irrigation_timer.fillings_to_irrigate = literToTanks(900);
+          if (irrigation_timer.fillings_to_irrigate < 0 or irrigation_timer.fillings_to_irrigate == 0xFFFF) irrigation_timer.fillings_to_irrigate = 0;
+          break;
+
+        default:
+          break;
+      }
       break;
     case PAGE_TANK:
+      settings.tank_capacity += dir ? 1 : -1;
+      if (settings.tank_capacity >= 200) settings.tank_capacity = 200;
+      if (settings.tank_capacity < 0) settings.tank_capacity = 0;
       break;
     case PAGE_CLOCK1:
       break;
@@ -191,8 +221,18 @@ void edit_change_callback() {
       }
       break;
     case PAGE_TIMER:
+      if (!menu_editing) { //if leaving edit mode
+        if (menu_entry_cursor > 1) {
+          EEPROM.put(0+sizeof(settings), irrigation_timer); //save timer settings when leaving
+        }
+      }
       break;
     case PAGE_TANK:
+      if (!menu_editing) { //if leaving edit mode
+        if (menu_entry_cursor > 1) {
+          EEPROM.put(0, settings); //save settings when leaving
+        }
+      }
       break;
     case PAGE_CLOCK1:
       break;
@@ -287,6 +327,28 @@ void setup() {
   lcd.createChar(GFX_ID_UML_O, gfx_uml_o);
   lcd.createChar(GFX_ID_UML_U, gfx_uml_u);
 
+  //EEPROM
+  Serial.println(F("Reading EEPROM..."));
+  lcd.clear();
+  lcd.home();
+  lcd.print(F("Reading EEPROM..."));
+  lcd.setCursor(0, 1);
+  if (EEPROM.read(EEPROM.length() - 1) == EEPROM_MAGIC_NUMBER) {
+    EEPROM.get(0,settings);
+    EEPROM.get(0+sizeof(settings), irrigation_timer);
+    //EEPROM.get(0+sizeof(settings)+sizeof(irrigation_timer), something_else);
+    lcd.print(F("OK"));
+  }
+  else {
+    EEPROM.put(0,settings);
+    EEPROM.put(0+sizeof(settings), irrigation_timer);
+    //EEPROM.put(0+sizeof(settings)+sizeof(irrigation_timer), something_else);
+    EEPROM.write(EEPROM.length() - 1, EEPROM_MAGIC_NUMBER);
+    lcd.print(F("Initialized"));
+    delay(900);
+  }
+  delay(100);
+
   //rtc setup
   Serial.println(F("Setting up RTC..."));
   lcd.clear();
@@ -299,11 +361,8 @@ void setup() {
   else {
     if (RTC.chipPresent()) { //if date invalid but RTC present
       Serial.println(F("RTC NOT SET"));
-      lcd.setCursor(0, 0);
       lcd.print(F("RTC NOT SET"));
-      lcd.setCursor(0, 1);
-      lcd.print(F("Setings->SetDate")); //Typo on purpose, 16char limit
-      delay(5000);
+      delay(1000);
     }
     else { //if RTC missing
       Serial.println(F("RTC MISSING!"));
@@ -316,6 +375,7 @@ void setup() {
       }
     }
   }
+  delay(100);
 
   attachInterrupt(digitalPinToInterrupt(BTN_PIN), handle_btn_down, FALLING);
   attachInterrupt(digitalPinToInterrupt(BTN_PIN), handle_btn_up, RISING);
@@ -327,15 +387,15 @@ void setup() {
 void print_page_basics() {
   lcd.clear();
   lcd.home();
-  lcd.print(menu_entry_cursor == 0 ? (menu_editing ? F("{") : F("[")) : F("("));
+  lcd_print_menu_bracket(0,false);
   lcd.print(menu_page);
-  lcd.print(menu_entry_cursor == 0 ? (menu_editing ? F("}") : F("]")) : F(")"));
+  lcd_print_menu_bracket(0,true);
   lcd.print(F(""));
   lcd.print(page_names[menu_page]);
   lcd.setCursor(10,0);
   switch (system_state) {
     case STATUS_IDLE:
-      lcd.write(byte(GFX_ID_IDLE));
+      lcd.write(irrigation_timer.fillings_to_irrigate == 0 ? 'X' : byte(GFX_ID_IDLE));
       break;
     case STATUS_PUMPING:
       lcd.write(byte(GFX_ID_FILL));
@@ -403,35 +463,59 @@ void update_display() {
         case PAGE_MAN:
           if (tank_fillings_remaining == 0) {
             lcd.print(F("Gie"));lcd.write(byte(GFX_ID_UML_S));lcd.print(F("e "));
-            lcd.print(menu_entry_cursor == 1 ? (menu_editing ? F("{") : F("[")) : F("("));
+            lcd_print_menu_bracket(1,false);
             lcd.print(page_1_irrigate_order);
-            lcd.print(menu_entry_cursor == 1 ? (menu_editing ? F("}") : F("]")) : F(")"));
-            lcd.print(F("L jetzt"));
+            lcd_print_menu_bracket(1,true);
+            lcd.print(F("L jetzt")); //the jetzt gets cut off when selecting more than 0L but thats not too bad
           }
           else {
-            lcd.print(menu_entry_cursor == 1 ? (menu_editing ? F("{") : F("[")) : F("("));
+            lcd_print_menu_bracket(1,false);
             lcd.print(F("Abbrechen"));
-            lcd.print(menu_entry_cursor == 1 ? (menu_editing ? F("}") : F("]")) : F(")"));
+            lcd_print_menu_bracket(1,true);
           }
           break;
-      }
+        
+        case PAGE_TIMER:
+          lcd_print_menu_bracket(1,false);
+          if (irrigation_timer.start_hour<10) lcd.print(0);
+          lcd.print(irrigation_timer.start_hour);
+          lcd_print_menu_bracket(1,true);
+          lcd.print(F(":"));
+          lcd_print_menu_bracket(2,false);
+          if (irrigation_timer.start_minute<10) lcd.print(0);
+          lcd.print(irrigation_timer.start_minute);
+          lcd_print_menu_bracket(2,true);
+          lcd.write(byte(126));
+          lcd_print_menu_bracket(3,false);
+          lcd.print(round(irrigation_timer.fillings_to_irrigate * settings.tank_capacity));
+          lcd_print_menu_bracket(3,true);
+          lcd.print(F("L"));
+          break;
+        
+        case PAGE_TANK:
+         lcd.print(F("Tank Vol.:"));
+          lcd_print_menu_bracket(1,false);
+          lcd.print(settings.tank_capacity);
+          lcd_print_menu_bracket(1,true);
+          lcd.print(F("L"));
+    }
     last_display_update = millis();
   }
 
   //status led
   switch (system_state) {
-              case STATUS_IDLE:
-                set_status_led(0,1,0);
-                break;
-              case STATUS_EMPTYING:
-                set_status_led(0,0,1);
-                break;
-              case STATUS_PUMPING:
-                set_status_led(0,0,1);
-                break;
-        case STATUS_NO_WATER:
+    case STATUS_IDLE:
+      set_status_led(0,1,0);
+      break;
+    case STATUS_EMPTYING:
+      set_status_led(0,0,1);
+      break;
+    case STATUS_PUMPING:
+      set_status_led(0,0,1);
+      break;
+    case STATUS_NO_WATER:
       set_status_led(1,0,0);
-     break;
+      break;
     case STATUS_NO_TIME:
       set_status_led(1,0,0);
       break;
@@ -454,7 +538,8 @@ void handle_pump_stuff() {
 
       if((irrigation_timer.start_hour < current_time.Hour and irrigation_timer.start_minute < current_time.Minute) and (irrigation_timer.last_watering_day != current_time.Day)) { //
         tank_fillings_remaining = irrigation_timer.fillings_to_irrigate;
-        irrigation_timer.last_watering_day != current_time.Day;
+        irrigation_timer.last_watering_day = current_time.Day;
+        EEPROM.put(0+sizeof(settings),irrigation_timer);
       }
       
       if (tank_fillings_remaining > 0 and digitalRead(LOW_WATER_PIN)) system_state = STATUS_PUMPING;
