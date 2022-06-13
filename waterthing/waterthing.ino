@@ -41,11 +41,28 @@ Zyklus:
 LiquidCrystal_I2C lcd(0x27,16,2);
 
 
+//const byte gfx_drop[8] = {B00100, B00100, B01110, B01110, B10111, B11111, B01110, B00000};
+const byte gfx_no_water[8] = {B00001, B00001, B01000, B01101, B01100, B10110, B11110, B01100};
+const byte gfx_idle[8] = {B00100, B00100, B01110, B10111, B11111, B01110, B00000, B10101};
+const byte gfx_fill[8] = {B00100, B10101, B01110, B00100, B00000, B10001, B10001, B11111};
+const byte gfx_drain[8] = {B10001, B10001, B11111, B00000, B00100, B10101, B01110, B00100};
+
 //umlaute graphics
 const byte gfx_uml_s[8] = {B01100, B10010, B10010, B11100, B10010, B10010, B10100, B10000};
 const byte gfx_uml_a[8] = {B01010, B00000, B01110, B00001, B01111, B10001, B01111, B00000};
 const byte gfx_uml_o[8] = {B01010, B00000, B01110, B10001, B10001, B10001, B01110, B00000};
 const byte gfx_uml_u[8] = {B01010, B00000, B10001, B10001, B10001, B10011, B01101, B00000};
+
+enum gfx_IDs { //enum for naming display gfx ids
+  GFX_ID_IDLE = 0,
+  GFX_ID_NO_WATER = 1, //GFX_ID_DROP = 1,
+  GFX_ID_FILL = 2,
+  GFX_ID_DRAIN = 3,
+  GFX_ID_UML_S = 4,
+  GFX_ID_UML_A = 5,
+  GFX_ID_UML_O = 6,
+  GFX_ID_UML_U = 7
+};
 
 //structs are used to save to EEPROM more easily
 struct settings_s {
@@ -80,7 +97,7 @@ enum system_state_e {
 enum system_state_e system_state = STATUS_IDLE;
 tmElements_t current_time;
 
-uint8_t tank_fillings_remaining = 0; //if over 0, run pumping stuff til 0
+uint16_t tank_fillings_remaining = 0; //if over 0, run pumping stuff til 0
 
 //global menu variables
 int8_t menu_page = 0; // 0-> main page, 1 -> Timer Setup, 2 -> Tank Setup, 3 -> Clock Setup
@@ -94,10 +111,18 @@ uint32_t btn_down_time = 0;
 uint16_t page_1_irrigate_order = 0;
 
 //pages
+enum pages_enum {
+  PAGE_STATUS = 0,
+  PAGE_MAN = 1,
+  PAGE_TIMER = 2,
+  PAGE_TANK = 3,
+  PAGE_CLOCK1 = 4,
+  PAGE_CLOCK2 = 5
+};
 
-#define N_OF_PAGES 5
-const char* page_names[N_OF_PAGES] = {"Status", "Manuell", "Timer", "Tank", "Uhr"};
-const uint8_t page_max_cursor[N_OF_PAGES] = {0, 1, 0, 0, 0};
+#define N_OF_PAGES 6
+const char* page_names[N_OF_PAGES] = {"Status", "Manuell", "Timer", "Tank", "Uhr1", "Uhr2"};
+const uint8_t page_max_cursor[N_OF_PAGES] = {0, 1, 0, 0, 2, 3};
 
 
 int16_t literToTanks(uint16_t liters_to_convert) {
@@ -118,18 +143,22 @@ void change_menu_entry(bool dir) { //true is up
     return;
   }
   switch (menu_page) {
-    case 1: //manual
-      if (menu_entry_cursor == 0) {
-        page_1_irrigate_order += dir ? 10 : -10;
-        if (page_1_irrigate_order > 1000) page_1_irrigate_order = 1000;
-        if (page_1_irrigate_order < 0) page_1_irrigate_order = 0;
+    case PAGE_MAN: //manual
+      if (menu_entry_cursor == 1) {
+        if (tank_fillings_remaining == 0) {
+          page_1_irrigate_order += dir ? settings.tank_capacity : settings.tank_capacity*-1;
+          if (page_1_irrigate_order > 990) page_1_irrigate_order = 990;
+          if (page_1_irrigate_order < 0) page_1_irrigate_order = 0;
+        }
       }
       break;
-    case 2:
+    case PAGE_TIMER:
       break;
-    case 3:
+    case PAGE_TANK:
       break;
-    case 4:
+    case PAGE_CLOCK1:
+      break;
+    case PAGE_CLOCK2:
       break;
 
 
@@ -141,16 +170,33 @@ void change_menu_entry(bool dir) { //true is up
 
 void edit_change_callback() {
   switch (menu_page) {
-    case 1:
-      if (!menu_editing) {
-        tank_fillings_remaining = literToTanks(page_1_irrigate_order);
+    case PAGE_MAN:
+      if (menu_entry_cursor == 1) {
+        if (tank_fillings_remaining == 0) {
+          if (!menu_editing) { //if leaving edit mode
+            tank_fillings_remaining = literToTanks(page_1_irrigate_order);
+            Serial.print(F("Manual water call for "));
+            Serial.print(page_1_irrigate_order);
+            Serial.print(F("L wich makes "));
+            Serial.print(tank_fillings_remaining);
+            Serial.println(F(" tank fillings"));
+          }
+        }
+        else {
+          system_state = STATUS_IDLE;
+          tank_fillings_remaining = 0;
+          menu_editing = false;
+          Serial.print(F("Watering canceled"));
+        }
       }
       break;
-    case 2:
+    case PAGE_TIMER:
       break;
-    case 3:
+    case PAGE_TANK:
       break;
-    case 4:
+    case PAGE_CLOCK1:
+      break;
+    case PAGE_CLOCK2:
       break;
 
 
@@ -231,10 +277,15 @@ void setup() {
   Serial.println(F("LCD setup..."));
   lcd.init();
   lcd.backlight();
-  lcd.createChar(4, gfx_uml_s);
-  lcd.createChar(5, gfx_uml_a);
-  lcd.createChar(6, gfx_uml_o);
-  lcd.createChar(7, gfx_uml_u);
+  lcd.createChar(GFX_ID_IDLE, gfx_idle);
+  //lcd.createChar(GFX_ID_DROP, gfx_drop);
+  lcd.createChar(GFX_ID_NO_WATER, gfx_no_water);
+  lcd.createChar(GFX_ID_FILL, gfx_fill);
+  lcd.createChar(GFX_ID_DRAIN, gfx_drain);
+  lcd.createChar(GFX_ID_UML_S, gfx_uml_s);
+  lcd.createChar(GFX_ID_UML_A, gfx_uml_a);
+  lcd.createChar(GFX_ID_UML_O, gfx_uml_o);
+  lcd.createChar(GFX_ID_UML_U, gfx_uml_u);
 
   //rtc setup
   Serial.println(F("Setting up RTC..."));
@@ -281,7 +332,25 @@ void print_page_basics() {
   lcd.print(menu_entry_cursor == 0 ? (menu_editing ? F("}") : F("]")) : F(")"));
   lcd.print(F(""));
   lcd.print(page_names[menu_page]);
-  lcd.setCursor(11,0);
+  lcd.setCursor(10,0);
+  switch (system_state) {
+    case STATUS_IDLE:
+      lcd.write(byte(GFX_ID_IDLE));
+      break;
+    case STATUS_PUMPING:
+      lcd.write(byte(GFX_ID_FILL));
+      break;
+    case STATUS_EMPTYING:
+      lcd.write(byte(GFX_ID_DRAIN));
+      break;
+    case STATUS_NO_WATER:
+      lcd.write(byte(GFX_ID_NO_WATER));
+      break;
+    case STATUS_NO_TIME:
+    case STATUS_GENERAL_FAIL:
+      lcd.write('!');
+      break;
+  }
   char clock_buf[5];
   sprintf(clock_buf, "%02u:%02u", current_time.Hour, current_time.Minute);
   lcd.print(clock_buf);
@@ -297,7 +366,7 @@ void update_display() {
           lcd.print(F("PAGE UNKNOWN!!"));
           //menu_page = 0;
           break;
-        case 0:
+        case PAGE_STATUS:
             switch (system_state) {
               case STATUS_IDLE:
                 lcd.print(F("Stby. bis"));
@@ -331,12 +400,19 @@ void update_display() {
                 break;
             }
           break;
-        case 1:
-          lcd.print(F("Gie"));lcd.write(byte(4));lcd.print(F("e "));
-          lcd.print(menu_entry_cursor == 1 ? (menu_editing ? F("{") : F("[")) : F("("));
-          lcd.print(page_1_irrigate_order);
-          lcd.print(menu_entry_cursor == 1 ? (menu_editing ? F("}") : F("]")) : F(")"));
-          lcd.print(F("L"));
+        case PAGE_MAN:
+          if (tank_fillings_remaining == 0) {
+            lcd.print(F("Gie"));lcd.write(byte(GFX_ID_UML_S));lcd.print(F("e "));
+            lcd.print(menu_entry_cursor == 1 ? (menu_editing ? F("{") : F("[")) : F("("));
+            lcd.print(page_1_irrigate_order);
+            lcd.print(menu_entry_cursor == 1 ? (menu_editing ? F("}") : F("]")) : F(")"));
+            lcd.print(F("L jetzt"));
+          }
+          else {
+            lcd.print(menu_entry_cursor == 1 ? (menu_editing ? F("{") : F("[")) : F("("));
+            lcd.print(F("Abbrechen"));
+            lcd.print(menu_entry_cursor == 1 ? (menu_editing ? F("}") : F("]")) : F(")"));
+          }
           break;
       }
     last_display_update = millis();
@@ -390,7 +466,11 @@ void handle_pump_stuff() {
       digitalWrite(VALVE_PIN, HIGH);
       if (!digitalRead(TANK_EMPTY_PIN)) {
         tank_fillings_remaining--;
-        if (tank_fillings_remaining==0 or !digitalRead(LOW_WATER_PIN)) {
+        if (!digitalRead(LOW_WATER_PIN)) {
+          system_state = STATUS_NO_WATER;
+          return;
+        }
+        if (tank_fillings_remaining==0) {
           system_state = STATUS_IDLE;
         }
         else {
