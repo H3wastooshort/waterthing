@@ -108,6 +108,8 @@ int8_t menu_entry_cursor = 0; //-2 -> not in menu system, 0 -> page selection, 1
 bool menu_editing = false;
 uint32_t last_display_update = 0; //this is a global var to allow calling for immediate update by setting this to 0
 uint32_t btn_down_time = 0;
+uint8_t button_queue[32]; //0 means no btn, 1 means down, 2 means up, 3 means enter
+uint8_t button_queue_add_pos = 0; //0-31
 
 //menu vars for each page
 //1 manuell
@@ -319,7 +321,7 @@ void handle_btn_down() {
 void handle_btn_up() {
   uint32_t btn_duration = millis() - btn_down_time;
   if (btn_duration >= DEBOUNCE_DELAY) {
-    btn_callback();
+    button_queue[button_queue_add_pos] = 3; //3 is for enter button
   }
 }
 
@@ -429,6 +431,9 @@ void setup() {
   }
   delay(100);
 
+  for (uint8_t q_pos = 0; q_pos < 32; q_pos++) { //make sure they are 0
+    button_queue[q_pos] = 0;
+  }
   attachInterrupt(digitalPinToInterrupt(BTN_PIN), handle_btn_down, FALLING);
   attachInterrupt(digitalPinToInterrupt(BTN_PIN), handle_btn_up, RISING);
 
@@ -696,9 +701,32 @@ void handle_serial() {
   }
 }
 
+void do_stored_buttons() {
+  for (uint8_t q_pos = 0; q_pos <= button_queue_add_pos; q_pos++) { //make sure they are 0
+    switch (button_queue[q_pos]) {
+      case 1:
+        down_callback();
+        break;
+      case 2:
+        up_callback();
+        break;
+      case 3:
+        btn_callback();
+        break;
+      case 0:
+        //return; //save time by stopping at first sight of 0, not needed due to only going up button_queue_add_pos
+      default:
+        break;
+    }
+    button_queue[q_pos] = 0; //clear position so it wont get executed again
+  }
+  button_queue_add_pos = 0;
+}
+
 void loop() {
   read_clock_and_stuff();
   handle_pump_stuff();
+  do_stored_buttons();
   update_display();
 
   handle_serial();
