@@ -23,10 +23,13 @@ Zyklus:
 #include <DS1307RTC.h>
 
 #define LOW_WATER_PIN 7
-#define TANK_EMPTY_PIN 8
-#define TANK_FULL_PIN 9
+#define TANK_BOTTOM_PIN 8
+#define TANK_TOP_PIN 9
 #define PUMP_PIN 10
 #define VALVE_PIN 11
+#define LOW_WATER_ON_LEVEL LOW //level of low water pin when the low water sensor detects low water. sensor will probably be mounted upside-down so no water means low
+#define TANK_BOTTOM_ON_LEVEL HIGH //level of TANK_BOTTOM_PIN when water has reached the bottom sensor. sensor will probably be mounted upside-down so on means high
+#define TANK_TOP_ON_LEVEL LOW //level of TANK_TOP_PIN when water has reached the top sensor
 
 #define RED_LED_PIN A1
 #define GREEN_LED_PIN A2
@@ -45,6 +48,7 @@ LiquidCrystal_I2C lcd(0x27,16,2);
 
 //const byte gfx_drop[8] = {B00100, B00100, B01110, B01110, B10111, B11111, B01110, B00000};
 const byte gfx_no_water[8] = {B00001, B00001, B01000, B01101, B01100, B10110, B11110, B01100};
+//const byte gfx_idle[8] = {B00000, B00000, B00000, B00000, B00000, B00000, B10101, B00000}; //... version
 const byte gfx_idle[8] = {B00100, B00100, B01110, B10111, B11111, B01110, B00000, B10101}; //drop with ... version
 //const byte gfx_idle[8] = {B00110, B00011, B01100, B00110, B11000, B01000, B10000, B11000}; //zZZ version
 const byte gfx_fill[8] = {B00100, B10101, B01110, B00100, B00000, B10001, B10001, B11111};
@@ -76,7 +80,7 @@ struct settings_s {
 struct i_timer_s {
   int8_t start_hour = 0;
   int8_t start_minute = 0;
-  uint16_t fillings_to_irrigate = 0;
+  uint16_t fillings_to_irrigate = 0; //when 0, system is turned off
   uint8_t last_watering_day = 0;
 } irrigation_timer;
 
@@ -337,8 +341,8 @@ void set_status_led(bool r, bool g, bool b) {
 void setup() {
   //pump stuff
   pinMode(LOW_WATER_PIN, INPUT_PULLUP);
-  pinMode(TANK_EMPTY_PIN, INPUT_PULLUP);
-  pinMode(TANK_FULL_PIN, INPUT_PULLUP);
+  pinMode(TANK_BOTTOM_PIN, INPUT_PULLUP);
+  pinMode(TANK_TOP_PIN, INPUT_PULLUP);
   pinMode(PUMP_PIN, OUTPUT);
   pinMode(VALVE_PIN, OUTPUT);
   digitalWrite(PUMP_PIN, LOW);
@@ -351,6 +355,11 @@ void setup() {
   digitalWrite(RED_LED_PIN, LOW);
   digitalWrite(GREEN_LED_PIN, LOW);
   digitalWrite(BLUE_LED_PIN, LOW);
+
+  //buttons
+  pinMode(ENCODER_CLK_PIN, INPUT_PULLUP);
+  pinMode(ENCODER_DT_PIN, INPUT_PULLUP);
+  pinMode(BTN_PIN, INPUT_PULLUP);
 
   set_status_led(1,1,0);
 
@@ -488,11 +497,19 @@ void update_display() {
         case PAGE_STATUS:
             switch (system_state) {
               case STATUS_IDLE:
-                lcd.print(F("Stby. bis"));
-                lcd.setCursor(11,1);
-                char til_buf[5];
-                sprintf(til_buf, "%02u:%02u", irrigation_timer.start_hour, irrigation_timer.start_minute);
-                lcd.print(til_buf);
+                if (irrigation_timer.fillings_to_irrigate == 0) {
+                  lcd.print(F("Ausgeschaltet"));
+                }
+                else if (irrigation_timer.last_watering_day == current_time.Day) {
+                  lcd.print(F("Fertig f\x07r Heute"));
+                }
+                else {
+                  lcd.print(F("Stby. bis"));
+                  lcd.setCursor(11,1);
+                  char til_buf[5];
+                  snprintf(til_buf, 5, "%02u:%02u", irrigation_timer.start_hour, irrigation_timer.start_minute);
+                  lcd.print(til_buf);
+                }
                 break;
               case STATUS_EMPTYING:
                 lcd.print(F("Leere Tank  "));
@@ -593,7 +610,8 @@ void update_display() {
   //status led
   switch (system_state) {
     case STATUS_IDLE:
-      set_status_led(0,1,0);
+      if (irrigation_timer.fillings_to_irrigate == 0) set_status_led(1,0,1);
+      else set_status_led(0,1,0);
       break;
     case STATUS_EMPTYING:
       set_status_led(0,0,1);
@@ -630,18 +648,18 @@ void handle_pump_stuff() {
         EEPROM.put(0+sizeof(settings),irrigation_timer);
       }
       
-      if (tank_fillings_remaining > 0 and digitalRead(LOW_WATER_PIN)) system_state = STATUS_PUMPING;
-      if (!digitalRead(LOW_WATER_PIN)) system_state = STATUS_NO_WATER;
-      if (!digitalRead(TANK_EMPTY_PIN)) system_state = STATUS_EMPTYING; //if at boot there is still water in the tank, empty it.
+      if (tank_fillings_remaining > 0 and digitalRead(LOW_WATER_PIN) != LOW_WATER_ON_LEVEL) system_state = STATUS_PUMPING;
+      if (digitalRead(LOW_WATER_PIN) == LOW_WATER_ON_LEVEL) system_state = STATUS_NO_WATER;
+      if (digitalRead(TANK_BOTTOM_PIN) == TANK_BOTTOM_ON_LEVEL) system_state = STATUS_EMPTYING; //if at boot there is still water in the tank, empty it.
       break;
 
     case STATUS_EMPTYING:
       digitalWrite(PUMP_PIN, LOW);
       digitalWrite(VALVE_PIN, HIGH);
-      if (digitalRead(TANK_EMPTY_PIN) and digitalRead(TANK_FULL_PIN)) {
+      if (digitalRead(TANK_BOTTOM_PIN) != TANK_BOTTOM_ON_LEVEL and digitalRead(TANK_TOP_PIN) != TANK_TOP_ON_LEVEL) {
         tank_fillings_remaining--;
         if (tank_fillings_remaining > 60000) tank_fillings_remaining = 0; //against integer rollover
-        if (!digitalRead(LOW_WATER_PIN)) {
+        if (digitalRead(LOW_WATER_PIN) == LOW_WATER_ON_LEVEL) {
           system_state = STATUS_NO_WATER;
           return;
         }
@@ -657,7 +675,7 @@ void handle_pump_stuff() {
     case STATUS_PUMPING:
       digitalWrite(PUMP_PIN, HIGH);
       digitalWrite(VALVE_PIN, LOW);
-      if (!digitalRead(TANK_FULL_PIN) or !digitalRead(LOW_WATER_PIN)) {
+      if (digitalRead(TANK_TOP_PIN) == TANK_TOP_ON_LEVEL or digitalRead(LOW_WATER_PIN) == LOW_WATER_ON_LEVEL) {
         system_state = STATUS_EMPTYING;
       }
       break;
@@ -665,7 +683,7 @@ void handle_pump_stuff() {
     case STATUS_NO_WATER:
       digitalWrite(PUMP_PIN, LOW);
       digitalWrite(VALVE_PIN, LOW);
-      if (digitalRead(LOW_WATER_PIN)) system_state = STATUS_IDLE;
+      if (digitalRead(LOW_WATER_PIN) != LOW_WATER_ON_LEVEL) system_state = STATUS_IDLE;
       break;
 
     case STATUS_NO_TIME:

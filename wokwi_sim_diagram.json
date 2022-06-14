@@ -6,19 +6,19 @@
     { "type": "wokwi-arduino-uno", "id": "uno", "top": -5.7, "left": 175.25, "attrs": {} },
     {
       "type": "wokwi-slide-switch",
-      "id": "sw1",
+      "id": "tank_full_sw",
       "top": -131.68,
       "left": 199.6,
       "rotate": 270,
-      "attrs": {}
+      "attrs": { "value": "1" }
     },
     {
       "type": "wokwi-slide-switch",
-      "id": "sw2",
+      "id": "tank_empty_sw",
       "top": -175.65,
       "left": 200.65,
       "rotate": 270,
-      "attrs": {}
+      "attrs": { "value": "" }
     },
     {
       "type": "wokwi-led",
@@ -54,11 +54,11 @@
     },
     {
       "type": "wokwi-slide-switch",
-      "id": "sw3",
+      "id": "low_water_sw",
       "top": -218.7,
       "left": 201.2,
       "rotate": 270,
-      "attrs": {}
+      "attrs": { "value": "1" }
     },
     {
       "type": "wokwi-rgb-led",
@@ -70,10 +70,10 @@
   ],
   "connections": [
     [ "led1:C", "uno:GND.2", "black", [ "h17.03", "v266.64", "h104.13" ] ],
-    [ "sw1:1", "sw2:1", "black", [ "h10.51", "v-36.84" ] ],
-    [ "sw1:1", "led1:C", "black", [ "h10.51", "v54.8" ] ],
-    [ "uno:5V", "sw1:3", "red", [ "v26.2", "h-86.33", "v-333.39" ] ],
-    [ "sw1:3", "sw2:3", "red", [ "h19.84", "v-49.47" ] ],
+    [ "tank_full_sw:1", "tank_empty_sw:1", "black", [ "h10.51", "v-36.84" ] ],
+    [ "tank_full_sw:1", "led1:C", "black", [ "h10.51", "v54.8" ] ],
+    [ "uno:5V", "tank_full_sw:3", "red", [ "v26.2", "h-86.33", "v-333.39" ] ],
+    [ "tank_full_sw:3", "tank_empty_sw:3", "red", [ "h19.84", "v-49.47" ] ],
     [ "uno:5V", "lcd1:VCC", "red", [ "v0" ] ],
     [ "uno:GND.2", "lcd1:GND", "black", [ "v0" ] ],
     [ "uno:A4", "lcd1:SDA", "green", [ "v0" ] ],
@@ -91,15 +91,15 @@
     [ "encoder1:DT", "uno:4", "white", [ "h10.06", "v-162.2", "h-195.2" ] ],
     [ "uno:11", "led1:A", "violet", [ "v0" ] ],
     [ "uno:10", "led2:A", "violet", [ "v0" ] ],
-    [ "uno:9", "sw1:2", "gold", [ "v0" ] ],
-    [ "uno:8", "sw2:2", "gold", [ "v0" ] ],
+    [ "uno:9", "tank_full_sw:2", "gold", [ "v0" ] ],
+    [ "uno:8", "tank_empty_sw:2", "gold", [ "v0" ] ],
     [ "uno:GND.2", "rtc1:GND", "black", [ "v0" ] ],
     [ "uno:5V", "rtc1:5V", "red", [ "v0" ] ],
     [ "rtc1:SCL", "lcd1:SCL", "blue", [ "h65.12", "v-19.03" ] ],
     [ "rtc1:SDA", "lcd1:SDA", "green", [ "h72.9", "v-6.49" ] ],
-    [ "sw2:1", "sw3:1", "black", [ "h9.2", "v-43.79" ] ],
-    [ "sw2:3", "sw3:3", "red", [ "h18.78", "v-1.12" ] ],
-    [ "sw3:2", "uno:7", "gold", [ "h0" ] ],
+    [ "tank_empty_sw:1", "low_water_sw:1", "black", [ "h9.2", "v-43.79" ] ],
+    [ "tank_empty_sw:3", "low_water_sw:3", "red", [ "h18.78", "v-1.12" ] ],
+    [ "low_water_sw:2", "uno:7", "gold", [ "h0" ] ],
     [ "rgb1:B", "uno:A3", "green", [ "v0" ] ],
     [ "rgb1:G", "uno:A2", "green", [ "v0" ] ],
     [ "rgb1:R", "uno:A1", "green", [ "v26.4", "h7.49" ] ],
