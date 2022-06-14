@@ -87,6 +87,7 @@ struct i_timer_s {
 struct c_error_s{
   bool rtc_missing = false;
   bool rtc_unset = false;
+  bool tank_sensors_irrational = false;
 } component_errors;
 
 //enums for easier code reading
@@ -507,7 +508,7 @@ void update_display() {
                   lcd.print(F("Stby. bis"));
                   lcd.setCursor(11,1);
                   char til_buf[5];
-                  snprintf(til_buf, 5, "%02u:%02u", irrigation_timer.start_hour, irrigation_timer.start_minute);
+                  sprintf(til_buf, "%02u:%02u", irrigation_timer.start_hour, irrigation_timer.start_minute);
                   lcd.print(til_buf);
                 }
                 break;
@@ -532,7 +533,23 @@ void update_display() {
 
               default:
               case STATUS_GENERAL_FAIL:
-                lcd.print(F("Algem. Fehler"));
+                bool no_error_desc_found = true;
+
+                if (component_errors.tank_sensors_irrational) { //tank sensor error
+                  lcd.print(F("TS "));
+                  no_error_desc_found = false;
+                }
+
+                if (component_errors.rtc_missing or component_errors.rtc_unset) { //rtc error
+                  lcd.print(F("RTC "));
+                  no_error_desc_found = false;
+                }
+
+                if (no_error_desc_found) lcd.print(F("Algem. "));
+
+                lcd.print(F("Fehler"));
+
+                if (component_errors.rtc_unset) system_state = STATUS_NO_TIME;
                 break;
             }
           break;
@@ -634,6 +651,10 @@ void update_display() {
 }
 
 void handle_pump_stuff() {
+  if (digitalRead(TANK_TOP_PIN) == TANK_TOP_ON_LEVEL and digitalRead(TANK_BOTTOM_PIN) != TANK_BOTTOM_ON_LEVEL) {
+    component_errors.tank_sensors_irrational = true;
+    system_state = STATUS_GENERAL_FAIL;
+  }
   switch (system_state) {
     case STATUS_IDLE:
       digitalWrite(PUMP_PIN, LOW);
@@ -696,17 +717,19 @@ void handle_pump_stuff() {
      case STATUS_GENERAL_FAIL:
       digitalWrite(PUMP_PIN, LOW);
       digitalWrite(VALVE_PIN, LOW);
+      if ((digitalRead(TANK_TOP_PIN) == TANK_TOP_ON_LEVEL) <= (digitalRead(TANK_BOTTOM_PIN) == TANK_BOTTOM_ON_LEVEL)) component_errors.tank_sensors_irrational = false; //if the top sensor is the same or lower than the bottom sensor, its fine
+      if (!component_errors.rtc_missing and !component_errors.tank_sensors_irrational) system_state = STATUS_IDLE;
       break;
   }
 }
 
 void read_clock_and_stuff() {
-    if (RTC.read(current_time)) {
+  if (RTC.read(current_time)) {
     component_errors.rtc_missing = false;
     component_errors.rtc_unset = false;
   }
   else {
-    if (RTC.chipPresent()) {component_errors.rtc_missing = false; component_errors.rtc_unset = true;}
+    if (RTC.chipPresent()) {component_errors.rtc_missing = false; component_errors.rtc_unset = true; system_state = STATUS_NO_TIME;}
     else {component_errors.rtc_missing = true; component_errors.rtc_unset = false;}
   }
 }
