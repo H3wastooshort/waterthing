@@ -113,7 +113,6 @@ int8_t menu_page = 0; // 0-> main page, 1 -> Timer Setup, 2 -> Tank Setup, 3 -> 
 int8_t menu_entry_cursor = 0; //-2 -> not in menu system, 0 -> page selection, 1-255 differs per page
 bool menu_editing = false;
 uint32_t last_display_update = 0; //this is a global var to allow calling for immediate update by setting this to 0
-uint32_t btn_down_time = 0;
 uint8_t button_queue[32]; //0 means no btn, 1 means down, 2 means up, 3 means enter
 uint8_t button_queue_add_pos = 0; //0-31
 
@@ -320,34 +319,29 @@ void btn_callback() {
   last_display_update = 0;
 }
 
-void handle_btn_down() {
-  btn_down_time = millis();
-}
-
+uint32_t last_btn_down = 0;
 void handle_btn_up() {
-  uint32_t btn_duration = millis() - btn_down_time;
-  if (btn_duration >= DEBOUNCE_DELAY) {
+  if (millis() - last_btn_down >= DEBOUNCE_DELAY) {
     if (button_queue_add_pos >= 32) return; //too many buttons in queue, ignoring
     button_queue[button_queue_add_pos] = 3; //3 is for enter button
     button_queue_add_pos++;
   }
+  last_btn_down = millis();
 }
 
 uint32_t last_encoder_clock = 0;
 void handle_encoder_clk() {
   bool immidiate_dt = digitalRead(ENCODER_DT_PIN); //read dt as quickly as possible
 
-
   if (button_queue_add_pos >= 32) return; //too many buttons in queue, ignoring
-  if (millis() - last_encoder_clock < DEBOUNCE_DELAY) return; //to quick, may be a bounce
+  if (millis() - last_encoder_clock <= DEBOUNCE_DELAY) return; //to quick, may be a bounce
   if (immidiate_dt != ENCODER_INVERT_DIRECTION) {
     button_queue[button_queue_add_pos] = 2; //2 is for up
-    button_queue_add_pos++;
   }
   else {
     button_queue[button_queue_add_pos] = 1; //1 is for down
-    button_queue_add_pos++;
   }
+  button_queue_add_pos++;
   last_encoder_clock = millis();
 }
 
@@ -465,10 +459,7 @@ void setup() {
   for (uint8_t q_pos = 0; q_pos < 32; q_pos++) { //make sure they are 0
     button_queue[q_pos] = 0;
   }
-  attachInterrupt(digitalPinToInterrupt(BTN_PIN), handle_btn_down, FALLING);
   attachInterrupt(digitalPinToInterrupt(BTN_PIN), handle_btn_up, RISING);
-
-
   attachInterrupt(digitalPinToInterrupt(ENCODER_CLK_PIN), handle_encoder_clk, FALLING);
 
   Serial.println();
