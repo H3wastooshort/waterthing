@@ -159,6 +159,7 @@ void change_menu_entry(bool dir) { //true is up
         }
       }
       break;
+
     case PAGE_TIMER:
       switch (menu_entry_cursor) {
         case 1:
@@ -169,7 +170,7 @@ void change_menu_entry(bool dir) { //true is up
         case 2:
           irrigation_timer.start_minute += dir ? 1 : -1;
           if (irrigation_timer.start_minute >= 59) irrigation_timer.start_minute = 59;
-          if (irrigation_timer.start_minute < 1) irrigation_timer.start_minute = 1;
+          if (irrigation_timer.start_minute < 0) irrigation_timer.start_minute = 0;
           break;
         case 3:
           irrigation_timer.fillings_to_irrigate += dir ? 1 : -1;
@@ -181,14 +182,50 @@ void change_menu_entry(bool dir) { //true is up
           break;
       }
       break;
+
     case PAGE_TANK:
       settings.tank_capacity += dir ? 1 : -1;
       if (settings.tank_capacity >= 200) settings.tank_capacity = 200;
       if (settings.tank_capacity < 0) settings.tank_capacity = 0;
       break;
+
     case PAGE_CLOCK1:
+      switch (menu_entry_cursor) {
+        case 1:
+          current_time.Hour += dir ? 1 : -1;
+          if (current_time.Hour >= 23) current_time.Hour = 23;
+          if (current_time.Hour < 0 or current_time.Hour > 25) current_time.Hour = 0;
+          break;
+        case 2:
+          current_time.Minute += dir ? 1 : -1;
+          if (current_time.Minute >= 59) current_time.Minute = 59;
+          if (current_time.Minute < 0 or current_time.Minute > 61) current_time.Minute = 0;
+          break;
+        default:
+          break;
+      }
+      RTC.write(current_time);
       break;
+
     case PAGE_CLOCK2:
+      switch (menu_entry_cursor) {
+        case 1:
+          current_time.Day += dir ? 1 : -1;
+          if (current_time.Day >= 31) current_time.Day = 31;
+          if (current_time.Day < 1) current_time.Day = 1;
+          break;
+        case 2:
+          current_time.Month += dir ? 1 : -1;
+          if (current_time.Month >= 12) current_time.Month = 12;
+          if (current_time.Month < 1) current_time.Month = 1;
+          break;
+        case 3:
+          current_time.Year += dir ? 1 : -1;
+          break;
+        default:
+          break;
+      }
+      RTC.write(current_time);
       break;
 
 
@@ -314,6 +351,7 @@ void setup() {
   set_status_led(1,1,0);
 
   Serial.begin(9600);
+  Serial.println(F("H3 Bewässerungssystem\nhttps://blog.hacker3000.cf/waterthing.php"));
 
   Serial.println(F("LCD setup..."));
   lcd.init();
@@ -327,6 +365,19 @@ void setup() {
   lcd.createChar(GFX_ID_UML_A, gfx_uml_a);
   lcd.createChar(GFX_ID_UML_O, gfx_uml_o);
   lcd.createChar(GFX_ID_UML_U, gfx_uml_u);
+  delay(50);
+  lcd.clear();
+  lcd.home();
+  lcd.print(F("Bew\x05sserungs"));
+  lcd.setCursor(0,1);
+  lcd.print(F("System by H3"));
+  delay(1000);
+  lcd.clear();
+  lcd.home();
+  lcd.print(F("Blog-Artikel/Doku"));
+  lcd.setCursor(0,1);
+  lcd.print(F("-> hacker3000.cf"));
+  delay(1000);
 
   //EEPROM
   Serial.println(F("Reading EEPROM..."));
@@ -499,6 +550,35 @@ void update_display() {
           lcd.print(settings.tank_capacity);
           lcd_print_menu_bracket(1,true);
           lcd.print(F("L"));
+          break;
+        
+        case PAGE_CLOCK1:
+          lcd_print_menu_bracket(1,false);
+          if (current_time.Hour<10) lcd.print(0);
+          lcd.print(current_time.Hour);
+          lcd_print_menu_bracket(1,true);
+          lcd.print(F(":"));
+          lcd_print_menu_bracket(2,false);
+          if (current_time.Minute<10) lcd.print(0);
+          lcd.print(current_time.Minute);
+          lcd_print_menu_bracket(2,true);
+          break;
+        
+        case PAGE_CLOCK2:
+          lcd_print_menu_bracket(1,false);
+          if (current_time.Day<10) lcd.print(0);
+          lcd.print(current_time.Day);
+          lcd_print_menu_bracket(1,true);
+          lcd.print(F("."));
+          lcd_print_menu_bracket(2,false);
+          if (current_time.Month<10) lcd.print(0);
+          lcd.print(current_time.Month);
+          lcd_print_menu_bracket(2,true);
+          lcd.print(F("."));
+          lcd_print_menu_bracket(3,false);
+          lcd.print(tmYearToCalendar(current_time.Year));
+          lcd_print_menu_bracket(3,true);
+          break;
     }
     last_display_update = millis();
   }
@@ -545,13 +625,15 @@ void handle_pump_stuff() {
       
       if (tank_fillings_remaining > 0 and digitalRead(LOW_WATER_PIN)) system_state = STATUS_PUMPING;
       if (!digitalRead(LOW_WATER_PIN)) system_state = STATUS_NO_WATER;
+      if (!digitalRead(TANK_EMPTY_PIN)) system_state = STATUS_EMPTYING; //if at boot there is still water in the tank, empty it.
       break;
 
     case STATUS_EMPTYING:
       digitalWrite(PUMP_PIN, LOW);
       digitalWrite(VALVE_PIN, HIGH);
-      if (digitalRead(TANK_EMPTY_PIN)) {
+      if (digitalRead(TANK_EMPTY_PIN) and digitalRead(TANK_FULL_PIN)) {
         tank_fillings_remaining--;
+        if (tank_fillings_remaining > 60000) tank_fillings_remaining = 0; //against integer rollover
         if (!digitalRead(LOW_WATER_PIN)) {
           system_state = STATUS_NO_WATER;
           return;
