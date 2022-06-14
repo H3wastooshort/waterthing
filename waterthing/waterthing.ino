@@ -321,7 +321,9 @@ void handle_btn_down() {
 void handle_btn_up() {
   uint32_t btn_duration = millis() - btn_down_time;
   if (btn_duration >= DEBOUNCE_DELAY) {
+    if (button_queue_add_pos >= 32) return; //too many buttons in queue, ignoring
     button_queue[button_queue_add_pos] = 3; //3 is for enter button
+    button_queue_add_pos++;
   }
 }
 
