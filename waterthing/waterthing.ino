@@ -39,6 +39,7 @@ Zyklus:
 #define BTN_PIN 2
 #define ENCODER_CLK_PIN 3
 #define ENCODER_DT_PIN 4
+#define ENCODER_INVERT_DIRECTION false
 
 #define EEPROM_MAGIC_NUMBER 42
 
@@ -332,6 +333,24 @@ void handle_btn_up() {
   }
 }
 
+uint32_t last_encoder_clock = 0;
+void handle_encoder_clk() {
+  bool immidiate_dt = digitalRead(ENCODER_DT_PIN); //read dt as quickly as possible
+
+
+  if (button_queue_add_pos >= 32) return; //too many buttons in queue, ignoring
+  if (millis() - last_encoder_clock < DEBOUNCE_DELAY) return; //to quick, may be a bounce
+  if (immidiate_dt != ENCODER_INVERT_DIRECTION) {
+    button_queue[button_queue_add_pos] = 2; //2 is for up
+    button_queue_add_pos++;
+  }
+  else {
+    button_queue[button_queue_add_pos] = 1; //1 is for down
+    button_queue_add_pos++;
+  }
+  last_encoder_clock = millis();
+}
+
 
 void set_status_led(bool r, bool g, bool b) {
   digitalWrite(RED_LED_PIN,r);
@@ -448,6 +467,9 @@ void setup() {
   }
   attachInterrupt(digitalPinToInterrupt(BTN_PIN), handle_btn_down, FALLING);
   attachInterrupt(digitalPinToInterrupt(BTN_PIN), handle_btn_up, RISING);
+
+
+  attachInterrupt(digitalPinToInterrupt(ENCODER_CLK_PIN), handle_encoder_clk, FALLING);
 
   Serial.println();
   set_status_led(0,0,0);
@@ -745,7 +767,7 @@ void handle_serial() {
 }
 
 void do_stored_buttons() {
-  for (uint8_t q_pos = 0; q_pos <= button_queue_add_pos; q_pos++) { //make sure they are 0
+  for (uint8_t q_pos = 0; q_pos <= min(31, button_queue_add_pos); q_pos++) { //make sure they are 0
     switch (button_queue[q_pos]) {
       case 1:
         down_callback();
@@ -769,8 +791,8 @@ void do_stored_buttons() {
 void loop() {
   read_clock_and_stuff();
   handle_pump_stuff();
-  do_stored_buttons();
   update_display();
 
   handle_serial();
+  do_stored_buttons();
 }
