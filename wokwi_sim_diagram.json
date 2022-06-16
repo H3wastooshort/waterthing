@@ -80,6 +80,14 @@
       "top": 390,
       "left": 383.16,
       "attrs": { "value": "1200" }
+    },
+    {
+      "type": "wokwi-potentiometer",
+      "id": "fake_Vbat",
+      "top": 422.05,
+      "left": 366.87,
+      "rotate": 180,
+      "attrs": {"value":1023}
     }
   ],
   "connections": [
@@ -118,9 +126,16 @@
     [ "rgb1:G", "uno:A2", "#8f4814", [ "v0" ] ],
     [ "rgb1:R", "uno:A1", "#8f4814", [ "v26.4", "h7.49" ] ],
     [ "r2:1", "r1:2", "gray", [ "v0" ] ],
-    [ "r2:1", "uno:A0", "gray", [ "v-190.27", "h14.76" ] ],
     [ "uno:GND.2", "r2:2", "black", [ "v191.42", "h96.43" ] ],
     [ "uno:VIN", "r1:1", "orange", [ "v173.55", "h-52.78" ] ],
-    [ "rgb1:COM", "uno:GND.3", "black", [ "v8.92", "h-31.36" ] ]
+    [ "rgb1:COM", "uno:GND.3", "black", [ "v8.92", "h-31.36" ] ],
+    [ "rtc1:5V", "fake_Vbat:VCC", "red", [ "h-25.05", "v93.12" ] ],
+    [ "rtc1:GND", "fake_Vbat:GND", "black", [ "h-16.24", "v88.26", "h120.38" ] ],
+    [
+      "fake_Vbat:SIG",
+      "uno:A0",
+      "gray",
+      [ "v-47.02", "h-31.38", "v-66.06", "h23.49", "v-82.95", "h-19.82" ]
+    ]
   ]
 }

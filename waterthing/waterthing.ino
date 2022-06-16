@@ -578,9 +578,10 @@ void update_display() {
                 break;
               case STATUS_LOW_BATTERY:
                 lcd.print(F("Akku Leer!"));
-                lcd.setCursor(12,1);
-                lcd.print(battery_voltage);
-                lcd.write('V');
+                lcd.setCursor(11,1);
+                char vbat_buf[5];
+                sprintf(vbat_buf, "%04.1fV", battery_voltage); //% signals start of number inset command, 0 means use 0 for padding instead of whitespace, 4 means pad the result to 4 characters wide, .1 means only 1 decimal, f means the number is a float
+                lcd.print(vbat_buf);
                 break;
 
               default:
@@ -710,20 +711,21 @@ void handle_pump_stuff() {
     case STATUS_IDLE:
       digitalWrite(PUMP_PIN, LOW);
       digitalWrite(VALVE_PIN, LOW);
+      //the further sth is down in this case, the higher it's priority 
 
-      if (component_errors.rtc_missing) {system_state = STATUS_GENERAL_FAIL; return;}
-      if (component_errors.rtc_unset) {system_state = STATUS_NO_TIME; return;}
+      if (battery_voltage <= settings.battery_voltage_cutoff) system_state = STATUS_LOW_BATTERY; //low battery is lowest priority. this is so a currently running irrigation is completed even if the pump motor drops the voltage
 
       if((irrigation_timer.start_hour <= current_time.Hour and irrigation_timer.start_minute <= current_time.Minute) and (irrigation_timer.last_watering_day != current_time.Day)) { //
         tank_fillings_remaining = irrigation_timer.fillings_to_irrigate;
         irrigation_timer.last_watering_day = current_time.Day;
         EEPROM.put(0+sizeof(settings),irrigation_timer);
       }
-      
       if (tank_fillings_remaining > 0 and raw_sensors.low_water != LOW_WATER_ON_LEVEL) system_state = STATUS_PUMPING;
+      
       if (raw_sensors.low_water == LOW_WATER_ON_LEVEL) system_state = STATUS_NO_WATER;
+      if (component_errors.rtc_unset) system_state = STATUS_NO_TIME;
+      if (component_errors.rtc_missing) system_state = STATUS_GENERAL_FAIL;
       if (raw_sensors.tank_bottom == TANK_BOTTOM_ON_LEVEL) system_state = STATUS_EMPTYING; //if at boot there is still water in the tank, empty it.
-      if (battery_voltage <= settings.battery_voltage_cutoff) system_state = STATUS_LOW_BATTERY;
       break;
 
     case STATUS_EMPTYING:
@@ -769,6 +771,7 @@ void handle_pump_stuff() {
       digitalWrite(PUMP_PIN, LOW);
       digitalWrite(VALVE_PIN, LOW);
       if (battery_voltage >= settings.battery_voltage_reset) system_state = STATUS_IDLE;
+      break;
 
      default:
      case STATUS_GENERAL_FAIL:
