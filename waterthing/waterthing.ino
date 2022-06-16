@@ -15,6 +15,22 @@ Zyklus:
  * Warten bis Tank leer
  * wiederholen bis gewünschte menge bewässert
 */
+/*
+========
+Achtumg/Attention
+========
+Die Standard sprintf() funktion von Arduino kann kein float. Diese compiler flags müssen hinzugefügt werden
+The default sprintf() fuction in Arduino cant do floats. You have to add these compiler flags
+
+ArduinoIDE either platform.txt:
+compiler.c.elf.extra_flags=-Wl,-u,vfprintf -lprintf_flt -lm
+
+or (recommended) boards.txt:
+uno.build.extra_flags=-Wl,-u,vfprintf -lprintf_flt -lm
+
+PlatformIO platformio.ini:
+build_flags = -Wl,-u,vfprintf -lprintf_flt -lm
+*/
 
 #include <EEPROM.h>
 #include <LiquidCrystal_I2C.h>
@@ -556,7 +572,7 @@ void print_page_basics() {
 
 void update_display() {
   if (millis() - last_display_update > 1000) {
-      uint32_t display_draw_start_time = millis();
+      //uint32_t display_draw_start_time = millis();
       print_page_basics();
       switch (menu_page) {
         default:
@@ -720,8 +736,8 @@ void update_display() {
     }
     last_display_update = millis();
 
-    Serial.print(F("Display drawing time [ms]: "));
-    Serial.println(last_display_update - display_draw_start_time);
+    //Serial.print(F("Display drawing time [ms]: "));
+    //Serial.println(last_display_update - display_draw_start_time);
   }
 
   //status led
