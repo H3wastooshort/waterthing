@@ -21,6 +21,7 @@ Zyklus:
 #include <TimeLib.h>
 #include <Wire.h>
 #include <DS1307RTC.h>
+#include <math.h>
 
 #define LOW_WATER_PIN 7
 #define TANK_BOTTOM_PIN 8
@@ -49,9 +50,7 @@ Zyklus:
 //library stuff
 LiquidCrystal_I2C lcd(0x27,16,2);
 
-
-//const byte gfx_drop[8] = {B00100, B00100, B01110, B01110, B10111, B11111, B01110, B00000};
-
+//dynamic status
 const byte gfx_off[8] = {B01110, B01010, B01110, B00000, B11011, B10010, B11011, B10010};
 //const byte gfx_idle[8] = {B00000, B00000, B00000, B00000, B00000, B00000, B10101, B00000}; //... version
 const byte gfx_idle[8] = {B00100, B00100, B01110, B10111, B11111, B01110, B00000, B10101}; //drop with ... version
@@ -61,6 +60,10 @@ const byte gfx_drain[8] = {B10001, B10001, B11111, B00000, B00100, B10101, B0111
 const byte gfx_no_water[8] = {B00001, B00001, B01000, B01101, B01100, B10110, B11110, B01100};
 const byte gfx_low_bat[8] = {B01110, B10001, B10101, B10101, B10001, B10101, B10001, B11111};
 const byte gfx_error[8] = {B10101, B10101, B10101, B10101, B00000, B00000, B10101, B00000};
+
+//symbol graphics
+const byte gfx_hyst[8] = {B00111, B01010, B01010, B01010, B01010, B01010, B01010, B11100};
+const byte gfx_drop[8] = {B00100, B00100, B01110, B01110, B10111, B11111, B01110, B00000};
 
 //umlaut graphics
 const byte gfx_uml_s[8] = {B01100, B10010, B10010, B11100, B10010, B10010, B10100, B10000};
@@ -74,10 +77,14 @@ enum gfx_IDs { //enum for naming display gfx ids
   GFX_ID_FILL = 2,
   GFX_ID_DRAIN = 3,*/
   GFX_ID_STATUS = 0, //redefined dynamically
+  GFX_ID_DROP = 1,
+  GFX_ID_HYST = 2,
   GFX_ID_UML_S = 4,
   GFX_ID_UML_A = 5,
   GFX_ID_UML_O = 6,
-  GFX_ID_UML_U = 7
+  GFX_ID_UML_U = 7,
+  GFX_ID_ARROW_R = 127,
+  GFX_ID_ARROW_L = 126
 };
 
 //structs are used to save to EEPROM more easily
@@ -146,12 +153,13 @@ enum pages_enum {
   PAGE_TIMER = 2,
   PAGE_TANK = 3,
   PAGE_CLOCK1 = 4,
-  PAGE_CLOCK2 = 5
+  PAGE_CLOCK2 = 5,
+  PAGE_BATTERY = 6
 };
 
-#define N_OF_PAGES 6
-const char* page_names[N_OF_PAGES] = {"Status", "Manuell", "Timer", "Tank", "Uhr1", "Uhr2"};
-const uint8_t page_max_cursor[N_OF_PAGES] = {0, 1, 3, 1, 2, 3};
+#define N_OF_PAGES 7
+const char* page_names[N_OF_PAGES] = {"Status", "Manuell", "Timer", "Tank", "Uhr1", "Uhr2", "Akku"};
+const uint8_t page_max_cursor[N_OF_PAGES] = {0, 1, 3, 1, 2, 3, 2};
 
 
 int16_t literToTanks(uint16_t liters_to_convert) {
@@ -161,11 +169,6 @@ int16_t literToTanks(uint16_t liters_to_convert) {
   else {
     return ((float)liters_to_convert / (float)settings.tank_capacity)+1;
   }
-}
-
-void lcd_print_menu_bracket(uint8_t for_menu_entry, bool ending_bracket) {
-  if (ending_bracket) lcd.print(menu_entry_cursor == for_menu_entry ? (menu_editing ? F("}") : F("]")) : F(")"));
-  else lcd.print(menu_entry_cursor == for_menu_entry ? (menu_editing ? F("{") : F("[")) : F("("));
 }
 
 void change_menu_entry(bool dir) { //true is up
@@ -254,6 +257,21 @@ void change_menu_entry(bool dir) { //true is up
       RTC.write(current_time);
       break;
 
+    case PAGE_BATTERY:
+      switch (menu_entry_cursor) {
+        case 1:
+          settings.battery_voltage_cutoff += dir ? 0.1 : -0.1;
+          if (settings.battery_voltage_cutoff >= 48) settings.battery_voltage_cutoff = ceil(1023 / BATTERY_VOLTAGE_ADC_DIVIDER);
+          if (settings.battery_voltage_cutoff < 0) settings.battery_voltage_cutoff = 0;
+          break;
+        case 2:
+          settings.battery_voltage_reset += dir ? 0.1 : -0.1;
+          if (settings.battery_voltage_reset >= 48) settings.battery_voltage_reset = ceil(1023 / BATTERY_VOLTAGE_ADC_DIVIDER);
+          if (settings.battery_voltage_reset < 0) settings.battery_voltage_reset = 0;
+          break;
+          break;
+      }
+      break;
 
     default:
     case -1:
@@ -292,6 +310,7 @@ void edit_change_callback() {
       }
       break;
     case PAGE_TANK:
+    case PAGE_BATTERY:
       if (!menu_editing) { //if leaving edit mode
         if (menu_entry_cursor > 1) {
           EEPROM.put(0, settings); //save settings when leaving
@@ -404,6 +423,7 @@ void setup() {
   Serial.println(F("H3 Bewässerungssystem\nhttps://blog.hacker3000.cf/waterthing.php"));
 
   Serial.println(F("LCD setup..."));
+  Wire.setClock(400000); //faster drawing
   lcd.init();
   lcd.backlight();
   /*lcd.createChar(GFX_ID_IDLE, gfx_idle);
@@ -412,6 +432,8 @@ void setup() {
   lcd.createChar(GFX_ID_FILL, gfx_fill);
   lcd.createChar(GFX_ID_DRAIN, gfx_drain);*/
   lcd.createChar(GFX_ID_STATUS, gfx_error);
+  lcd.createChar(GFX_ID_DROP, gfx_drop);
+  lcd.createChar(GFX_ID_HYST, gfx_hyst);
   lcd.createChar(GFX_ID_UML_S, gfx_uml_s);
   lcd.createChar(GFX_ID_UML_A, gfx_uml_a);
   lcd.createChar(GFX_ID_UML_O, gfx_uml_o);
@@ -534,6 +556,7 @@ void print_page_basics() {
 
 void update_display() {
   if (millis() - last_display_update > 1000) {
+      uint32_t display_draw_start_time = millis();
       print_page_basics();
       switch (menu_page) {
         default:
@@ -673,8 +696,32 @@ void update_display() {
           lcd.print(tmYearToCalendar(current_time.Year));
           lcd_print_menu_bracket(3,true);
           break;
+        
+        case PAGE_BATTERY:
+          char volt_buf[5];
+          
+          lcd.print(F("0"));
+          //lcd.write(byte(GFX_ID_ARROW_R));
+          lcd_print_menu_bracket(1,false);
+          sprintf(volt_buf, "%04.1fV", settings.battery_voltage_cutoff);
+          lcd.print(volt_buf);
+          lcd_print_menu_bracket(1,true);
+
+          lcd.write(byte(GFX_ID_HYST));
+
+          lcd_print_menu_bracket(2,false);
+          sprintf(volt_buf, "%04.1fV", settings.battery_voltage_reset);
+          lcd.print(volt_buf);
+          lcd_print_menu_bracket(2,true);
+
+          //lcd.write(byte(GFX_ID_ARROW_L));
+          lcd.print(F("1"));
+          break;
     }
     last_display_update = millis();
+
+    Serial.print(F("Display drawing time [ms]: "));
+    Serial.println(last_display_update - display_draw_start_time);
   }
 
   //status led
@@ -713,7 +760,7 @@ void handle_pump_stuff() {
       digitalWrite(VALVE_PIN, LOW);
       //the further sth is down in this case, the higher it's priority 
 
-      if (battery_voltage <= settings.battery_voltage_cutoff) system_state = STATUS_LOW_BATTERY; //low battery is lowest priority. this is so a currently running irrigation is completed even if the pump motor drops the voltage
+      if (battery_voltage <= settings.battery_voltage_cutoff and tank_fillings_remaining == 0) system_state = STATUS_LOW_BATTERY; //low battery is lowest priority. this is so a currently running irrigation is completed even if the pump motor drops the voltage
 
       if((irrigation_timer.start_hour <= current_time.Hour and irrigation_timer.start_minute <= current_time.Minute) and (irrigation_timer.last_watering_day != current_time.Day)) { //
         tank_fillings_remaining = irrigation_timer.fillings_to_irrigate;
