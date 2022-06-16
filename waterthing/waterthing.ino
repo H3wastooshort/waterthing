@@ -187,6 +187,11 @@ int16_t literToTanks(uint16_t liters_to_convert) {
   }
 }
 
+void lcd_print_menu_bracket(uint8_t for_menu_entry, bool ending_bracket) {
+  if (ending_bracket) lcd.print(menu_entry_cursor == for_menu_entry ? (menu_editing ? F("}") : F("]")) : F(")"));
+  else lcd.print(menu_entry_cursor == for_menu_entry ? (menu_editing ? F("{") : F("[")) : F("("));
+}
+
 void change_menu_entry(bool dir) { //true is up
   if (menu_entry_cursor == 0) {
       menu_page += dir ? 1 : -1;
