@@ -41,6 +41,9 @@ Zyklus:
 #define ENCODER_DT_PIN 4
 #define ENCODER_INVERT_DIRECTION false
 
+#define BATTERY_VOLTAGE_PIN A0
+#define BATTERY_VOLTAGE_ADC_DIVIDER 68.267 //1024 divided by this multiplier equals the battery voltage
+
 #define EEPROM_MAGIC_NUMBER 42
 
 //library stuff
@@ -48,24 +51,29 @@ LiquidCrystal_I2C lcd(0x27,16,2);
 
 
 //const byte gfx_drop[8] = {B00100, B00100, B01110, B01110, B10111, B11111, B01110, B00000};
-const byte gfx_no_water[8] = {B00001, B00001, B01000, B01101, B01100, B10110, B11110, B01100};
+
+const byte gfx_off[8] = {B01110, B01010, B01110, B00000, B11011, B10010, B11011, B10010};
 //const byte gfx_idle[8] = {B00000, B00000, B00000, B00000, B00000, B00000, B10101, B00000}; //... version
 const byte gfx_idle[8] = {B00100, B00100, B01110, B10111, B11111, B01110, B00000, B10101}; //drop with ... version
 //const byte gfx_idle[8] = {B00110, B00011, B01100, B00110, B11000, B01000, B10000, B11000}; //zZZ version
 const byte gfx_fill[8] = {B00100, B10101, B01110, B00100, B00000, B10001, B10001, B11111};
 const byte gfx_drain[8] = {B10001, B10001, B11111, B00000, B00100, B10101, B01110, B00100};
+const byte gfx_no_water[8] = {B00001, B00001, B01000, B01101, B01100, B10110, B11110, B01100};
+const byte gfx_low_bat[8] = {B01110, B10001, B10101, B10101, B10001, B10101, B10001, B11111};
+const byte gfx_error[8] = {B10101, B10101, B10101, B10101, B00000, B00000, B10101, B00000};
 
-//umlaute graphics
+//umlaut graphics
 const byte gfx_uml_s[8] = {B01100, B10010, B10010, B11100, B10010, B10010, B10100, B10000};
 const byte gfx_uml_a[8] = {B01010, B00000, B01110, B00001, B01111, B10001, B01111, B00000};
 const byte gfx_uml_o[8] = {B01010, B00000, B01110, B10001, B10001, B10001, B01110, B00000};
 const byte gfx_uml_u[8] = {B01010, B00000, B10001, B10001, B10001, B10011, B01101, B00000};
 
 enum gfx_IDs { //enum for naming display gfx ids
-  GFX_ID_IDLE = 0,
+  /*GFX_ID_IDLE = 0,
   GFX_ID_NO_WATER = 1, //GFX_ID_DROP = 1,
   GFX_ID_FILL = 2,
-  GFX_ID_DRAIN = 3,
+  GFX_ID_DRAIN = 3,*/
+  GFX_ID_STATUS = 0, //redefined dynamically
   GFX_ID_UML_S = 4,
   GFX_ID_UML_A = 5,
   GFX_ID_UML_O = 6,
@@ -75,6 +83,8 @@ enum gfx_IDs { //enum for naming display gfx ids
 //structs are used to save to EEPROM more easily
 struct settings_s {
   uint8_t tank_capacity = 10; //in L
+  float battery_voltage_cutoff = 10.4; //if this voltage is reached while the system is idle, a low battery waring is displayed. 0 means disable
+  float battery_voltage_reset = 11.4; //if this voltage is reached while the system is in low batters state, the system is set back to idle
   int16_t max_mins_per_refill = -1; //error is thrown if the pump takes longer than that to fill the tank (5L/min pump wont take more than 5 minutes to fill a 20L tank)
 } settings;
 
@@ -85,6 +95,7 @@ struct i_timer_s {
   uint8_t last_watering_day = 0;
 } irrigation_timer;
 
+//and also just to organize things
 struct c_error_s{
   bool rtc_missing = false;
   bool rtc_unset = false;
@@ -98,6 +109,7 @@ enum system_state_e {
   STATUS_PUMPING, //pumping water in tank
   STATUS_NO_WATER, //cant get water from tank
   STATUS_NO_TIME, //clock not set
+  STATUS_LOW_BATTERY, //low battery voltage
 
   STATUS_GENERAL_FAIL
 };
@@ -105,6 +117,13 @@ enum system_state_e {
 //global system variables
 enum system_state_e system_state = STATUS_IDLE;
 tmElements_t current_time;
+float battery_voltage = 13.8;
+
+struct raw_sens_s {
+  bool low_water = !LOW_WATER_ON_LEVEL;
+  bool tank_bottom = !TANK_BOTTOM_ON_LEVEL;
+  bool tank_top = !TANK_TOP_ON_LEVEL;
+} raw_sensors;
 
 uint16_t tank_fillings_remaining = 0; //if over 0, run pumping stuff til 0
 
@@ -362,6 +381,10 @@ void setup() {
   digitalWrite(PUMP_PIN, LOW);
   digitalWrite(VALVE_PIN, LOW);
 
+  //vbat
+  pinMode(BATTERY_VOLTAGE_PIN, INPUT);
+  analogReference(INTERNAL/*1V1*/); //set ADC voltage reference to stable internal 1.1V reference. uncomment the 1V1 part for arduino megas
+
   //rgb led
   pinMode(RED_LED_PIN, OUTPUT);
   pinMode(GREEN_LED_PIN, OUTPUT);
@@ -383,11 +406,12 @@ void setup() {
   Serial.println(F("LCD setup..."));
   lcd.init();
   lcd.backlight();
-  lcd.createChar(GFX_ID_IDLE, gfx_idle);
+  /*lcd.createChar(GFX_ID_IDLE, gfx_idle);
   //lcd.createChar(GFX_ID_DROP, gfx_drop);
   lcd.createChar(GFX_ID_NO_WATER, gfx_no_water);
   lcd.createChar(GFX_ID_FILL, gfx_fill);
-  lcd.createChar(GFX_ID_DRAIN, gfx_drain);
+  lcd.createChar(GFX_ID_DRAIN, gfx_drain);*/
+  lcd.createChar(GFX_ID_STATUS, gfx_error);
   lcd.createChar(GFX_ID_UML_S, gfx_uml_s);
   lcd.createChar(GFX_ID_UML_A, gfx_uml_a);
   lcd.createChar(GFX_ID_UML_O, gfx_uml_o);
@@ -467,6 +491,31 @@ void setup() {
 }
 
 void print_page_basics() {
+  switch (system_state) {
+    case STATUS_IDLE:
+      
+    if (irrigation_timer.fillings_to_irrigate == 0) lcd.createChar(GFX_ID_STATUS, gfx_off);
+      else lcd.createChar(GFX_ID_STATUS, gfx_idle);
+      break;
+    case STATUS_PUMPING:
+      lcd.createChar(GFX_ID_STATUS, gfx_fill);
+      break;
+    case STATUS_EMPTYING:
+      lcd.createChar(GFX_ID_STATUS, gfx_drain);
+      break;
+    case STATUS_NO_WATER:
+      lcd.createChar(GFX_ID_STATUS, gfx_no_water);
+      break;
+    case STATUS_LOW_BATTERY:
+      lcd.createChar(GFX_ID_STATUS, gfx_low_bat);
+      break;
+    case STATUS_NO_TIME:
+    case STATUS_GENERAL_FAIL:
+    default:
+      lcd.createChar(GFX_ID_STATUS, gfx_error);
+      break;
+  }
+
   lcd.clear();
   lcd.home();
   lcd_print_menu_bracket(0,false);
@@ -475,24 +524,8 @@ void print_page_basics() {
   lcd.print(F(""));
   lcd.print(page_names[menu_page]);
   lcd.setCursor(10,0);
-  switch (system_state) {
-    case STATUS_IDLE:
-      lcd.write(irrigation_timer.fillings_to_irrigate == 0 ? 'X' : byte(GFX_ID_IDLE));
-      break;
-    case STATUS_PUMPING:
-      lcd.write(byte(GFX_ID_FILL));
-      break;
-    case STATUS_EMPTYING:
-      lcd.write(byte(GFX_ID_DRAIN));
-      break;
-    case STATUS_NO_WATER:
-      lcd.write(byte(GFX_ID_NO_WATER));
-      break;
-    case STATUS_NO_TIME:
-    case STATUS_GENERAL_FAIL:
-      lcd.write('!');
-      break;
-  }
+
+  lcd.write(byte(GFX_ID_STATUS));
   char clock_buf[5];
   sprintf(clock_buf, "%02u:%02u", current_time.Hour, current_time.Minute);
   lcd.print(clock_buf);
@@ -542,6 +575,12 @@ void update_display() {
                 break;
               case STATUS_NO_TIME:
                 lcd.print(F("Uhrzeit fehlt!"));
+                break;
+              case STATUS_LOW_BATTERY:
+                lcd.print(F("Akku Leer!"));
+                lcd.setCursor(12,1);
+                lcd.print(battery_voltage);
+                lcd.write('V');
                 break;
 
               default:
@@ -650,9 +689,8 @@ void update_display() {
       set_status_led(0,0,1);
       break;
     case STATUS_NO_WATER:
-      set_status_led(1,0,0);
-      break;
     case STATUS_NO_TIME:
+    case STATUS_LOW_BATTERY:
       set_status_led(1,0,0);
       break;
 
@@ -664,7 +702,7 @@ void update_display() {
 }
 
 void handle_pump_stuff() {
-  if (digitalRead(TANK_TOP_PIN) == TANK_TOP_ON_LEVEL and digitalRead(TANK_BOTTOM_PIN) != TANK_BOTTOM_ON_LEVEL) {
+  if (raw_sensors.tank_top == TANK_TOP_ON_LEVEL and raw_sensors.tank_bottom != TANK_BOTTOM_ON_LEVEL) {
     component_errors.tank_sensors_irrational = true;
     system_state = STATUS_GENERAL_FAIL;
   }
@@ -682,18 +720,19 @@ void handle_pump_stuff() {
         EEPROM.put(0+sizeof(settings),irrigation_timer);
       }
       
-      if (tank_fillings_remaining > 0 and digitalRead(LOW_WATER_PIN) != LOW_WATER_ON_LEVEL) system_state = STATUS_PUMPING;
-      if (digitalRead(LOW_WATER_PIN) == LOW_WATER_ON_LEVEL) system_state = STATUS_NO_WATER;
-      if (digitalRead(TANK_BOTTOM_PIN) == TANK_BOTTOM_ON_LEVEL) system_state = STATUS_EMPTYING; //if at boot there is still water in the tank, empty it.
+      if (tank_fillings_remaining > 0 and raw_sensors.low_water != LOW_WATER_ON_LEVEL) system_state = STATUS_PUMPING;
+      if (raw_sensors.low_water == LOW_WATER_ON_LEVEL) system_state = STATUS_NO_WATER;
+      if (raw_sensors.tank_bottom == TANK_BOTTOM_ON_LEVEL) system_state = STATUS_EMPTYING; //if at boot there is still water in the tank, empty it.
+      if (battery_voltage <= settings.battery_voltage_cutoff) system_state = STATUS_LOW_BATTERY;
       break;
 
     case STATUS_EMPTYING:
       digitalWrite(PUMP_PIN, LOW);
       digitalWrite(VALVE_PIN, HIGH);
-      if (digitalRead(TANK_BOTTOM_PIN) != TANK_BOTTOM_ON_LEVEL and digitalRead(TANK_TOP_PIN) != TANK_TOP_ON_LEVEL) {
+      if (raw_sensors.tank_bottom != TANK_BOTTOM_ON_LEVEL and raw_sensors.tank_top != TANK_TOP_ON_LEVEL) {
         tank_fillings_remaining--;
         if (tank_fillings_remaining > 60000) tank_fillings_remaining = 0; //against integer rollover
-        if (digitalRead(LOW_WATER_PIN) == LOW_WATER_ON_LEVEL) {
+        if (raw_sensors.low_water == LOW_WATER_ON_LEVEL) {
           system_state = STATUS_NO_WATER;
           return;
         }
@@ -709,7 +748,7 @@ void handle_pump_stuff() {
     case STATUS_PUMPING:
       digitalWrite(PUMP_PIN, HIGH);
       digitalWrite(VALVE_PIN, LOW);
-      if (digitalRead(TANK_TOP_PIN) == TANK_TOP_ON_LEVEL or digitalRead(LOW_WATER_PIN) == LOW_WATER_ON_LEVEL) {
+      if (raw_sensors.tank_top == TANK_TOP_ON_LEVEL or raw_sensors.low_water == LOW_WATER_ON_LEVEL) {
         system_state = STATUS_EMPTYING;
       }
       break;
@@ -717,7 +756,7 @@ void handle_pump_stuff() {
     case STATUS_NO_WATER:
       digitalWrite(PUMP_PIN, LOW);
       digitalWrite(VALVE_PIN, LOW);
-      if (digitalRead(LOW_WATER_PIN) != LOW_WATER_ON_LEVEL) system_state = STATUS_IDLE;
+      if (raw_sensors.low_water != LOW_WATER_ON_LEVEL) system_state = STATUS_IDLE;
       break;
 
     case STATUS_NO_TIME:
@@ -726,17 +765,22 @@ void handle_pump_stuff() {
       if (!component_errors.rtc_unset) {system_state = STATUS_IDLE; return;}
       break;
 
+    case STATUS_LOW_BATTERY:
+      digitalWrite(PUMP_PIN, LOW);
+      digitalWrite(VALVE_PIN, LOW);
+      if (battery_voltage >= settings.battery_voltage_reset) system_state = STATUS_IDLE;
+
      default:
      case STATUS_GENERAL_FAIL:
       digitalWrite(PUMP_PIN, LOW);
       digitalWrite(VALVE_PIN, LOW);
-      if ((digitalRead(TANK_TOP_PIN) == TANK_TOP_ON_LEVEL) <= (digitalRead(TANK_BOTTOM_PIN) == TANK_BOTTOM_ON_LEVEL)) component_errors.tank_sensors_irrational = false; //if the top sensor is the same or lower than the bottom sensor, its fine
+      if ((raw_sensors.tank_top == TANK_TOP_ON_LEVEL) <= (raw_sensors.tank_bottom == TANK_BOTTOM_ON_LEVEL)) component_errors.tank_sensors_irrational = false; //if the top sensor is the same or lower than the bottom sensor, its fine
       if (!component_errors.rtc_missing and !component_errors.tank_sensors_irrational) system_state = STATUS_IDLE;
       break;
   }
 }
 
-void read_clock_and_stuff() {
+void read_sensors_and_clock() {
   if (RTC.read(current_time)) {
     component_errors.rtc_missing = false;
     component_errors.rtc_unset = false;
@@ -745,6 +789,11 @@ void read_clock_and_stuff() {
     if (RTC.chipPresent()) {component_errors.rtc_missing = false; component_errors.rtc_unset = true; system_state = STATUS_NO_TIME;}
     else {component_errors.rtc_missing = true; component_errors.rtc_unset = false;}
   }
+  battery_voltage = (float)analogRead(BATTERY_VOLTAGE_PIN) / BATTERY_VOLTAGE_ADC_DIVIDER;
+
+  raw_sensors.low_water = digitalRead(LOW_WATER_PIN);
+  raw_sensors.tank_bottom = digitalRead(TANK_BOTTOM_PIN);
+  raw_sensors.tank_top = digitalRead(TANK_TOP_PIN);
 }
 
 void handle_serial() {
@@ -754,6 +803,24 @@ void handle_serial() {
     if (controlCharacter == 'd') up_callback();
     if (controlCharacter == 'a') down_callback();
     if (controlCharacter == 's') btn_callback();
+
+    if (controlCharacter == 'V') { //dump all sensor values to serial
+      Serial.print(F("Low Water: "));
+      Serial.println((raw_sensors.low_water == LOW_WATER_ON_LEVEL) ? F("Water too low") : F("Water fine"));
+      Serial.print(F("Bottom Tank Swimmer: "));
+      Serial.println((raw_sensors.tank_bottom == TANK_BOTTOM_ON_LEVEL) ? F("Under Water") : F("Dry"));
+      Serial.print(F("Top Tank Swimmer: "));
+      Serial.println((raw_sensors.tank_top == TANK_TOP_ON_LEVEL) ? F("Under Water") : F("Dry"));
+      Serial.print(F("Battery Voltage: "));
+      Serial.print(battery_voltage);
+      Serial.println('V');
+
+      Serial.println();
+    }
+
+    if (controlCharacter == 'R') { //reset all settings
+      //todo: write this
+    } 
   }
 }
 
@@ -780,7 +847,7 @@ void do_stored_buttons() {
 }
 
 void loop() {
-  read_clock_and_stuff();
+  read_sensors_and_clock();
   handle_pump_stuff();
   update_display();
 

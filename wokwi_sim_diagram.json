@@ -66,6 +66,20 @@
       "top": 95.69,
       "left": 375.37,
       "attrs": { "common": "cathode" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r1",
+      "top": 390,
+      "left": 310.97,
+      "attrs": { "value": "15000" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r2",
+      "top": 390,
+      "left": 383.16,
+      "attrs": { "value": "1200" }
     }
   ],
   "connections": [
@@ -100,9 +114,13 @@
     [ "tank_empty_sw:1", "low_water_sw:1", "black", [ "h9.2", "v-43.79" ] ],
     [ "tank_empty_sw:3", "low_water_sw:3", "red", [ "h18.78", "v-1.12" ] ],
     [ "low_water_sw:2", "uno:7", "gold", [ "h0" ] ],
-    [ "rgb1:B", "uno:A3", "green", [ "v0" ] ],
-    [ "rgb1:G", "uno:A2", "green", [ "v0" ] ],
-    [ "rgb1:R", "uno:A1", "green", [ "v26.4", "h7.49" ] ],
-    [ "uno:GND.2", "rgb1:COM", "black", [ "v-23.98", "h50.03" ] ]
+    [ "rgb1:B", "uno:A3", "#8f4814", [ "v0" ] ],
+    [ "rgb1:G", "uno:A2", "#8f4814", [ "v0" ] ],
+    [ "rgb1:R", "uno:A1", "#8f4814", [ "v26.4", "h7.49" ] ],
+    [ "r2:1", "r1:2", "gray", [ "v0" ] ],
+    [ "r2:1", "uno:A0", "gray", [ "v-190.27", "h14.76" ] ],
+    [ "uno:GND.2", "r2:2", "black", [ "v191.42", "h96.43" ] ],
+    [ "uno:VIN", "r1:1", "orange", [ "v173.55", "h-52.78" ] ],
+    [ "rgb1:COM", "uno:GND.3", "black", [ "v8.92", "h-31.36" ] ]
   ]
 }
