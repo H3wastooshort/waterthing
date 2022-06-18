@@ -24,9 +24,12 @@ The default sprintf() fuction in Arduino cant do floats. You have to add these c
 
 ArduinoIDE either platform.txt:
 compiler.c.elf.extra_flags=-Wl,-u,vfprintf -lprintf_flt -lm
+or add it to compiler.c.elf.flags
 
 or (recommended) boards.txt:
 uno.build.extra_flags=-Wl,-u,vfprintf -lprintf_flt -lm
+
+this may not work. in that case try this https://forum.arduino.cc/t/strange-problem-with-sprintf/122242/9
 
 PlatformIO platformio.ini:
 build_flags = -Wl,-u,vfprintf -lprintf_flt -lm
@@ -67,25 +70,25 @@ build_flags = -Wl,-u,vfprintf -lprintf_flt -lm
 LiquidCrystal_I2C lcd(0x27,16,2);
 
 //dynamic status
-const byte gfx_off[8] = {B01110, B01010, B01110, B00000, B11011, B10010, B11011, B10010};
-//const byte gfx_idle[8] = {B00000, B00000, B00000, B00000, B00000, B00000, B10101, B00000}; //... version
-const byte gfx_idle[8] = {B00100, B00100, B01110, B10111, B11111, B01110, B00000, B10101}; //drop with ... version
-//const byte gfx_idle[8] = {B00110, B00011, B01100, B00110, B11000, B01000, B10000, B11000}; //zZZ version
-const byte gfx_fill[8] = {B00100, B10101, B01110, B00100, B00000, B10001, B10001, B11111};
-const byte gfx_drain[8] = {B10001, B10001, B11111, B00000, B00100, B10101, B01110, B00100};
-const byte gfx_no_water[8] = {B00001, B00001, B01000, B01101, B01100, B10110, B11110, B01100};
-const byte gfx_low_bat[8] = {B01110, B10001, B10101, B10101, B10001, B10101, B10001, B11111};
-const byte gfx_error[8] = {B10101, B10101, B10101, B10101, B00000, B00000, B10101, B00000};
+byte gfx_off[8] = {B01110, B01010, B01110, B00000, B11011, B10010, B11011, B10010};
+//byte gfx_idle[8] = {B00000, B00000, B00000, B00000, B00000, B00000, B10101, B00000}; //... version
+byte gfx_idle[8] = {B00100, B00100, B01110, B10111, B11111, B01110, B00000, B10101}; //drop with ... version
+//byte gfx_idle[8] = {B00110, B00011, B01100, B00110, B11000, B01000, B10000, B11000}; //zZZ version
+byte gfx_fill[8] = {B00100, B10101, B01110, B00100, B00000, B10001, B10001, B11111};
+byte gfx_drain[8] = {B10001, B10001, B11111, B00000, B00100, B10101, B01110, B00100};
+byte gfx_no_water[8] = {B00001, B00001, B01000, B01101, B01100, B10110, B11110, B01100};
+byte gfx_low_bat[8] = {B01110, B10001, B10101, B10101, B10001, B10101, B10001, B11111};
+byte gfx_error[8] = {B10101, B10101, B10101, B10101, B00000, B00000, B10101, B00000};
 
 //symbol graphics
-const byte gfx_hyst[8] = {B00111, B01010, B01010, B01010, B01010, B01010, B01010, B11100};
-const byte gfx_drop[8] = {B00100, B00100, B01110, B01110, B10111, B11111, B01110, B00000};
+byte gfx_hyst[8] = {B00111, B01010, B01010, B01010, B01010, B01010, B01010, B11100};
+byte gfx_drop[8] = {B00100, B00100, B01110, B01110, B10111, B11111, B01110, B00000};
 
 //umlaut graphics
-const byte gfx_uml_s[8] = {B01100, B10010, B10010, B11100, B10010, B10010, B10100, B10000};
-const byte gfx_uml_a[8] = {B01010, B00000, B01110, B00001, B01111, B10001, B01111, B00000};
-const byte gfx_uml_o[8] = {B01010, B00000, B01110, B10001, B10001, B10001, B01110, B00000};
-const byte gfx_uml_u[8] = {B01010, B00000, B10001, B10001, B10001, B10011, B01101, B00000};
+byte gfx_uml_s[8] = {B01100, B10010, B10010, B11100, B10010, B10010, B10100, B10000};
+byte gfx_uml_a[8] = {B01010, B00000, B01110, B00001, B01111, B10001, B01111, B00000};
+byte gfx_uml_o[8] = {B01010, B00000, B01110, B10001, B10001, B10001, B01110, B00000};
+byte gfx_uml_u[8] = {B01010, B00000, B10001, B10001, B10001, B10011, B01101, B00000};
 
 enum gfx_IDs { //enum for naming display gfx ids
   /*GFX_ID_IDLE = 0,
@@ -721,22 +724,27 @@ void update_display() {
         case PAGE_BATTERY:
           char volt_buf[5];
           
-          lcd.print(F("0"));
+          lcd.write('0');
+
+          //lcd.print(F("OFF"));
           //lcd.write(byte(GFX_ID_ARROW_R));
           lcd_print_menu_bracket(1,false);
-          sprintf(volt_buf, "%04.1fV", settings.battery_voltage_cutoff);
+          sprintf(volt_buf, "%04.1f", settings.battery_voltage_cutoff);
           lcd.print(volt_buf);
           lcd_print_menu_bracket(1,true);
 
           lcd.write(byte(GFX_ID_HYST));
 
           lcd_print_menu_bracket(2,false);
-          sprintf(volt_buf, "%04.1fV", settings.battery_voltage_reset);
+          sprintf(volt_buf, "%04.1f", settings.battery_voltage_reset);
           lcd.print(volt_buf);
           lcd_print_menu_bracket(2,true);
 
           //lcd.write(byte(GFX_ID_ARROW_L));
-          lcd.print(F("1"));
+          //lcd.print(F("ON"));
+
+          lcd.write('1');
+
           break;
     }
     last_display_update = millis();
