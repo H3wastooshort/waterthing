@@ -15,25 +15,6 @@ Zyklus:
  * Warten bis Tank leer
  * wiederholen bis gewünschte menge bewässert
 */
-/*
-========
-Achtumg/Attention
-========
-Die Standard sprintf() funktion von Arduino kann kein float. Diese compiler flags müssen hinzugefügt werden
-The default sprintf() fuction in Arduino cant do floats. You have to add these compiler flags
-
-ArduinoIDE either platform.txt:
-compiler.c.elf.extra_flags=-Wl,-u,vfprintf -lprintf_flt -lm
-or add it to compiler.c.elf.flags
-
-or (recommended) boards.txt:
-uno.build.extra_flags=-Wl,-u,vfprintf -lprintf_flt -lm
-
-this may not work. in that case try this https://forum.arduino.cc/t/strange-problem-with-sprintf/122242/9
-
-PlatformIO platformio.ini:
-build_flags = -Wl,-u,vfprintf -lprintf_flt -lm
-*/
 
 #include <EEPROM.h>
 #include <LiquidCrystal_I2C.h>
@@ -627,8 +608,9 @@ void update_display() {
                 lcd.print(F("Akku Leer!"));
                 lcd.setCursor(11,1);
                 char vbat_buf[5];
-                sprintf(vbat_buf, "%04.1fV", battery_voltage); //% signals start of number inset command, 0 means use 0 for padding instead of whitespace, 4 means pad the result to 4 characters wide, .1 means only 1 decimal, f means the number is a float
+                dtostrf(battery_voltage,4,1,vbat_buf);
                 lcd.print(vbat_buf);
+                lcd.write('V');
                 break;
 
               default:
@@ -729,14 +711,14 @@ void update_display() {
           //lcd.print(F("OFF"));
           //lcd.write(byte(GFX_ID_ARROW_R));
           lcd_print_menu_bracket(1,false);
-          sprintf(volt_buf, "%04.1f", settings.battery_voltage_cutoff);
+          dtostrf(settings.battery_voltage_cutoff,4,1,volt_buf);
           lcd.print(volt_buf);
           lcd_print_menu_bracket(1,true);
 
           lcd.write(byte(GFX_ID_HYST));
 
           lcd_print_menu_bracket(2,false);
-          sprintf(volt_buf, "%04.1f", settings.battery_voltage_reset);
+          dtostrf(settings.battery_voltage_reset,4,1,volt_buf);
           lcd.print(volt_buf);
           lcd_print_menu_bracket(2,true);
 
