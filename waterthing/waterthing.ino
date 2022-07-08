@@ -53,8 +53,8 @@ LiquidCrystal_I2C lcd(0x27,16,2);
 //dynamic status
 byte gfx_off[8] = {B01110, B01010, B01110, B00000, B11011, B10010, B11011, B10010};
 //byte gfx_idle[8] = {B00000, B00000, B00000, B00000, B00000, B00000, B10101, B00000}; //... version
-byte gfx_idle[8] = {B00100, B00100, B01110, B10111, B11111, B01110, B00000, B10101}; //drop with ... version
-//byte gfx_idle[8] = {B00110, B00011, B01100, B00110, B11000, B01000, B10000, B11000}; //zZZ version
+//byte gfx_idle[8] = {B00100, B00100, B01110, B10111, B11111, B01110, B00000, B10101}; //drop with ... version
+byte gfx_idle[8] = {B00110, B00011, B01100, B00110, B11000, B01000, B10000, B11000}; //zZZ version
 byte gfx_fill[8] = {B00100, B10101, B01110, B00100, B00000, B10001, B10001, B11111};
 byte gfx_drain[8] = {B10001, B10001, B11111, B00000, B00100, B10101, B01110, B00100};
 byte gfx_afterdrain[8] = {B00000, B10001, B10001, B11111, B00000, B00000, B10101, B00000};
@@ -65,6 +65,7 @@ byte gfx_error[8] = {B10101, B10101, B10101, B10101, B00000, B00000, B10101, B00
 //symbol graphics
 byte gfx_hyst[8] = {B00111, B01010, B01010, B01010, B01010, B01010, B01010, B11100};
 byte gfx_drop[8] = {B00100, B00100, B01110, B01110, B10111, B11111, B01110, B00000};
+byte gfx_clock[8] = {B01110, B00100, B01110, B10001, B10111, B10101, B01110, B00000};
 
 //umlaut graphics
 byte gfx_uml_s[8] = {B01100, B10010, B10010, B11100, B10010, B10010, B10100, B10000};
@@ -78,8 +79,9 @@ enum gfx_IDs { //enum for naming display gfx ids
   GFX_ID_FILL = 2,
   GFX_ID_DRAIN = 3,*/
   GFX_ID_STATUS = 0, //redefined dynamically
-  GFX_ID_DROP = 1,
-  GFX_ID_HYST = 2,
+  GFX_ID_DYN_1 = 1,
+  GFX_ID_DYN_2 = 2,
+  GFX_ID_HYST = 3,
   GFX_ID_UML_S = 4,
   GFX_ID_UML_A = 5,
   GFX_ID_UML_O = 6,
@@ -303,18 +305,18 @@ void edit_change_callback() {
         if (tank_fillings_remaining == 0) {
           if (!menu_editing) { //if leaving edit mode
             tank_fillings_remaining = literToTanks(page_1_irrigate_order);
-            Serial.print(F("Manual water call for "));
+            /*Serial.print(F("Manual water call for "));
             Serial.print(page_1_irrigate_order);
             Serial.print(F("L wich makes "));
             Serial.print(tank_fillings_remaining);
-            Serial.println(F(" tank fillings"));
+            Serial.println(F(" tank fillings"));*/
           }
         }
         else {
           system_state = STATUS_IDLE;
           tank_fillings_remaining = 0;
           menu_editing = false;
-          Serial.print(F("Watering canceled"));
+          //Serial.print(F("Watering canceled"));
         }
       }
       break;
@@ -449,7 +451,8 @@ void setup() {
   lcd.createChar(GFX_ID_FILL, gfx_fill);
   lcd.createChar(GFX_ID_DRAIN, gfx_drain);*/
   lcd.createChar(GFX_ID_STATUS, gfx_error);
-  lcd.createChar(GFX_ID_DROP, gfx_drop);
+  lcd.createChar(GFX_ID_DYN_1, gfx_error);
+  lcd.createChar(GFX_ID_DYN_2, gfx_error);
   lcd.createChar(GFX_ID_HYST, gfx_hyst);
   lcd.createChar(GFX_ID_UML_S, gfx_uml_s);
   lcd.createChar(GFX_ID_UML_A, gfx_uml_a);
@@ -576,6 +579,8 @@ void print_page_basics() {
 
 void update_display() {
   if (millis() - last_display_update > 1000) {
+      uint16_t uint16_temp;
+      char char_5_temp[5];
       //uint32_t display_draw_start_time = millis();
       print_page_basics();
       switch (menu_page) {
@@ -596,9 +601,8 @@ void update_display() {
                 else {
                   lcd.print(F("Stby. bis"));
                   lcd.setCursor(11,1);
-                  char til_buf[5];
-                  sprintf(til_buf, "%02u:%02u", irrigation_timer.start_hour, irrigation_timer.start_minute);
-                  lcd.print(til_buf);
+                  sprintf(char_5_temp, "%02u:%02u", irrigation_timer.start_hour, irrigation_timer.start_minute);
+                  lcd.print(char_5_temp);
                 }
                 break;
               case STATUS_EMPTYING:
@@ -632,9 +636,8 @@ void update_display() {
               case STATUS_LOW_BATTERY:
                 lcd.print(F("Akku Leer!"));
                 lcd.setCursor(11,1);
-                char vbat_buf[5];
-                dtostrf(battery_voltage,4,1,vbat_buf);
-                lcd.print(vbat_buf);
+                dtostrf(battery_voltage,4,1,char_5_temp);
+                lcd.print(char_5_temp);
                 lcd.write('V');
                 break;
 
@@ -675,7 +678,7 @@ void update_display() {
           }
           break;
         
-        case PAGE_TIMER:
+        case PAGE_TIMER:          
           lcd_print_menu_bracket(1,false);
           if (irrigation_timer.start_hour<10) lcd.print(0);
           lcd.print(irrigation_timer.start_hour);
@@ -687,13 +690,22 @@ void update_display() {
           lcd_print_menu_bracket(2,true);
           lcd.write(byte(126));
           lcd_print_menu_bracket(3,false);
-          lcd.print(round(irrigation_timer.fillings_to_irrigate * settings.tank_capacity));
+          uint16_temp = round(irrigation_timer.fillings_to_irrigate * settings.tank_capacity);
+          if (uint16_temp<10) lcd.print(0);
+          if (uint16_temp<100) lcd.print(0);
+          lcd.print(uint16_temp);
           lcd_print_menu_bracket(3,true);
           lcd.print(F("L"));
           break;
         
         case PAGE_TANK:
-          lcd.print(F("Vl"));
+          lcd.createChar(GFX_ID_DYN_1, gfx_drop);
+          lcd.createChar(GFX_ID_DYN_2, gfx_clock);
+          delay(10);
+
+          lcd.setCursor(0,1);
+          //lcd.print(F("Vl"));
+          lcd.write(byte(GFX_ID_DYN_1));
           lcd_print_menu_bracket(1,false);
           if (settings.tank_capacity<10) lcd.print(0);
           if (settings.tank_capacity<100) lcd.print(0);
@@ -701,14 +713,14 @@ void update_display() {
           lcd_print_menu_bracket(1,true);
           lcd.print(F("L"));
           
-          lcd.setCursor(9,1);
-          lcd.print(F("Nl"));
+          lcd.setCursor(8,1);
+          lcd.write(byte(GFX_ID_DYN_2));
+          //lcd.print(F("Nl"));
           lcd_print_menu_bracket(2,false);
           if (settings.afterdrain_time<10) lcd.print(0);
           lcd.print(settings.afterdrain_time);
           lcd_print_menu_bracket(2,true);
-          lcd.print(F("m"));
-
+          lcd.print(F("min"));
           break;
         
         case PAGE_CLOCK1:
@@ -740,22 +752,21 @@ void update_display() {
           break;
         
         case PAGE_BATTERY:
-          char volt_buf[5];
           
           lcd.write('0');
 
           //lcd.print(F("OFF"));
           //lcd.write(byte(GFX_ID_ARROW_R));
           lcd_print_menu_bracket(1,false);
-          dtostrf(settings.battery_voltage_cutoff,4,1,volt_buf);
-          lcd.print(volt_buf);
+          dtostrf(settings.battery_voltage_cutoff,4,1,char_5_temp);
+          lcd.print(char_5_temp);
           lcd_print_menu_bracket(1,true);
 
           lcd.write(byte(GFX_ID_HYST));
 
           lcd_print_menu_bracket(2,false);
-          dtostrf(settings.battery_voltage_reset,4,1,volt_buf);
-          lcd.print(volt_buf);
+          dtostrf(settings.battery_voltage_reset,4,1,char_5_temp);
+          lcd.print(char_5_temp);
           lcd_print_menu_bracket(2,true);
 
           //lcd.write(byte(GFX_ID_ARROW_L));
@@ -932,6 +943,7 @@ void handle_serial() {
 }
 
 void do_stored_buttons() {
+  noInterrupts();
   for (uint8_t q_pos = 0; q_pos <= min(31, button_queue_add_pos); q_pos++) { //make sure they are 0
     switch (button_queue[q_pos]) {
       case 1:
@@ -951,6 +963,7 @@ void do_stored_buttons() {
     button_queue[q_pos] = 0; //clear position so it wont get executed again
   }
   button_queue_add_pos = 0;
+  interrupts();
 }
 
 void loop() {
@@ -960,4 +973,6 @@ void loop() {
 
   handle_serial();
   do_stored_buttons();
+
+  delay(1);
 }
