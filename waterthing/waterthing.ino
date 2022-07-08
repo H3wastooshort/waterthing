@@ -57,6 +57,7 @@ byte gfx_idle[8] = {B00100, B00100, B01110, B10111, B11111, B01110, B00000, B101
 //byte gfx_idle[8] = {B00110, B00011, B01100, B00110, B11000, B01000, B10000, B11000}; //zZZ version
 byte gfx_fill[8] = {B00100, B10101, B01110, B00100, B00000, B10001, B10001, B11111};
 byte gfx_drain[8] = {B10001, B10001, B11111, B00000, B00100, B10101, B01110, B00100};
+byte gfx_afterdrain[8] = {B00000, B10001, B10001, B11111, B00000, B00000, B10101, B00000};
 byte gfx_no_water[8] = {B00001, B00001, B01000, B01101, B01100, B10110, B11110, B01100};
 byte gfx_low_bat[8] = {B01110, B10001, B10101, B10101, B10001, B10101, B10001, B11111};
 byte gfx_error[8] = {B10101, B10101, B10101, B10101, B00000, B00000, B10101, B00000};
@@ -93,6 +94,7 @@ struct settings_s {
   float battery_voltage_cutoff = 10.4; //if this voltage is reached while the system is idle, a low battery waring is displayed. 0 means disable
   float battery_voltage_reset = 11.4; //if this voltage is reached while the system is in low batters state, the system is set back to idle
   int16_t max_mins_per_refill = -1; //error is thrown if the pump takes longer than that to fill the tank (5L/min pump wont take more than 5 minutes to fill a 20L tank)
+  uint8_t afterdrain_time = 5; //keep draining for this amount of time after a cycle finishes to dry the tank out
 } settings;
 
 struct i_timer_s {
@@ -117,7 +119,7 @@ enum system_state_e {
   STATUS_NO_WATER, //cant get water from tank
   STATUS_NO_TIME, //clock not set
   STATUS_LOW_BATTERY, //low battery voltage
-
+  STATUS_AFTERDRAIN, //fully drain out tank
   STATUS_GENERAL_FAIL
 };
 
@@ -133,6 +135,7 @@ struct raw_sens_s {
 } raw_sensors;
 
 uint16_t tank_fillings_remaining = 0; //if over 0, run pumping stuff til 0
+uint64_t cycle_finish_millis = 0xFFFFFFFF;
 
 //global menu variables
 int8_t menu_page = 0; // 0-> main page, 1 -> Timer Setup, 2 -> Tank Setup, 3 -> Clock Setup
@@ -159,7 +162,7 @@ enum pages_enum {
 
 #define N_OF_PAGES 7
 const char* page_names[N_OF_PAGES] = {"Status", "Manuell", "Timer", "Tank", "Uhr1", "Uhr2", "Akku"};
-const uint8_t page_max_cursor[N_OF_PAGES] = {0, 1, 3, 1, 2, 3, 2};
+const uint8_t page_max_cursor[N_OF_PAGES] = {0, 1, 3, 2, 2, 3, 2};
 
 
 int16_t literToTanks(uint16_t liters_to_convert) {
@@ -208,8 +211,8 @@ void change_menu_entry(bool dir) { //true is up
           break;
         case 3:
           irrigation_timer.fillings_to_irrigate += dir ? 1 : -1;
-          if (irrigation_timer.fillings_to_irrigate >= literToTanks(900)) irrigation_timer.fillings_to_irrigate = literToTanks(900);
           if (irrigation_timer.fillings_to_irrigate < 0 or irrigation_timer.fillings_to_irrigate == 0xFFFF) irrigation_timer.fillings_to_irrigate = 0;
+          if (irrigation_timer.fillings_to_irrigate >= literToTanks(900)) irrigation_timer.fillings_to_irrigate = literToTanks(900);
           break;
 
         default:
@@ -218,9 +221,18 @@ void change_menu_entry(bool dir) { //true is up
       break;
 
     case PAGE_TANK:
-      settings.tank_capacity += dir ? 1 : -1;
-      if (settings.tank_capacity >= 200) settings.tank_capacity = 200;
-      if (settings.tank_capacity < 0) settings.tank_capacity = 0;
+      switch (menu_entry_cursor) {
+        case 1:
+          settings.tank_capacity += dir ? 1 : -1;
+          if (settings.tank_capacity >= 200) settings.tank_capacity = 200;
+          if (settings.tank_capacity < 0) settings.tank_capacity = 0;
+          break;
+        case 2:
+          settings.afterdrain_time += dir ? 1 : -1;
+          if (settings.afterdrain_time > 250 /*overflow*/) settings.afterdrain_time = 0;
+          if (settings.afterdrain_time >= 90) settings.afterdrain_time = 90;
+          break;
+      }
       break;
 
     case PAGE_CLOCK1:
@@ -530,6 +542,9 @@ void print_page_basics() {
     case STATUS_EMPTYING:
       lcd.createChar(GFX_ID_STATUS, gfx_drain);
       break;
+    case STATUS_AFTERDRAIN:
+      lcd.createChar(GFX_ID_STATUS, gfx_afterdrain);
+      break;
     case STATUS_NO_WATER:
       lcd.createChar(GFX_ID_STATUS, gfx_no_water);
       break;
@@ -597,6 +612,16 @@ void update_display() {
                 lcd.print(tank_fillings_remaining);
                 lcd.print(F("/"));
                 lcd.print(irrigation_timer.fillings_to_irrigate);
+                break;
+              case STATUS_AFTERDRAIN:
+                char ad_buf[16];
+                if (settings.afterdrain_time < 15) {
+                  sprintf(ad_buf, "Nachlauf %03u/%03u", ((uint64_t)settings.afterdrain_time * 60) - (uint64_t(millis() - cycle_finish_millis) / 1000L), settings.afterdrain_time * 60);
+                }
+                else {
+                  sprintf(ad_buf, "Nachlauf %02um/%02um", (uint64_t)settings.afterdrain_time - ((uint64_t(millis() - cycle_finish_millis) / 1000L) / 60L), settings.afterdrain_time);
+                }
+                lcd.print(ad_buf);
                 break;
               case STATUS_NO_WATER:
                 lcd.print(F("WASSER LEER!!"));
@@ -668,11 +693,22 @@ void update_display() {
           break;
         
         case PAGE_TANK:
-         lcd.print(F("Tank Vol.:"));
+          lcd.print(F("Vl"));
           lcd_print_menu_bracket(1,false);
+          if (settings.tank_capacity<10) lcd.print(0);
+          if (settings.tank_capacity<100) lcd.print(0);
           lcd.print(settings.tank_capacity);
           lcd_print_menu_bracket(1,true);
           lcd.print(F("L"));
+          
+          lcd.setCursor(9,1);
+          lcd.print(F("Nl"));
+          lcd_print_menu_bracket(2,false);
+          if (settings.afterdrain_time<10) lcd.print(0);
+          lcd.print(settings.afterdrain_time);
+          lcd_print_menu_bracket(2,true);
+          lcd.print(F("m"));
+
           break;
         
         case PAGE_CLOCK1:
@@ -741,8 +777,9 @@ void update_display() {
       if (irrigation_timer.fillings_to_irrigate == 0) set_status_led(1,0,1);
       else set_status_led(0,1,0);
       break;
+    case STATUS_AFTERDRAIN:
     case STATUS_EMPTYING:
-      set_status_led(0,0,1);
+      set_status_led(0,1,1);
       break;
     case STATUS_PUMPING:
       set_status_led(0,0,1);
@@ -779,11 +816,19 @@ void handle_pump_stuff() {
         EEPROM.put(0+sizeof(settings),irrigation_timer);
       }
       if (tank_fillings_remaining > 0 and raw_sensors.low_water != LOW_WATER_ON_LEVEL) system_state = STATUS_PUMPING;
-      
+
       if (raw_sensors.low_water == LOW_WATER_ON_LEVEL) system_state = STATUS_NO_WATER;
       if (component_errors.rtc_unset) system_state = STATUS_NO_TIME;
       if (component_errors.rtc_missing) system_state = STATUS_GENERAL_FAIL;
+      if (millis() - cycle_finish_millis < (uint64_t(settings.afterdrain_time) * 60L * 1000L)) system_state = STATUS_AFTERDRAIN;
       if (raw_sensors.tank_bottom == TANK_BOTTOM_ON_LEVEL) system_state = STATUS_EMPTYING; //if at boot there is still water in the tank, empty it.
+      break;
+
+    case STATUS_AFTERDRAIN:
+      digitalWrite(PUMP_PIN, LOW);
+      digitalWrite(VALVE_PIN, HIGH);
+      if (tank_fillings_remaining > 0) system_state = STATUS_PUMPING; //return if for some reason there is more irrigation commanded
+      if (millis() - cycle_finish_millis > (uint64_t(settings.afterdrain_time) * 60L * 1000L)) system_state = STATUS_IDLE;
       break;
 
     case STATUS_EMPTYING:
@@ -797,7 +842,8 @@ void handle_pump_stuff() {
           return;
         }
         if (tank_fillings_remaining==0) {
-          system_state = STATUS_IDLE;
+          cycle_finish_millis = millis();
+          system_state = STATUS_AFTERDRAIN;
         }
         else {
           system_state = STATUS_PUMPING;
