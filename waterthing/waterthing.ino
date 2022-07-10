@@ -28,9 +28,7 @@ Zyklus:
 #define TANK_TOP_PIN 9
 #define PUMP_PIN 10
 #define VALVE_PIN 11
-#define LOW_WATER_ON_LEVEL LOW //level of low water pin when the low water sensor detects low water. sensor will probably be mounted upside-down so no water means low
-#define TANK_BOTTOM_ON_LEVEL HIGH //level of TANK_BOTTOM_PIN when water has reached the bottom sensor. sensor will probably be mounted upside-down so on means high
-#define TANK_TOP_ON_LEVEL LOW //level of TANK_TOP_PIN when water has reached the top sensor
+#define WATER_FLOW_SENSOR_PIN 6 //WARNING! change PCINT suff in setup() too!!
 
 #define RED_LED_PIN A1
 #define GREEN_LED_PIN A2
@@ -97,13 +95,18 @@ struct settings_s {
   float battery_voltage_reset = 11.4; //if this voltage is reached while the system is in low batters state, the system is set back to idle
   int16_t max_mins_per_refill = -1; //error is thrown if the pump takes longer than that to fill the tank (5L/min pump wont take more than 5 minutes to fill a 20L tank)
   uint8_t afterdrain_time = 5; //keep draining for this amount of time after a cycle finishes to dry the tank out
+  double clicks_per_liter = 1000;
+  bool low_water_on_level = LOW; //level of low water pin when the low water sensor detects low water. sensor will probably be mounted upside-down so no water means low
+  bool tank_bottom_on_level = HIGH; //level of TANK_BOTTOM_PIN when water has reached the bottom sensor. sensor will probably be mounted upside-down so on means high
+  bool tank_top_on_level = LOW; //level of TANK_TOP_PIN when water has reached the top sensor
 } settings;
 
 struct i_timer_s {
   int8_t start_hour = 0;
   int8_t start_minute = 0;
-  uint16_t fillings_to_irrigate = 0; //when 0, system is turned off
+  uint16_t fillings_to_irrigate = 0; //how many tank fillings to irrigate. when 0, system is turned off.
   uint8_t last_watering_day = 0;
+  uint16_t liters_to_pump = 0; //when in direct mode (no tank) how much liters to pump out
 } irrigation_timer;
 
 //and also just to organize things
@@ -131,9 +134,10 @@ tmElements_t current_time;
 float battery_voltage = 13.8;
 
 struct raw_sens_s {
-  bool low_water = !LOW_WATER_ON_LEVEL;
-  bool tank_bottom = !TANK_BOTTOM_ON_LEVEL;
-  bool tank_top = !TANK_TOP_ON_LEVEL;
+  bool low_water = !settings.low_water_on_level;
+  bool tank_bottom = !settings.tank_bottom_on_level;
+  bool tank_top = !settings.tank_top_on_level;
+  uint32_t water_flow_clicks = 0;
 } raw_sensors;
 
 uint16_t tank_fillings_remaining = 0; //if over 0, run pumping stuff til 0
@@ -402,11 +406,17 @@ void handle_encoder_clk() {
   last_encoder_clock = millis();
 }
 
-
 void set_status_led(bool r, bool g, bool b) {
   digitalWrite(RED_LED_PIN,r);
   digitalWrite(GREEN_LED_PIN,g);
   digitalWrite(BLUE_LED_PIN,b);
+}
+
+ISR (PCINT2_vect) {
+  static bool water_flow_click_halver = false;
+  water_flow_click_halver = !water_flow_click_halver;
+  if (water_flow_click_halver) return;
+  raw_sensors.water_flow_clicks++;
 }
 
 void setup() {
@@ -414,6 +424,7 @@ void setup() {
   pinMode(LOW_WATER_PIN, INPUT_PULLUP);
   pinMode(TANK_BOTTOM_PIN, INPUT_PULLUP);
   pinMode(TANK_TOP_PIN, INPUT_PULLUP);
+  pinMode(WATER_FLOW_SENSOR_PIN, INPUT_PULLUP);
   pinMode(PUMP_PIN, OUTPUT);
   pinMode(VALVE_PIN, OUTPUT);
   digitalWrite(PUMP_PIN, LOW);
@@ -527,6 +538,11 @@ void setup() {
   }
   attachInterrupt(digitalPinToInterrupt(BTN_PIN), handle_btn_up, RISING);
   attachInterrupt(digitalPinToInterrupt(ENCODER_CLK_PIN), handle_encoder_clk, FALLING);
+
+  //              dcb
+  PCICR |= 0b00000100; //allow pcint on port d
+  //      Pin 76543210
+  PCMSK2 |= 0b01000000; //enable pcint for pin 6
 
   Serial.println();
   set_status_led(0,0,0);
@@ -809,7 +825,7 @@ void update_display() {
 }
 
 void handle_pump_stuff() {
-  if (raw_sensors.tank_top == TANK_TOP_ON_LEVEL and raw_sensors.tank_bottom != TANK_BOTTOM_ON_LEVEL) {
+  if (raw_sensors.tank_top == settings.tank_top_on_level and raw_sensors.tank_bottom != settings.tank_bottom_on_level) {
     component_errors.tank_sensors_irrational = true;
     system_state = STATUS_GENERAL_FAIL;
   }
@@ -826,29 +842,29 @@ void handle_pump_stuff() {
         irrigation_timer.last_watering_day = current_time.Day;
         EEPROM.put(0+sizeof(settings),irrigation_timer);
       }
-      if (tank_fillings_remaining > 0 and raw_sensors.low_water != LOW_WATER_ON_LEVEL) system_state = STATUS_PUMPING;
+      if (tank_fillings_remaining > 0 and raw_sensors.low_water != settings.low_water_on_level) {raw_sensors.water_flow_clicks = 0; system_state = STATUS_PUMPING;}
 
-      if (raw_sensors.low_water == LOW_WATER_ON_LEVEL) system_state = STATUS_NO_WATER;
+      if (raw_sensors.low_water == settings.low_water_on_level) system_state = STATUS_NO_WATER;
       if (component_errors.rtc_unset) system_state = STATUS_NO_TIME;
       if (component_errors.rtc_missing) system_state = STATUS_GENERAL_FAIL;
       if (millis() - cycle_finish_millis < (uint64_t(settings.afterdrain_time) * 60L * 1000L)) system_state = STATUS_AFTERDRAIN;
-      if (raw_sensors.tank_bottom == TANK_BOTTOM_ON_LEVEL) system_state = STATUS_EMPTYING; //if at boot there is still water in the tank, empty it.
+      if (raw_sensors.tank_bottom == settings.tank_bottom_on_level) system_state = STATUS_EMPTYING; //if at boot there is still water in the tank, empty it.
       break;
 
     case STATUS_AFTERDRAIN:
       digitalWrite(PUMP_PIN, LOW);
       digitalWrite(VALVE_PIN, HIGH);
-      if (tank_fillings_remaining > 0) system_state = STATUS_PUMPING; //return if for some reason there is more irrigation commanded
+      if (tank_fillings_remaining > 0) {raw_sensors.water_flow_clicks = 0; system_state = STATUS_PUMPING;} //return if for some reason there is more irrigation commanded
       if (millis() - cycle_finish_millis > (uint64_t(settings.afterdrain_time) * 60L * 1000L)) system_state = STATUS_IDLE;
       break;
 
     case STATUS_EMPTYING:
       digitalWrite(PUMP_PIN, LOW);
       digitalWrite(VALVE_PIN, HIGH);
-      if (raw_sensors.tank_bottom != TANK_BOTTOM_ON_LEVEL and raw_sensors.tank_top != TANK_TOP_ON_LEVEL) {
+      if (raw_sensors.tank_bottom != settings.tank_bottom_on_level and raw_sensors.tank_top != settings.tank_top_on_level) {
         tank_fillings_remaining--;
         if (tank_fillings_remaining > 60000) tank_fillings_remaining = 0; //against integer rollover
-        if (raw_sensors.low_water == LOW_WATER_ON_LEVEL) {
+        if (raw_sensors.low_water == settings.low_water_on_level) {
           system_state = STATUS_NO_WATER;
           return;
         }
@@ -865,15 +881,22 @@ void handle_pump_stuff() {
     case STATUS_PUMPING:
       digitalWrite(PUMP_PIN, HIGH);
       digitalWrite(VALVE_PIN, LOW);
-      if (raw_sensors.tank_top == TANK_TOP_ON_LEVEL or raw_sensors.low_water == LOW_WATER_ON_LEVEL) {
-        system_state = STATUS_EMPTYING;
+      if (settings.tank_capacity > 0) {
+        if (raw_sensors.tank_top == settings.tank_top_on_level or raw_sensors.low_water == settings.low_water_on_level) {
+          system_state = STATUS_EMPTYING;
+        }
+      }
+      else {
+        if (raw_sensors.water_flow_clicks > (settings.clicks_per_liter * irrigation_timer.liters_to_pump) or raw_sensors.low_water == settings.low_water_on_level) {
+          system_state = STATUS_EMPTYING;
+        }
       }
       break;
 
     case STATUS_NO_WATER:
       digitalWrite(PUMP_PIN, LOW);
       digitalWrite(VALVE_PIN, LOW);
-      if (raw_sensors.low_water != LOW_WATER_ON_LEVEL) system_state = STATUS_IDLE;
+      if (raw_sensors.low_water != settings.low_water_on_level) system_state = STATUS_IDLE;
       break;
 
     case STATUS_NO_TIME:
@@ -892,7 +915,7 @@ void handle_pump_stuff() {
      case STATUS_GENERAL_FAIL:
       digitalWrite(PUMP_PIN, LOW);
       digitalWrite(VALVE_PIN, LOW);
-      if ((raw_sensors.tank_top == TANK_TOP_ON_LEVEL) <= (raw_sensors.tank_bottom == TANK_BOTTOM_ON_LEVEL)) component_errors.tank_sensors_irrational = false; //if the top sensor is the same or lower than the bottom sensor, its fine
+      if ((raw_sensors.tank_top == settings.tank_top_on_level) <= (raw_sensors.tank_bottom == settings.tank_bottom_on_level)) component_errors.tank_sensors_irrational = false; //if the top sensor is the same or lower than the bottom sensor, its fine
       if (!component_errors.rtc_missing and !component_errors.tank_sensors_irrational) system_state = STATUS_IDLE;
       break;
   }
@@ -924,14 +947,15 @@ void handle_serial() {
 
     if (controlCharacter == 'V') { //dump all sensor values to serial
       Serial.print(F("Low Water: "));
-      Serial.println((raw_sensors.low_water == LOW_WATER_ON_LEVEL) ? F("Water too low") : F("Water fine"));
+      Serial.println((raw_sensors.low_water == settings.low_water_on_level) ? F("Water too low") : F("Water fine"));
       Serial.print(F("Bottom Tank Swimmer: "));
-      Serial.println((raw_sensors.tank_bottom == TANK_BOTTOM_ON_LEVEL) ? F("Under Water") : F("Dry"));
+      Serial.println((raw_sensors.tank_bottom == settings.tank_bottom_on_level) ? F("Under Water") : F("Dry"));
       Serial.print(F("Top Tank Swimmer: "));
-      Serial.println((raw_sensors.tank_top == TANK_TOP_ON_LEVEL) ? F("Under Water") : F("Dry"));
+      Serial.println((raw_sensors.tank_top == settings.tank_top_on_level) ? F("Under Water") : F("Dry"));
       Serial.print(F("Battery Voltage: "));
       Serial.print(battery_voltage);
-      Serial.println('V');
+      Serial.print(F("V\nWater flow clicks: "));
+      Serial.print(raw_sensors.water_flow_clicks);
 
       Serial.println();
     }
