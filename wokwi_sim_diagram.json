@@ -85,9 +85,16 @@
       "type": "wokwi-potentiometer",
       "id": "fake_Vbat",
       "top": 422.05,
-      "left": 366.87,
+      "left": 374.08,
       "rotate": 180,
-      "attrs": {"value":1023}
+      "attrs": { "value": 1023 }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "btn1",
+      "top": -118.4,
+      "left": 422.01,
+      "attrs": { "color": "white", "bounce": "0", "key": " " }
     }
   ],
   "connections": [
@@ -136,6 +143,13 @@
       "uno:A0",
       "gray",
       [ "v-47.02", "h-31.38", "v-66.06", "h23.49", "v-82.95", "h-19.82" ]
+    ],
+    [ "btn1:2.l", "uno:6", "white", [ "h-49.72", "v84.8", "h4.29" ] ],
+    [
+      "btn1:1.r",
+      "uno:GND.2",
+      "black",
+      [ "v1.23", "h136.72", "v324.01", "h-187.72", "v34.29", "h-91.72", "v-68.57" ]
     ]
   ]
 }

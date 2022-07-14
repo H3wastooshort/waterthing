@@ -64,6 +64,8 @@ byte gfx_error[8] = {B10101, B10101, B10101, B10101, B00000, B00000, B10101, B00
 byte gfx_hyst[8] = {B00111, B01010, B01010, B01010, B01010, B01010, B01010, B11100};
 byte gfx_drop[8] = {B00100, B00100, B01110, B01110, B10111, B11111, B01110, B00000};
 byte gfx_clock[8] = {B01110, B00100, B01110, B10001, B10111, B10101, B01110, B00000};
+byte gfx_flow[8] = {B00100, B01100, B10110, B11110, B01100, B00010, B11001, B00010};
+byte gfx_pulse[8] = {B00000, B01110, B01010, B01010, B01010, B01010, B11011, B00000};
 
 //umlaut graphics
 byte gfx_uml_s[8] = {B01100, B10010, B10010, B11100, B10010, B10010, B10100, B10000};
@@ -79,7 +81,7 @@ enum gfx_IDs { //enum for naming display gfx ids
   GFX_ID_STATUS = 0, //redefined dynamically
   GFX_ID_DYN_1 = 1,
   GFX_ID_DYN_2 = 2,
-  GFX_ID_HYST = 3,
+  GFX_ID_DYN_3 = 3,
   GFX_ID_UML_S = 4,
   GFX_ID_UML_A = 5,
   GFX_ID_UML_O = 6,
@@ -90,12 +92,12 @@ enum gfx_IDs { //enum for naming display gfx ids
 
 //structs are used to save to EEPROM more easily
 struct settings_s {
-  uint8_t tank_capacity = 10; //in L
+  uint16_t tank_capacity = 10; //in L
   float battery_voltage_cutoff = 10.4; //if this voltage is reached while the system is idle, a low battery waring is displayed. 0 means disable
   float battery_voltage_reset = 11.4; //if this voltage is reached while the system is in low batters state, the system is set back to idle
   int16_t max_mins_per_refill = -1; //error is thrown if the pump takes longer than that to fill the tank (5L/min pump wont take more than 5 minutes to fill a 20L tank)
   uint8_t afterdrain_time = 5; //keep draining for this amount of time after a cycle finishes to dry the tank out
-  double clicks_per_liter = 1000;
+  uint16_t clicks_per_liter = 1000;
   bool low_water_on_level = LOW; //level of low water pin when the low water sensor detects low water. sensor will probably be mounted upside-down so no water means low
   bool tank_bottom_on_level = HIGH; //level of TANK_BOTTOM_PIN when water has reached the bottom sensor. sensor will probably be mounted upside-down so on means high
   bool tank_top_on_level = LOW; //level of TANK_TOP_PIN when water has reached the top sensor
@@ -140,7 +142,7 @@ struct raw_sens_s {
   uint32_t water_flow_clicks = 0;
 } raw_sensors;
 
-uint16_t tank_fillings_remaining = 0; //if over 0, run pumping stuff til 0
+uint16_t tank_fillings_remaining = 0; //if over 0, run pumping stuff til 0. is in tank fillings normally, in liters in direct mode
 uint64_t cycle_finish_millis = 0xFFFFFFFF;
 
 //global menu variables
@@ -186,6 +188,7 @@ void lcd_print_menu_bracket(uint8_t for_menu_entry, bool ending_bracket) {
 }
 
 void change_menu_entry(bool dir) { //true is up
+  static uint32_t last_menu_entry_change = 0;
   if (menu_entry_cursor == 0) {
       menu_page += dir ? 1 : -1;
       if (menu_page >= N_OF_PAGES) menu_page = N_OF_PAGES-1;
@@ -196,9 +199,17 @@ void change_menu_entry(bool dir) { //true is up
     case PAGE_MAN: //manual
       if (menu_entry_cursor == 1) {
         if (tank_fillings_remaining == 0) {
-          page_1_irrigate_order += dir ? settings.tank_capacity : settings.tank_capacity*-1;
-          if (page_1_irrigate_order > 990) page_1_irrigate_order = 990;
-          if (page_1_irrigate_order < 0) page_1_irrigate_order = 0;
+          if (settings.tank_capacity>0)
+          {
+            page_1_irrigate_order += dir ? settings.tank_capacity : settings.tank_capacity*-1;
+            if (page_1_irrigate_order > 0xFF00 /* overflow */) page_1_irrigate_order = 0;
+            if (page_1_irrigate_order > 990) page_1_irrigate_order = 990;
+          }
+          else {
+            page_1_irrigate_order += dir ? 1 : -1;
+            if (page_1_irrigate_order > 60000 /* overflow */) page_1_irrigate_order = 0;
+            if (page_1_irrigate_order > 50000) page_1_irrigate_order = 50000;
+          }
         }
       }
       break;
@@ -217,7 +228,7 @@ void change_menu_entry(bool dir) { //true is up
           break;
         case 3:
           irrigation_timer.fillings_to_irrigate += dir ? 1 : -1;
-          if (irrigation_timer.fillings_to_irrigate < 0 or irrigation_timer.fillings_to_irrigate == 0xFFFF) irrigation_timer.fillings_to_irrigate = 0;
+          if (irrigation_timer.fillings_to_irrigate < 0 or irrigation_timer.fillings_to_irrigate > 0xFFF0) irrigation_timer.fillings_to_irrigate = 0;
           if (irrigation_timer.fillings_to_irrigate >= literToTanks(900)) irrigation_timer.fillings_to_irrigate = literToTanks(900);
           break;
 
@@ -230,13 +241,23 @@ void change_menu_entry(bool dir) { //true is up
       switch (menu_entry_cursor) {
         case 1:
           settings.tank_capacity += dir ? 1 : -1;
+          if (settings.tank_capacity < 0 or settings.tank_capacity > 0xFFF0) settings.tank_capacity = 0;
           if (settings.tank_capacity >= 200) settings.tank_capacity = 200;
-          if (settings.tank_capacity < 0) settings.tank_capacity = 0;
           break;
         case 2:
-          settings.afterdrain_time += dir ? 1 : -1;
-          if (settings.afterdrain_time > 250 /*overflow*/) settings.afterdrain_time = 0;
-          if (settings.afterdrain_time >= 90) settings.afterdrain_time = 90;
+          if (settings.tank_capacity>0) {
+            settings.afterdrain_time += dir ? 1 : -1;
+            if (settings.afterdrain_time > 250 /*overflow*/) settings.afterdrain_time = 0;
+            if (settings.afterdrain_time >= 90) settings.afterdrain_time = 90;
+          }
+          else {
+            if (millis() - last_menu_entry_change > 250) settings.clicks_per_liter += dir ? 1 : -1;
+            else if (millis() - last_menu_entry_change > 150) settings.clicks_per_liter += dir ? 10 : -10;
+            else settings.clicks_per_liter += dir ? 100 : -100;
+
+            if (settings.clicks_per_liter > 60000 /*overflow*/) settings.clicks_per_liter = 0;
+            if (settings.clicks_per_liter >= 50000) settings.clicks_per_liter = 50000;
+          }
           break;
       }
       break;
@@ -300,6 +321,7 @@ void change_menu_entry(bool dir) { //true is up
     case -1:
       break;
   }
+  last_menu_entry_change = millis();
 }
 
 void edit_change_callback() {
@@ -308,7 +330,8 @@ void edit_change_callback() {
       if (menu_entry_cursor == 1) {
         if (tank_fillings_remaining == 0) {
           if (!menu_editing) { //if leaving edit mode
-            tank_fillings_remaining = literToTanks(page_1_irrigate_order);
+            if (settings.tank_capacity > 0) tank_fillings_remaining = literToTanks(page_1_irrigate_order);
+            else tank_fillings_remaining = page_1_irrigate_order;
             /*Serial.print(F("Manual water call for "));
             Serial.print(page_1_irrigate_order);
             Serial.print(F("L wich makes "));
@@ -417,6 +440,8 @@ ISR (PCINT2_vect) {
   water_flow_click_halver = !water_flow_click_halver;
   if (water_flow_click_halver) return;
   raw_sensors.water_flow_clicks++;
+  if (raw_sensors.water_flow_clicks >= settings.clicks_per_liter) if (settings.tank_capacity > 0) tank_fillings_remaining--; //decrement liter count if in direct mode
+  if (tank_fillings_remaining > 60000) tank_fillings_remaining = 0;
 }
 
 void setup() {
@@ -464,7 +489,7 @@ void setup() {
   lcd.createChar(GFX_ID_STATUS, gfx_error);
   lcd.createChar(GFX_ID_DYN_1, gfx_error);
   lcd.createChar(GFX_ID_DYN_2, gfx_error);
-  lcd.createChar(GFX_ID_HYST, gfx_hyst);
+  lcd.createChar(GFX_ID_DYN_3, gfx_error);
   lcd.createChar(GFX_ID_UML_S, gfx_uml_s);
   lcd.createChar(GFX_ID_UML_A, gfx_uml_a);
   lcd.createChar(GFX_ID_UML_O, gfx_uml_o);
@@ -549,6 +574,12 @@ void setup() {
 }
 
 void print_page_basics() {
+  static system_state_e last_sys_state = 255;
+  static pages_enum last_page = 255;
+  static uint8_t last_min = 255;
+  static uint8_t last_cursor = 255;
+  if (last_sys_state ==  system_state and last_page == menu_page and last_min == current_time.Minute and (menu_entry_cursor + menu_editing ? 0x80 : 0) == last_cursor) goto skip_page_basics;
+
   switch (system_state) {
     case STATUS_IDLE:
       
@@ -590,7 +621,14 @@ void print_page_basics() {
   char clock_buf[5];
   sprintf(clock_buf, "%02u:%02u", current_time.Hour, current_time.Minute);
   lcd.print(clock_buf);
+
+skip_page_basics:
   lcd.setCursor(0,1);
+
+  last_cursor = menu_entry_cursor + menu_editing ? 0x80 : 0;
+  last_sys_state = system_state;
+  last_page = menu_page;
+  last_min = current_time.Minute;
 }
 
 void update_display() {
@@ -678,14 +716,17 @@ void update_display() {
                 if (component_errors.rtc_unset) system_state = STATUS_NO_TIME;
                 break;
             }
+
+            for (uint8_t pad = 10; pad >0; pad--) lcd.print(' '); //doin it the wrong way round :P
           break;
         case PAGE_MAN:
           if (tank_fillings_remaining == 0) {
-            lcd.print(F("Gie"));lcd.write(byte(GFX_ID_UML_S));lcd.print(F("e "));
+            lcd.print(F("Gie\x04\x65 "));
             lcd_print_menu_bracket(1,false);
             lcd.print(page_1_irrigate_order);
+            lcd.print('L');
             lcd_print_menu_bracket(1,true);
-            lcd.print(F("L jetzt")); //the jetzt gets cut off when selecting more than 0L but thats not too bad
+            lcd.print(F(" jetzt")); //the jetzt gets cut off when selecting more than 0L but thats not too bad
           }
           else {
             lcd_print_menu_bracket(1,false);
@@ -710,33 +751,54 @@ void update_display() {
           if (uint16_temp<10) lcd.print(0);
           if (uint16_temp<100) lcd.print(0);
           lcd.print(uint16_temp);
-          lcd_print_menu_bracket(3,true);
           lcd.print(F("L"));
+          lcd_print_menu_bracket(3,true);
           break;
         
         case PAGE_TANK:
           lcd.createChar(GFX_ID_DYN_1, gfx_drop);
-          lcd.createChar(GFX_ID_DYN_2, gfx_clock);
-          delay(10);
+          if (settings.tank_capacity>0) lcd.createChar(GFX_ID_DYN_2, gfx_clock);
+          else {
+            lcd.createChar(GFX_ID_DYN_2, gfx_flow);
+            lcd.createChar(GFX_ID_DYN_3, gfx_pulse);
+          }
+          lcd.setCursor(0,1); //this is needed so the disp takes the custom char
 
-          lcd.setCursor(0,1);
           //lcd.print(F("Vl"));
           lcd.write(byte(GFX_ID_DYN_1));
           lcd_print_menu_bracket(1,false);
-          if (settings.tank_capacity<10) lcd.print(0);
-          if (settings.tank_capacity<100) lcd.print(0);
-          lcd.print(settings.tank_capacity);
+          if (settings.tank_capacity>0) {
+            if (settings.tank_capacity<10) lcd.print(0);
+            if (settings.tank_capacity<100) lcd.print(0);
+            lcd.print(settings.tank_capacity);
+            lcd.print(F("L"));
+          }
+          else lcd.print(F("D"));
           lcd_print_menu_bracket(1,true);
-          lcd.print(F("L"));
           
-          lcd.setCursor(8,1);
-          lcd.write(byte(GFX_ID_DYN_2));
-          //lcd.print(F("Nl"));
-          lcd_print_menu_bracket(2,false);
-          if (settings.afterdrain_time<10) lcd.print(0);
-          lcd.print(settings.afterdrain_time);
-          lcd_print_menu_bracket(2,true);
-          lcd.print(F("min"));
+          if (settings.tank_capacity>0) {
+            lcd.setCursor(8,1);
+            lcd.write(byte(GFX_ID_DYN_2));
+            //lcd.print(F("Nl"));
+            lcd_print_menu_bracket(2,false);
+            if (settings.afterdrain_time<10) lcd.print(0);
+            lcd.print(settings.afterdrain_time);
+            lcd.print(F("min"));
+            lcd_print_menu_bracket(2,true);
+          }
+          else {
+            lcd.write(' ');
+            lcd.write(byte(GFX_ID_DYN_2));
+            lcd_print_menu_bracket(2,false);
+            if (settings.clicks_per_liter<10) lcd.print(0);
+            if (settings.clicks_per_liter<100) lcd.print(0);
+            if (settings.clicks_per_liter<1000) lcd.print(0);
+            if (settings.clicks_per_liter<10000) lcd.print(0);
+            lcd.print(settings.clicks_per_liter);
+            lcd.write(byte(GFX_ID_DYN_3));
+            lcd.print(F("/L"));
+            lcd_print_menu_bracket(2,true);
+          }
           break;
         
         case PAGE_CLOCK1:
@@ -768,7 +830,9 @@ void update_display() {
           break;
         
         case PAGE_BATTERY:
-          
+          lcd.createChar(GFX_ID_DYN_3, gfx_hyst);
+          lcd.setCursor(0,1); //this is needed so the disp takes the custom char
+
           lcd.write('0');
 
           //lcd.print(F("OFF"));
@@ -778,7 +842,7 @@ void update_display() {
           lcd.print(char_5_temp);
           lcd_print_menu_bracket(1,true);
 
-          lcd.write(byte(GFX_ID_HYST));
+          lcd.write(byte(GFX_ID_DYN_3));
 
           lcd_print_menu_bracket(2,false);
           dtostrf(settings.battery_voltage_reset,4,1,char_5_temp);
@@ -825,9 +889,14 @@ void update_display() {
 }
 
 void handle_pump_stuff() {
-  if (raw_sensors.tank_top == settings.tank_top_on_level and raw_sensors.tank_bottom != settings.tank_bottom_on_level) {
+  if ((raw_sensors.tank_top == settings.tank_top_on_level and raw_sensors.tank_bottom != settings.tank_bottom_on_level) and settings.tank_capacity > 0) {
     component_errors.tank_sensors_irrational = true;
     system_state = STATUS_GENERAL_FAIL;
+  }
+  if((irrigation_timer.start_hour <= current_time.Hour and irrigation_timer.start_minute <= current_time.Minute) and (irrigation_timer.last_watering_day != current_time.Day)) { //
+    tank_fillings_remaining +=  (settings.tank_capacity > 10) ? irrigation_timer.fillings_to_irrigate : irrigation_timer.liters_to_pump;
+    irrigation_timer.last_watering_day = current_time.Day;
+    EEPROM.put(0+sizeof(settings),irrigation_timer);
   }
   switch (system_state) {
     case STATUS_IDLE:
@@ -837,11 +906,7 @@ void handle_pump_stuff() {
 
       if (battery_voltage <= settings.battery_voltage_cutoff and tank_fillings_remaining == 0) system_state = STATUS_LOW_BATTERY; //low battery is lowest priority. this is so a currently running irrigation is completed even if the pump motor drops the voltage
 
-      if((irrigation_timer.start_hour <= current_time.Hour and irrigation_timer.start_minute <= current_time.Minute) and (irrigation_timer.last_watering_day != current_time.Day)) { //
-        tank_fillings_remaining = irrigation_timer.fillings_to_irrigate;
-        irrigation_timer.last_watering_day = current_time.Day;
-        EEPROM.put(0+sizeof(settings),irrigation_timer);
-      }
+
       if (tank_fillings_remaining > 0 and raw_sensors.low_water != settings.low_water_on_level) {raw_sensors.water_flow_clicks = 0; system_state = STATUS_PUMPING;}
 
       if (raw_sensors.low_water == settings.low_water_on_level) system_state = STATUS_NO_WATER;
@@ -887,8 +952,8 @@ void handle_pump_stuff() {
         }
       }
       else {
-        if (raw_sensors.water_flow_clicks > (settings.clicks_per_liter * irrigation_timer.liters_to_pump) or raw_sensors.low_water == settings.low_water_on_level) {
-          system_state = STATUS_EMPTYING;
+        if (tank_fillings_remaining == 0/*raw_sensors.water_flow_clicks > (settings.clicks_per_liter * irrigation_timer.liters_to_pump)*/ or raw_sensors.low_water == settings.low_water_on_level) {
+          system_state = STATUS_IDLE;
         }
       }
       break;
@@ -915,7 +980,7 @@ void handle_pump_stuff() {
      case STATUS_GENERAL_FAIL:
       digitalWrite(PUMP_PIN, LOW);
       digitalWrite(VALVE_PIN, LOW);
-      if ((raw_sensors.tank_top == settings.tank_top_on_level) <= (raw_sensors.tank_bottom == settings.tank_bottom_on_level)) component_errors.tank_sensors_irrational = false; //if the top sensor is the same or lower than the bottom sensor, its fine
+      if (((raw_sensors.tank_top == settings.tank_top_on_level) <= (raw_sensors.tank_bottom == settings.tank_bottom_on_level)) or (settings.tank_capacity == 0)) component_errors.tank_sensors_irrational = false; //if the top sensor is the same or lower than the bottom sensor, its fine
       if (!component_errors.rtc_missing and !component_errors.tank_sensors_irrational) system_state = STATUS_IDLE;
       break;
   }
