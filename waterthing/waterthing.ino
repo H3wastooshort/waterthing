@@ -50,9 +50,10 @@ LiquidCrystal_I2C lcd(0x27,16,2);
 
 //dynamic status
 byte gfx_off[8] = {B01110, B01010, B01110, B00000, B11011, B10010, B11011, B10010};
+byte gfx_idle[8] = {B01110, B10001, B10111, B10101, B01110, B00000, B10101, B00000}; //clock 3 dots version
 //byte gfx_idle[8] = {B00000, B00000, B00000, B00000, B00000, B00000, B10101, B00000}; //... version
 //byte gfx_idle[8] = {B00100, B00100, B01110, B10111, B11111, B01110, B00000, B10101}; //drop with ... version
-byte gfx_idle[8] = {B00110, B00011, B01100, B00110, B11000, B01000, B10000, B11000}; //zZZ version
+//byte gfx_idle[8] = {B00110, B00011, B01100, B00110, B11000, B01000, B10000, B11000}; //zZZ version
 byte gfx_fill[8] = {B00100, B10101, B01110, B00100, B00000, B10001, B10001, B11111};
 byte gfx_drain[8] = {B10001, B10001, B11111, B00000, B00100, B10101, B01110, B00100};
 byte gfx_afterdrain[8] = {B00000, B10001, B10001, B11111, B00000, B00000, B10101, B00000};
@@ -227,9 +228,16 @@ void change_menu_entry(bool dir) { //true is up
           if (irrigation_timer.start_minute < 0) irrigation_timer.start_minute = 0;
           break;
         case 3:
-          irrigation_timer.fillings_to_irrigate += dir ? 1 : -1;
-          if (irrigation_timer.fillings_to_irrigate < 0 or irrigation_timer.fillings_to_irrigate > 0xFFF0) irrigation_timer.fillings_to_irrigate = 0;
-          if (irrigation_timer.fillings_to_irrigate >= literToTanks(900)) irrigation_timer.fillings_to_irrigate = literToTanks(900);
+          if (settings.tank_capacity > 0) {
+            irrigation_timer.fillings_to_irrigate += dir ? 1 : -1;
+            if (irrigation_timer.fillings_to_irrigate < 0 or irrigation_timer.fillings_to_irrigate > 0xFFF0) irrigation_timer.fillings_to_irrigate = 0;
+            if (irrigation_timer.fillings_to_irrigate >= literToTanks(900)) irrigation_timer.fillings_to_irrigate = literToTanks(900);
+          }
+          else {
+            irrigation_timer.liters_to_pump += dir ? 1 : -1;
+            if (irrigation_timer.liters_to_pump < 0 or irrigation_timer.liters_to_pump > 0xFFF0) irrigation_timer.liters_to_pump = 0;
+            if (irrigation_timer.liters_to_pump >= 999) irrigation_timer.liters_to_pump = 999;
+          }
           break;
 
         default:
@@ -583,7 +591,7 @@ void print_page_basics() {
   switch (system_state) {
     case STATUS_IDLE:
       
-    if (irrigation_timer.fillings_to_irrigate == 0) lcd.createChar(GFX_ID_STATUS, gfx_off);
+    if (settings.tank_capacity > 0 ? irrigation_timer.fillings_to_irrigate == 0 : irrigation_timer.liters_to_pump == 0) lcd.createChar(GFX_ID_STATUS, gfx_off);
       else lcd.createChar(GFX_ID_STATUS, gfx_idle);
       break;
     case STATUS_PUMPING:
@@ -646,7 +654,7 @@ void update_display() {
         case PAGE_STATUS:
             switch (system_state) {
               case STATUS_IDLE:
-                if (irrigation_timer.fillings_to_irrigate == 0) {
+                if (settings.tank_capacity > 0 ? irrigation_timer.fillings_to_irrigate == 0 : irrigation_timer.liters_to_pump == 0) {
                   lcd.print(F("Ausgeschaltet"));
                 }
                 else if (irrigation_timer.last_watering_day == current_time.Day) {
@@ -663,13 +671,13 @@ void update_display() {
                 lcd.print(F("Leere Tank  "));
                 lcd.print(tank_fillings_remaining);
                 lcd.print(F("/"));
-                lcd.print(irrigation_timer.fillings_to_irrigate);
+                lcd.print(settings.tank_capacity > 0 ? irrigation_timer.fillings_to_irrigate : irrigation_timer.liters_to_pump);
                 break;
               case STATUS_PUMPING:
                 lcd.print(F("F"));lcd.write(byte(GFX_ID_UML_U));lcd.print(F("lle Tank  "));
                 lcd.print(tank_fillings_remaining);
                 lcd.print(F("/"));
-                lcd.print(irrigation_timer.fillings_to_irrigate);
+                lcd.print(settings.tank_capacity > 0 ? irrigation_timer.fillings_to_irrigate : irrigation_timer.liters_to_pump);
                 break;
               case STATUS_AFTERDRAIN:
                 char ad_buf[16];
@@ -747,7 +755,7 @@ void update_display() {
           lcd_print_menu_bracket(2,true);
           lcd.write(byte(126));
           lcd_print_menu_bracket(3,false);
-          uint16_temp = round(irrigation_timer.fillings_to_irrigate * settings.tank_capacity);
+          uint16_temp = settings.tank_capacity > 0 ? round(irrigation_timer.fillings_to_irrigate * settings.tank_capacity) : irrigation_timer.liters_to_pump;
           if (uint16_temp<10) lcd.print(0);
           if (uint16_temp<100) lcd.print(0);
           lcd.print(uint16_temp);
@@ -865,7 +873,7 @@ void update_display() {
   //status led
   switch (system_state) {
     case STATUS_IDLE:
-      if (irrigation_timer.fillings_to_irrigate == 0) set_status_led(1,0,1);
+      if (settings.tank_capacity > 0 ? irrigation_timer.fillings_to_irrigate == 0 : irrigation_timer.liters_to_pump == 0) set_status_led(1,0,1);
       else set_status_led(0,1,0);
       break;
     case STATUS_AFTERDRAIN:
@@ -894,7 +902,7 @@ void handle_pump_stuff() {
     system_state = STATUS_GENERAL_FAIL;
   }
   if((irrigation_timer.start_hour <= current_time.Hour and irrigation_timer.start_minute <= current_time.Minute) and (irrigation_timer.last_watering_day != current_time.Day)) { //
-    tank_fillings_remaining +=  (settings.tank_capacity > 10) ? irrigation_timer.fillings_to_irrigate : irrigation_timer.liters_to_pump;
+    tank_fillings_remaining +=  (settings.tank_capacity > 0) ? irrigation_timer.fillings_to_irrigate : irrigation_timer.liters_to_pump;
     irrigation_timer.last_watering_day = current_time.Day;
     EEPROM.put(0+sizeof(settings),irrigation_timer);
   }
