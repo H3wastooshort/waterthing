@@ -643,6 +643,7 @@ void update_display() {
   if (millis() - last_display_update > 1000) {
       uint16_t uint16_temp;
       char char_5_temp[5];
+      uint8_t disp_pad = 8;
       //uint32_t display_draw_start_time = millis();
       print_page_basics();
       switch (menu_page) {
@@ -724,8 +725,6 @@ void update_display() {
                 if (component_errors.rtc_unset) system_state = STATUS_NO_TIME;
                 break;
             }
-
-            for (uint8_t pad = 10; pad >0; pad--) lcd.print(' '); //doin it the wrong way round :P
           break;
         case PAGE_MAN:
           if (tank_fillings_remaining == 0) {
@@ -741,6 +740,7 @@ void update_display() {
             lcd.print(F("Abbrechen"));
             lcd_print_menu_bracket(1,true);
           }
+          disp_pad = 0;
           break;
         
         case PAGE_TIMER:          
@@ -761,6 +761,7 @@ void update_display() {
           lcd.print(uint16_temp);
           lcd.print(F("L"));
           lcd_print_menu_bracket(3,true);
+          disp_pad = 4;
           break;
         
         case PAGE_TANK:
@@ -807,6 +808,7 @@ void update_display() {
             lcd.print(F("/L"));
             lcd_print_menu_bracket(2,true);
           }
+          disp_pad = 0;
           break;
         
         case PAGE_CLOCK1:
@@ -819,6 +821,11 @@ void update_display() {
           if (current_time.Minute<10) lcd.print(0);
           lcd.print(current_time.Minute);
           lcd_print_menu_bracket(2,true);
+          lcd.print(F(":"));
+          lcd_print_menu_bracket(3,false);
+          if (current_time.Second<10) lcd.print(0);
+          lcd.print(current_time.Second);
+          lcd_print_menu_bracket(3,true);
           break;
         
         case PAGE_CLOCK2:
@@ -862,9 +869,12 @@ void update_display() {
 
           lcd.write('1');
 
+          disp_pad = 4;
           break;
     }
     last_display_update = millis();
+
+    for (; disp_pad < 250; disp_pad--) lcd.print(' '); //make sure rest of line is clear. also doin it the wrong way round :P
 
     //Serial.print(F("Display drawing time [ms]: "));
     //Serial.println(last_display_update - display_draw_start_time);
