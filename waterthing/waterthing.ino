@@ -67,6 +67,7 @@ byte gfx_drop[8] = {B00100, B00100, B01110, B01110, B10111, B11111, B01110, B000
 byte gfx_clock[8] = {B01110, B00100, B01110, B10001, B10111, B10101, B01110, B00000};
 byte gfx_flow[8] = {B00100, B01100, B10110, B11110, B01100, B00010, B11001, B00010};
 byte gfx_pulse[8] = {B00000, B01110, B01010, B01010, B01010, B01010, B11011, B00000};
+byte gfx_h3[8] = {B00000, B00000, B10110, B10001, B11110, B10001, B10110, B00000};
 
 //umlaut graphics
 byte gfx_uml_s[8] = {B01100, B10010, B10010, B11100, B10010, B10010, B10100, B10000};
@@ -171,7 +172,7 @@ enum pages_enum {
 
 #define N_OF_PAGES 7
 const char* page_names[N_OF_PAGES] = {"Status", "Manuell", "Timer", "Tank", "Uhr1", "Uhr2", "Akku"};
-const uint8_t page_max_cursor[N_OF_PAGES] = {0, 1, 3, 2, 2, 3, 2};
+const uint8_t page_max_cursor[N_OF_PAGES] = {0, 1, 3, 2, 3, 3, 2};
 
 
 int16_t literToTanks(uint16_t liters_to_convert) {
@@ -192,8 +193,8 @@ void change_menu_entry(bool dir) { //true is up
   static uint32_t last_menu_entry_change = 0;
   if (menu_entry_cursor == 0) {
       menu_page += dir ? 1 : -1;
-      if (menu_page >= N_OF_PAGES) menu_page = N_OF_PAGES-1;
       if (menu_page < 0) menu_page = 0;
+      if (menu_page >= N_OF_PAGES) menu_page = N_OF_PAGES-1;
     return;
   }
   switch (menu_page) {
@@ -274,13 +275,18 @@ void change_menu_entry(bool dir) { //true is up
       switch (menu_entry_cursor) {
         case 1:
           current_time.Hour += dir ? 1 : -1;
-          if (current_time.Hour >= 23) current_time.Hour = 23;
           if (current_time.Hour < 0 or current_time.Hour > 25) current_time.Hour = 0;
+          if (current_time.Hour >= 23) current_time.Hour = 23;
           break;
         case 2:
           current_time.Minute += dir ? 1 : -1;
+          if (current_time.Minute < 0 or current_time.Minute > 64) current_time.Minute = 0;
           if (current_time.Minute >= 59) current_time.Minute = 59;
-          if (current_time.Minute < 0 or current_time.Minute > 61) current_time.Minute = 0;
+          break;
+        case 3:
+          current_time.Second += dir ? 1 : -1;
+          if (current_time.Second < 0 or current_time.Second > 64) current_time.Second = 0;
+          if (current_time.Second >= 59) current_time.Second = 59;
           break;
         default:
           break;
@@ -389,7 +395,7 @@ void up_callback() {
   }
   else {
     menu_entry_cursor++;
-    if (menu_entry_cursor > page_max_cursor[menu_page]) menu_entry_cursor = 0;
+    if (menu_entry_cursor > page_max_cursor[menu_page]) menu_entry_cursor = page_max_cursor[menu_page];
   }
   last_display_update = 0;
 }
@@ -1050,7 +1056,6 @@ void handle_serial() {
 }
 
 void do_stored_buttons() {
-  noInterrupts();
   for (uint8_t q_pos = 0; q_pos <= min(31, button_queue_add_pos); q_pos++) { //make sure they are 0
     switch (button_queue[q_pos]) {
       case 1:
@@ -1070,7 +1075,6 @@ void do_stored_buttons() {
     button_queue[q_pos] = 0; //clear position so it wont get executed again
   }
   button_queue_add_pos = 0;
-  interrupts();
 }
 
 void loop() {
