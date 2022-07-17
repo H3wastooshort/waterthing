@@ -40,6 +40,8 @@ Zyklus:
 #define ENCODER_DT_PIN 4
 #define ENCODER_INVERT_DIRECTION false
 
+#define LCD_BACKLIGHT_TIMEOUT 10000
+
 #define BATTERY_VOLTAGE_PIN A0
 #define BATTERY_VOLTAGE_ADC_DIVIDER 68.267 //1024 divided by this multiplier equals the battery voltage
 
@@ -68,6 +70,8 @@ byte gfx_clock[8] = {B01110, B00100, B01110, B10001, B10111, B10101, B01110, B00
 byte gfx_flow[8] = {B00100, B01100, B10110, B11110, B01100, B00010, B11001, B00010};
 byte gfx_pulse[8] = {B00000, B01110, B01010, B01010, B01010, B01010, B11011, B00000};
 byte gfx_h3[8] = {B00000, B00000, B10110, B10001, B11110, B10001, B10110, B00000};
+byte gfx_tank_top[8] = {B10011, B01011, B10011, B00011, B00011, B00011, B00011, B00011};
+byte gfx_tank_bottom[8] = {B00011, B00011, B00011, B00011, B00011, B10011, B01011, B10011};
 
 //umlaut graphics
 byte gfx_uml_s[8] = {B01100, B10010, B10010, B11100, B10010, B10010, B10100, B10000};
@@ -167,12 +171,13 @@ enum pages_enum {
   PAGE_TANK = 3,
   PAGE_CLOCK1 = 4,
   PAGE_CLOCK2 = 5,
-  PAGE_BATTERY = 6
+  PAGE_BATTERY = 6,
+  PAGE_SENSORS = 7
 };
 
-#define N_OF_PAGES 7
-const char* page_names[N_OF_PAGES] = {"Status", "Manuell", "Timer", "Tank", "Uhr1", "Uhr2", "Akku"};
-const uint8_t page_max_cursor[N_OF_PAGES] = {0, 1, 3, 2, 3, 3, 2};
+#define N_OF_PAGES 8
+const char* page_names[N_OF_PAGES] = {"Status", "Manuell", "Timer", "Tank", "Uhr1", "Uhr2", "Akku", "Sensor"};
+const uint8_t page_max_cursor[N_OF_PAGES] = {0, 1, 3, 2, 3, 3, 2, 3};
 
 
 int16_t literToTanks(uint16_t liters_to_convert) {
@@ -189,8 +194,9 @@ void lcd_print_menu_bracket(uint8_t for_menu_entry, bool ending_bracket) {
   else lcd.print(menu_entry_cursor == for_menu_entry ? (menu_editing ? F("{") : F("[")) : F("("));
 }
 
+
+uint32_t last_menu_entry_change = 0;
 void change_menu_entry(bool dir) { //true is up
-  static uint32_t last_menu_entry_change = 0;
   if (menu_entry_cursor == 0) {
       menu_page += dir ? 1 : -1;
       if (menu_page < 0) menu_page = 0;
@@ -331,6 +337,7 @@ void change_menu_entry(bool dir) { //true is up
       }
       break;
 
+    case PAGE_SENSORS: //only toggles, all done in edit_change_callback()
     default:
     case -1:
       break;
@@ -382,11 +389,30 @@ void edit_change_callback() {
     case PAGE_CLOCK2:
       break;
 
+    case PAGE_SENSORS:
+      switch (menu_entry_cursor) {
+        case 1:
+          settings.tank_top_on_level = !settings.tank_top_on_level;
+          break;
+        case 2:
+          settings.tank_bottom_on_level = !settings.tank_bottom_on_level;
+          break;
+        case 3:
+          settings.low_water_on_level = !settings.low_water_on_level;
+          break;
+
+        default:
+        break;
+      }
+      EEPROM.put(0, settings);
+      menu_editing = false;
+      break;
 
     default:
     case -1:
       break;
   }
+  last_menu_entry_change = millis();
 }
 
 void up_callback() {
@@ -877,10 +903,39 @@ void update_display() {
 
           disp_pad = 4;
           break;
+
+        case PAGE_SENSORS:
+          lcd.createChar(GFX_ID_DYN_1, gfx_tank_top);
+          lcd.createChar(GFX_ID_DYN_2, gfx_tank_bottom);
+          lcd.createChar(GFX_ID_DYN_3, gfx_no_water);
+          lcd.setCursor(0,1); //this is needed so the disp takes the custom char
+
+          lcd.write(GFX_ID_DYN_1);
+          lcd_print_menu_bracket(1,false);
+          lcd.print(settings.tank_top_on_level ? 'H' : 'L');
+          lcd_print_menu_bracket(1,true);
+
+          lcd.write(' ');
+          lcd.write(GFX_ID_DYN_2);
+          lcd_print_menu_bracket(2,false);
+          lcd.print(settings.tank_bottom_on_level ? 'H' : 'L');
+          lcd_print_menu_bracket(2,true);
+
+          lcd.write(' ');
+          lcd.write(GFX_ID_DYN_3);
+          lcd_print_menu_bracket(3,false);
+          lcd.print(settings.low_water_on_level ? 'H' : 'L');
+          lcd_print_menu_bracket(3,true);
+          
+          disp_pad = 2;
+          break;
     }
     last_display_update = millis();
 
     for (; disp_pad < 250; disp_pad--) lcd.print(' '); //make sure rest of line is clear. also doin it the wrong way round :P
+
+    if (millis() - last_menu_entry_change > LCD_BACKLIGHT_TIMEOUT) lcd.noBacklight();
+    else lcd.backlight();
 
     //Serial.print(F("Display drawing time [ms]: "));
     //Serial.println(last_display_update - display_draw_start_time);
