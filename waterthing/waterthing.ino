@@ -103,7 +103,7 @@ struct settings_s {
   float battery_voltage_reset = 11.4; //if this voltage is reached while the system is in low batters state, the system is set back to idle
   int16_t max_mins_per_refill = -1; //error is thrown if the pump takes longer than that to fill the tank (5L/min pump wont take more than 5 minutes to fill a 20L tank)
   uint8_t afterdrain_time = 5; //keep draining for this amount of time after a cycle finishes to dry the tank out
-  uint16_t clicks_per_liter = 1000;
+  uint16_t clicks_per_liter = 500;
   bool low_water_on_level = LOW; //level of low water pin when the low water sensor detects low water. sensor will probably be mounted upside-down so no water means low
   bool tank_bottom_on_level = HIGH; //level of TANK_BOTTOM_PIN when water has reached the bottom sensor. sensor will probably be mounted upside-down so on means high
   bool tank_top_on_level = LOW; //level of TANK_TOP_PIN when water has reached the top sensor
@@ -158,6 +158,7 @@ bool menu_editing = false;
 uint32_t last_display_update = 0; //this is a global var to allow calling for immediate update by setting this to 0
 uint8_t button_queue[32]; //0 means no btn, 1 means down, 2 means up, 3 means enter
 uint8_t button_queue_add_pos = 0; //0-31
+uint32_t last_interface_interaction = 0;
 
 //menu vars for each page
 //1 manuell
@@ -198,9 +199,9 @@ void lcd_print_menu_bracket(uint8_t for_menu_entry, bool ending_bracket) {
 uint32_t last_menu_entry_change = 0;
 void change_menu_entry(bool dir) { //true is up
   if (menu_entry_cursor == 0) {
-      menu_page += dir ? 1 : -1;
-      if (menu_page < 0) menu_page = 0;
-      if (menu_page >= N_OF_PAGES) menu_page = N_OF_PAGES-1;
+    menu_page += dir ? 1 : -1;
+    if (menu_page < 0) menu_page = 0;
+    if (menu_page >= N_OF_PAGES) menu_page = N_OF_PAGES-1;
     return;
   }
   switch (menu_page) {
@@ -270,7 +271,7 @@ void change_menu_entry(bool dir) { //true is up
             else if (millis() - last_menu_entry_change > 150) settings.clicks_per_liter += dir ? 10 : -10;
             else settings.clicks_per_liter += dir ? 100 : -100;
 
-            if (settings.clicks_per_liter > 60000 /*overflow*/) settings.clicks_per_liter = 0;
+            if (settings.clicks_per_liter > 60000 /*overflow*/) settings.clicks_per_liter = 1;
             if (settings.clicks_per_liter >= 50000) settings.clicks_per_liter = 50000;
           }
           break;
@@ -412,7 +413,6 @@ void edit_change_callback() {
     case -1:
       break;
   }
-  last_menu_entry_change = millis();
 }
 
 void up_callback() {
@@ -424,6 +424,7 @@ void up_callback() {
     if (menu_entry_cursor > page_max_cursor[menu_page]) menu_entry_cursor = page_max_cursor[menu_page];
   }
   last_display_update = 0;
+  last_interface_interaction = millis();
 }
 
 void down_callback() {
@@ -435,12 +436,14 @@ void down_callback() {
     if (menu_entry_cursor < 0) menu_entry_cursor = 0;
   }
   last_display_update = 0;
+  last_interface_interaction = millis();
 }
 
 void btn_callback() {
   menu_editing = !menu_editing;
   edit_change_callback();
   last_display_update = 0;
+  last_interface_interaction = millis();
 }
 
 uint32_t last_btn_down = 0;
@@ -934,7 +937,7 @@ void update_display() {
 
     for (; disp_pad < 250; disp_pad--) lcd.print(' '); //make sure rest of line is clear. also doin it the wrong way round :P
 
-    if (millis() - last_menu_entry_change > LCD_BACKLIGHT_TIMEOUT) lcd.noBacklight();
+    if (millis() - last_interface_interaction > LCD_BACKLIGHT_TIMEOUT) lcd.noBacklight();
     else lcd.backlight();
 
     //Serial.print(F("Display drawing time [ms]: "));
