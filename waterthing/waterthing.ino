@@ -17,6 +17,8 @@ Zyklus:
 #include <DS1307RTC.h>
 #include <math.h>
 #include <pcf8574.h> //https://github.com/MSZ98/pcf8574
+#include <SPI.h>
+#include <LoRa.h>
 
 #define LOW_WATER_PIN A1
 #define TANK_BOTTOM_PIN A2
@@ -30,7 +32,8 @@ Zyklus:
 #define RED_LED_PIN 0
 #define GREEN_LED_PIN 1
 #define BLUE_LED_PIN 2
-
+#define LORA_TX_LED 6
+#define LORA_RX_LED 7
 
 #define DEBOUNCE_DELAY 100
 #define BTN_PIN 5
@@ -44,6 +47,9 @@ Zyklus:
 #define BATTERY_VOLTAGE_ADC_DIVIDER 68.267 //1024 divided by this multiplier equals the battery voltage
 
 #define EEPROM_MAGIC_NUMBER 42
+
+#define LORA_FREQ  869525000 //869.525mhz is allowed to be used at 100mW 10% duty cycle (360 sec an hour) in germany
+#define LORA_TX_PWR 20 //20dbm/100mW is max
 
 //library stuff
 LiquidCrystal_I2C lcd(0x27,16,2);
@@ -106,6 +112,7 @@ struct settings_s {
   bool low_water_on_level = LOW; //level of low water pin when the low water sensor detects low water. sensor will probably be mounted upside-down so no water means low
   bool tank_bottom_on_level = HIGH; //level of TANK_BOTTOM_PIN when water has reached the bottom sensor. sensor will probably be mounted upside-down so on means high
   bool tank_top_on_level = LOW; //level of TANK_TOP_PIN when water has reached the top sensor
+  byte lora_security_key[16];
 } settings;
 
 struct i_timer_s {
@@ -149,6 +156,10 @@ struct raw_sens_s {
 
 uint16_t tank_fillings_remaining = 0; //if over 0, run pumping stuff til 0. is in tank fillings normally, in liters in direct mode
 uint64_t cycle_finish_millis = 0xFFFFFFFF;
+
+//lora variables
+uint8_t package_id = 0; //increments every packet
+char lora_message_buffer[4][48]; //holds up to 4 messages with max 48 bits. first byte is message id, 2nd is message type, rest is data. if all 0, no message in slot. set to 0 after up to 0 retransmits
 
 //global menu variables
 int8_t menu_page = 0; // 0-> main page, 1 -> Timer Setup, 2 -> Tank Setup, 3 -> Clock Setup
@@ -488,6 +499,10 @@ ISR (PCINT1_vect) { //port B (analog pins)
   if (tank_fillings_remaining > 60000) tank_fillings_remaining = 0;
 }
 
+void handle_lora_packet(uint16_t packet_size) {
+  
+}
+
 void setup() {
   //pump stuff
   pinMode(LOW_WATER_PIN, INPUT_PULLUP);
@@ -502,6 +517,7 @@ void setup() {
   //vbat
   pinMode(BATTERY_VOLTAGE_PIN, INPUT);
   analogReference(INTERNAL/*1V1*/); //set ADC voltage reference to stable internal 1.1V reference. uncomment the 1V1 part for arduino megas
+  randomSeed(analogRead(BATTERY_VOLTAGE_PIN));
 
   //rgb led
   pinMode(pcf, RED_LED_PIN, OUTPUT);
@@ -565,13 +581,15 @@ void setup() {
   else {
     lcd.print(F("Missing"));
     Serial.println(F("LED PCF missing."));
+    delay(1000);
   }
+  delay(100);
 
   //EEPROM
   Serial.println(F("Reading EEPROM..."));
   lcd.clear();
   lcd.home();
-  lcd.print(F("Reading EEPROM..."));
+  lcd.print(F("EEPROM..."));
   lcd.setCursor(0, 1);
   if (EEPROM.read(EEPROM.length() - 1) == EEPROM_MAGIC_NUMBER) {
     EEPROM.get(0,settings);
@@ -580,6 +598,7 @@ void setup() {
     lcd.print(F("OK"));
   }
   else {
+    for (uint8_t b = 0; b < 16; b++) settings.lora_security_key[b] = random(0,255);
     EEPROM.put(0,settings);
     EEPROM.put(0+sizeof(settings), irrigation_timer);
     //EEPROM.put(0+sizeof(settings)+sizeof(irrigation_timer), something_else);
@@ -593,7 +612,7 @@ void setup() {
   Serial.println(F("Setting up RTC..."));
   lcd.clear();
   lcd.home();
-  lcd.print(F("RTC Setup..."));
+  lcd.print(F("RTC..."));
   lcd.setCursor(0, 1);
   if (RTC.read(current_time)) { //if valid date read
     lcd.print(F("OK"));
@@ -617,10 +636,35 @@ void setup() {
   }
   delay(100);
 
+  Serial.println(F("Setting up LoRa..."));
+  lcd.clear();
+  lcd.home();
+  lcd.print(F("LoRa..."));
+  lcd.setCursor(0, 1);
+  LoRa.setPins(10, 9, 2);
+  LoRa.setSPIFrequency(1E6); //1mhz is way fast
+  if (LoRa.begin(LORA_FREQ)) { //if valid date read
+    LoRa.idle();
+    LoRa.setTxPower(LORA_TX_PWR);
+    LoRa.setSpreadingFactor(12);
+    LoRa.setSignalBandwidth(250E3);
+    LoRa.setCodingRate4(8); //sf,bw,cr make a data rate of 366 bits per sec or 45,75 bytes per sec
+    LoRa.enableCrc();
+    LoRa.onReceive(handle_lora_packet);
+    LoRa.receive();
+    lcd.print(F("OK"));
+  }
+  else {
+    lcd.print(F("Missing"));
+    Serial.println(F("LoRa missing."));
+    delay(1000);
+  }
+  delay(100);
+
+  //buttons etc
   for (uint8_t q_pos = 0; q_pos < 32; q_pos++) { //make sure they are 0
     button_queue[q_pos] = 0;
   }
-
 
   attachInterrupt(digitalPinToInterrupt(ENCODER_CLK_PIN), handle_encoder_clk, FALLING);
 
@@ -1129,6 +1173,22 @@ void handle_serial() {
       Serial.print(F("V\nWater flow clicks: "));
       Serial.print(raw_sensors.water_flow_clicks);
 
+      Serial.println();
+    }
+
+    if (controlCharacter == 'G') { //generate new lora key
+      for (uint8_t b = 0; b < 16; b++) settings.lora_security_key[b] = LoRa.random();
+
+      Serial.println(F("New Key."));
+      controlCharacter = 'K';
+    }
+
+    if (controlCharacter == 'K') { //generate new lora key
+      Serial.print(F("LoRa Sec Key: "));
+      for (uint8_t b = 0; b < 16; b++) {
+        Serial.print(settings.lora_security_key[b], HEX);
+        Serial.write(' ');
+      }
       Serial.println();
     }
 
