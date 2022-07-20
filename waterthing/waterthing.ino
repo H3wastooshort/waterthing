@@ -1,11 +1,5 @@
+
 //Bewässerungssystem
-/*
- * Pin 7 -> Wassermangel Sensor / Fass Schwimmer
- * Pin 8 -> Tank Leer Schwimmer
- * Pin 9 -> Tank Voll Schwimmer
- * Pin 10 -> Relais für Pumpe + Magnetventil vor Tank
- * Pin 11 -> Relais für Magnetventil nach Tank
-*/
 /*
 Zyklus:
  * Pumpe An
@@ -22,20 +16,24 @@ Zyklus:
 #include <Wire.h>
 #include <DS1307RTC.h>
 #include <math.h>
+#include <pcf8574.h> //https://github.com/MSZ98/pcf8574
 
-#define LOW_WATER_PIN 7
-#define TANK_BOTTOM_PIN 8
-#define TANK_TOP_PIN 9
-#define PUMP_PIN 10
-#define VALVE_PIN 11
-#define WATER_FLOW_SENSOR_PIN 6 //WARNING! change PCINT suff in setup() too!!
+#define LOW_WATER_PIN A1
+#define TANK_BOTTOM_PIN A2
+#define TANK_TOP_PIN A3 //reused for water flow sensor when in direct mode. WARNING! change PCINT suff in setup() too!!
+#define PUMP_PIN 6
+#define VALVE_PIN 7 
+#define RAIN_DETECTOR_PIN 8
 
-#define RED_LED_PIN A1
-#define GREEN_LED_PIN A2
-#define BLUE_LED_PIN A3
+//pcf
+#define LED_PCF_ADDR 0x3F
+#define RED_LED_PIN 0
+#define GREEN_LED_PIN 1
+#define BLUE_LED_PIN 2
+
 
 #define DEBOUNCE_DELAY 100
-#define BTN_PIN 2
+#define BTN_PIN 5
 #define ENCODER_CLK_PIN 3
 #define ENCODER_DT_PIN 4
 #define ENCODER_INVERT_DIRECTION false
@@ -49,6 +47,7 @@ Zyklus:
 
 //library stuff
 LiquidCrystal_I2C lcd(0x27,16,2);
+PCF8574 pcf(LED_PCF_ADDR); //all addr pins to high
 
 //dynamic status
 byte gfx_off[8] = {B01110, B01010, B01110, B00000, B11011, B10010, B11011, B10010};
@@ -103,7 +102,7 @@ struct settings_s {
   float battery_voltage_reset = 11.4; //if this voltage is reached while the system is in low batters state, the system is set back to idle
   int16_t max_mins_per_refill = -1; //error is thrown if the pump takes longer than that to fill the tank (5L/min pump wont take more than 5 minutes to fill a 20L tank)
   uint8_t afterdrain_time = 5; //keep draining for this amount of time after a cycle finishes to dry the tank out
-  uint16_t clicks_per_liter = 500;
+  uint16_t clicks_per_liter = 1000;
   bool low_water_on_level = LOW; //level of low water pin when the low water sensor detects low water. sensor will probably be mounted upside-down so no water means low
   bool tank_bottom_on_level = HIGH; //level of TANK_BOTTOM_PIN when water has reached the bottom sensor. sensor will probably be mounted upside-down so on means high
   bool tank_top_on_level = LOW; //level of TANK_TOP_PIN when water has reached the top sensor
@@ -447,7 +446,8 @@ void btn_callback() {
 }
 
 uint32_t last_btn_down = 0;
-void handle_btn_up() {
+ISR (PCINT2_vect) { //port D
+  if (!digitalRead(BTN_PIN)) return; //ignore falling edge
   if (millis() - last_btn_down >= DEBOUNCE_DELAY) {
     if (button_queue_add_pos >= 32) return; //too many buttons in queue, ignoring
     button_queue[button_queue_add_pos] = 3; //3 is for enter button
@@ -473,12 +473,13 @@ void handle_encoder_clk() {
 }
 
 void set_status_led(bool r, bool g, bool b) {
-  digitalWrite(RED_LED_PIN,r);
-  digitalWrite(GREEN_LED_PIN,g);
-  digitalWrite(BLUE_LED_PIN,b);
+  digitalWrite(pcf, RED_LED_PIN,r);
+  digitalWrite(pcf, GREEN_LED_PIN,g);
+  digitalWrite(pcf, BLUE_LED_PIN,b);
 }
 
-ISR (PCINT2_vect) {
+ISR (PCINT1_vect) { //port B (analog pins)
+  if (settings.tank_capacity > 0) return; //against bugs when not in direct mode
   static bool water_flow_click_halver = false;
   water_flow_click_halver = !water_flow_click_halver;
   if (water_flow_click_halver) return;
@@ -492,7 +493,7 @@ void setup() {
   pinMode(LOW_WATER_PIN, INPUT_PULLUP);
   pinMode(TANK_BOTTOM_PIN, INPUT_PULLUP);
   pinMode(TANK_TOP_PIN, INPUT_PULLUP);
-  pinMode(WATER_FLOW_SENSOR_PIN, INPUT_PULLUP);
+  pinMode(RAIN_DETECTOR_PIN, INPUT_PULLUP);
   pinMode(PUMP_PIN, OUTPUT);
   pinMode(VALVE_PIN, OUTPUT);
   digitalWrite(PUMP_PIN, LOW);
@@ -503,12 +504,12 @@ void setup() {
   analogReference(INTERNAL/*1V1*/); //set ADC voltage reference to stable internal 1.1V reference. uncomment the 1V1 part for arduino megas
 
   //rgb led
-  pinMode(RED_LED_PIN, OUTPUT);
-  pinMode(GREEN_LED_PIN, OUTPUT);
-  pinMode(BLUE_LED_PIN, OUTPUT);
-  digitalWrite(RED_LED_PIN, LOW);
-  digitalWrite(GREEN_LED_PIN, LOW);
-  digitalWrite(BLUE_LED_PIN, LOW);
+  pinMode(pcf, RED_LED_PIN, OUTPUT);
+  pinMode(pcf, GREEN_LED_PIN, OUTPUT);
+  pinMode(pcf, BLUE_LED_PIN, OUTPUT);
+  digitalWrite(pcf, RED_LED_PIN, LOW);
+  digitalWrite(pcf, GREEN_LED_PIN, LOW);
+  digitalWrite(pcf, BLUE_LED_PIN, LOW);
 
   //buttons
   pinMode(ENCODER_CLK_PIN, INPUT_PULLUP);
@@ -550,6 +551,21 @@ void setup() {
   lcd.setCursor(0,1);
   lcd.print(F("-> hacker3000.cf"));
   delay(1000);
+
+  //check for LED pcf
+  Serial.println(F("Checking for LED PCF..."));
+  lcd.clear();
+  lcd.home();
+  lcd.print(F("LED PCF8574..."));
+  lcd.setCursor(0, 1);
+  Wire.beginTransmission(LED_PCF_ADDR);
+  if (Wire.endTransmission () != 0) {
+    lcd.print(F("OK"));
+  }
+  else {
+    lcd.print(F("Missing"));
+    Serial.println(F("LED PCF missing."));
+  }
 
   //EEPROM
   Serial.println(F("Reading EEPROM..."));
@@ -604,13 +620,22 @@ void setup() {
   for (uint8_t q_pos = 0; q_pos < 32; q_pos++) { //make sure they are 0
     button_queue[q_pos] = 0;
   }
-  attachInterrupt(digitalPinToInterrupt(BTN_PIN), handle_btn_up, RISING);
+
+
   attachInterrupt(digitalPinToInterrupt(ENCODER_CLK_PIN), handle_encoder_clk, FALLING);
 
+  //button
   //              dcb
   PCICR |= 0b00000100; //allow pcint on port d
   //      Pin 76543210
-  PCMSK2 |= 0b01000000; //enable pcint for pin 6
+  PCMSK2 |= 0b00100000; //enable pcint for pin 
+
+  //water sensor
+  //              dcb
+  PCICR |= 0b00000010; //allow pcint on port c
+  //      Pin 76543210
+  PCMSK1 |= 0b00001000; //enable pcint for pin A3
+
 
   Serial.println();
   set_status_led(0,0,0);

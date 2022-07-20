@@ -3,7 +3,7 @@
   "author": "HACKER3000",
   "editor": "wokwi",
   "parts": [
-    { "type": "wokwi-arduino-uno", "id": "uno", "top": -5.7, "left": 175.25, "attrs": {} },
+    { "type": "wokwi-arduino-uno", "id": "uno", "top": -35.16, "left": 175.25, "attrs": {} },
     {
       "type": "wokwi-slide-switch",
       "id": "tank_full_sw",
@@ -43,7 +43,7 @@
       "left": 443.41,
       "attrs": { "pins": "i2c" }
     },
-    { "type": "wokwi-ky-040", "id": "encoder1", "top": 114.96, "left": 465.88, "attrs": {} },
+    { "type": "wokwi-ky-040", "id": "encoder1", "top": 115.58, "left": 460.9, "attrs": {} },
     {
       "type": "wokwi-ds1307",
       "id": "rtc1",
@@ -59,13 +59,6 @@
       "left": 201.2,
       "rotate": 270,
       "attrs": { "value": "1" }
-    },
-    {
-      "type": "wokwi-rgb-led",
-      "id": "rgb1",
-      "top": 95.69,
-      "left": 375.37,
-      "attrs": { "common": "cathode" }
     },
     {
       "type": "wokwi-resistor",
@@ -90,11 +83,12 @@
       "attrs": { "value": 1023 }
     },
     {
-      "type": "wokwi-pushbutton",
-      "id": "btn1",
-      "top": -118.4,
-      "left": 422.01,
-      "attrs": { "color": "white", "bounce": "0", "key": " " }
+      "type": "wokwi-slide-switch",
+      "id": "sw1",
+      "top": -268.71,
+      "left": 202.91,
+      "rotate": 270,
+      "attrs": {}
     }
   ],
   "connections": [
@@ -108,34 +102,15 @@
     [ "uno:A4", "lcd1:SDA", "green", [ "v0" ] ],
     [ "uno:A5", "lcd1:SCL", "blue", [ "v0" ] ],
     [ "led1:C", "led2:C", "black", [ "h17.1", "v-28.8" ] ],
-    [
-      "uno:GND.2",
-      "encoder1:GND",
-      "black",
-      [ "v33.16", "h69.89", "v-17.75", "h183.18", "v-39.5" ]
-    ],
-    [ "uno:5V", "encoder1:VCC", "red", [ "v42.89", "h68.52", "v-23.47", "h199.78", "v-50.37" ] ],
-    [ "encoder1:SW", "uno:2", "gold", [ "h16.93", "v-157.49", "h-192.91" ] ],
-    [ "encoder1:CLK", "uno:3", "white", [ "h4.33", "v-145.25", "h-182.04" ] ],
-    [ "encoder1:DT", "uno:4", "white", [ "h10.06", "v-162.2", "h-195.2" ] ],
-    [ "uno:11", "led1:A", "violet", [ "v0" ] ],
-    [ "uno:10", "led2:A", "violet", [ "v0" ] ],
-    [ "uno:9", "tank_full_sw:2", "gold", [ "v0" ] ],
-    [ "uno:8", "tank_empty_sw:2", "gold", [ "v0" ] ],
     [ "uno:GND.2", "rtc1:GND", "black", [ "v0" ] ],
     [ "uno:5V", "rtc1:5V", "red", [ "v0" ] ],
     [ "rtc1:SCL", "lcd1:SCL", "blue", [ "h65.12", "v-19.03" ] ],
     [ "rtc1:SDA", "lcd1:SDA", "green", [ "h72.9", "v-6.49" ] ],
     [ "tank_empty_sw:1", "low_water_sw:1", "black", [ "h9.2", "v-43.79" ] ],
     [ "tank_empty_sw:3", "low_water_sw:3", "red", [ "h18.78", "v-1.12" ] ],
-    [ "low_water_sw:2", "uno:7", "gold", [ "h0" ] ],
-    [ "rgb1:B", "uno:A3", "#8f4814", [ "v0" ] ],
-    [ "rgb1:G", "uno:A2", "#8f4814", [ "v0" ] ],
-    [ "rgb1:R", "uno:A1", "#8f4814", [ "v26.4", "h7.49" ] ],
     [ "r2:1", "r1:2", "gray", [ "v0" ] ],
     [ "uno:GND.2", "r2:2", "black", [ "v191.42", "h96.43" ] ],
     [ "uno:VIN", "r1:1", "orange", [ "v173.55", "h-52.78" ] ],
-    [ "rgb1:COM", "uno:GND.3", "black", [ "v8.92", "h-31.36" ] ],
     [ "rtc1:5V", "fake_Vbat:VCC", "red", [ "h-25.05", "v93.12" ] ],
     [ "rtc1:GND", "fake_Vbat:GND", "black", [ "h-16.24", "v88.26", "h120.38" ] ],
     [
@@ -144,12 +119,18 @@
       "gray",
       [ "v-47.02", "h-31.38", "v-66.06", "h23.49", "v-82.95", "h-19.82" ]
     ],
-    [ "btn1:2.l", "uno:6", "white", [ "h-49.72", "v84.8", "h4.29" ] ],
-    [
-      "btn1:1.r",
-      "uno:GND.2",
-      "black",
-      [ "v1.23", "h136.72", "v324.01", "h-187.72", "v34.29", "h-91.72", "v-68.57" ]
-    ]
+    [ "led2:A", "uno:6", "violet", [ "h0" ] ],
+    [ "led1:A", "uno:7", "violet", [ "h0" ] ],
+    [ "uno:GND.2", "encoder1:GND", "black", [ "v32.5", "h243.43", "v-27.79" ] ],
+    [ "uno:5V", "encoder1:VCC", "red", [ "v42.51", "h265.71", "v-43.9" ] ],
+    [ "encoder1:SW", "uno:5", "white", [ "h16.46", "v-231.13", "h-215.65" ] ],
+    [ "encoder1:DT", "uno:4", "white", [ "h9.07", "v-211.85", "h-196.44" ] ],
+    [ "encoder1:CLK", "uno:3", "white", [ "h1.07", "v-194.34", "h-175.72" ] ],
+    [ "tank_full_sw:2", "uno:A3", "gold", [ "h297.36", "v217.58", "h-112.21" ] ],
+    [ "tank_empty_sw:2", "uno:A2", "gold", [ "h281.01", "v249.89", "h-103.47" ] ],
+    [ "low_water_sw:2", "uno:A1", "gold", [ "h265.15", "v282.01", "h-103.47" ] ],
+    [ "low_water_sw:3", "sw1:3", "red", [ "h19.15", "v-64.17" ] ],
+    [ "low_water_sw:1", "sw1:1", "black", [ "h10.08", "v-59.49" ] ],
+    [ "sw1:2", "uno:8", "gold", [ "h0" ] ]
   ]
 }
