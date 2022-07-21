@@ -136,18 +136,19 @@ struct c_error_s{
   bool rtc_missing = false;
   bool rtc_unset = false;
   bool tank_sensors_irrational = false;
+  bool lora_missing = false;
 } component_errors;
 
 //enums for easier code reading
 enum system_state_e { 
-  STATUS_IDLE, //doing nothing
-  STATUS_EMPTYING, //emptying tank
-  STATUS_PUMPING, //pumping water in tank
-  STATUS_NO_WATER, //cant get water from tank
-  STATUS_NO_TIME, //clock not set
-  STATUS_LOW_BATTERY, //low battery voltage
-  STATUS_AFTERDRAIN, //fully drain out tank
-  STATUS_GENERAL_FAIL
+  STATUS_IDLE = 0, //doing nothing
+  STATUS_PUMPING = 1, //pumping water in tank
+  STATUS_EMPTYING = 2, //emptying tank
+  STATUS_AFTERDRAIN = 3, //fully drain out tank
+  STATUS_NO_WATER = 4, //cant get water from tank
+  STATUS_LOW_BATTERY = 5, //low battery voltage
+  STATUS_NO_TIME = 6, //clock not set
+  STATUS_GENERAL_FAIL = 7
 };
 
 //global system variables
@@ -167,12 +168,17 @@ uint16_t tank_fillings_remaining = 0; //if over 0, run pumping stuff til 0. is i
 uint64_t cycle_finish_millis = 0xFFFFFFFF;
 
 //lora variables
-uint8_t package_id = 0; //increments every packet
-char lora_packet_queue[4][48] = {0}; //holds up to 4 messages that are to be sent with max 48 bits. first byte is message id, 2nd is message type, rest is data. if all 0, no message in slot. set to 0 after up to 0 retransmits
-uint8_t lora_packet_queue_idx = 0; //idx where to write
-uint32_t lora_packet_queue_last_tx[4] = {0};
-uint8_t lora_packet_queue_tx_attempts[4] = {0};
+uint8_t lora_outgoing_packet_id = 0; //increments every packet
+byte lora_outgoing_queue[4][48] = {0}; //holds up to 4 messages that are to be sent with max 48 bits. first byte is message id, 2nd is message type, rest is data. if all 0, no message in slot. set to 0 after up to 0 retransmits
+uint8_t lora_outgoing_queue_idx = 0; //idx where to write
+uint32_t lora_outgoing_queue_last_tx[4] = {0};
+uint8_t lora_outgoing_queue_tx_attempts[4] = {0};
 bool lora_tx_ready = true;
+
+byte lora_incoming_queue[4][48] = {0}; //holds up to 4 messages that are to be sent with max 48 bits.
+uint8_t lora_incoming_queue_idx = 0; //idx where to write
+uint8_t lora_incoming_queue_len[4] = {0}; //lengths of recieved packages
+
 
 enum lora_packet_types_ws_to_gw { //water system to gateway
   PACKET_TYPE_STATUS = 0,
@@ -548,7 +554,12 @@ ISR (PCINT1_vect) { //port B (analog pins)
 }
 
 void handle_lora_packet(uint16_t packet_size) {
-  
+  for (uint8_t b = 0; b <= packet_size; b++) {
+    lora_incoming_queue[lora_incoming_queue_idx][b] = LoRa.read();
+  }
+
+  lora_incoming_queue_idx++;
+  if (lora_incoming_queue_idx++ >= 4) lora_incoming_queue_idx = 0;
 }
 
 void handle_lora_tx_done() {
@@ -707,11 +718,13 @@ void setup() {
     LoRa.onReceive(handle_lora_packet);
     LoRa.receive();
     lcd.print(F("OK"));
+    component_errors.lora_missing = false;
   }
   else {
     lcd.print(F("Missing"));
     Serial.println(F("LoRa missing."));
     delay(900);
+    component_errors.lora_missing = true;
   }
   delay(100);
 
@@ -1336,40 +1349,53 @@ void do_stored_buttons() {
 }
 
 void handle_lora() {
+  if (component_errors.lora_missing) return; // if there is no lora, dont even bother
+
   static system_state_e last_system_states[8] = {255}; //just in case my stuff bounces between states a few times
   uint32_t last_lora_tx = 0;
 
   //recieve
+  for (uint8_t p_idx = 0; p_idx < 4; p_idx++) {
+    bool is_empty = true;
+    for (uint8_t i = 0; i < 48; i++) if (lora_incoming_queue[p_idx][i] != 0) {is_empty = false; break;} //check for data in packet
+    if (!is_empty) {
+      Serial.print(F("Recieved LoRa Packet: "));
+      for (uint8_t b = 0; b < lora_incoming_queue_len[p_idx]; b++) {
+        Serial.print(lora_incoming_queue[p_idx][b], HEX);
+        Serial.write(' ');
+      }
+    }
+  }
 
   //queue handle
   if (lora_tx_ready) {
     for (uint8_t p_idx = 0; p_idx < 4; p_idx++) {
       bool is_empty = true;
-      for (uint8_t i = 0; i < 48; i++) if (lora_packet_queue[p_idx][i] != 0) {is_empty = false; break;} //check for data in packet
-      if (!is_empty and millis() - lora_packet_queue_last_tx[p_idx] > LORA_RETRANSMIT_TIME and lora_tx_ready) {
+      for (uint8_t i = 0; i < 48; i++) if (lora_outgoing_queue[p_idx][i] != 0) {is_empty = false; break;} //check for data in packet
+      if (!is_empty and millis() - lora_outgoing_queue_last_tx[p_idx] > LORA_RETRANSMIT_TIME and lora_tx_ready) {
         Serial.print(F("Sending LoRa Packet: "));
 
         LoRa.beginPacket();
         LoRa.write(LORA_MAGIC);
         uint8_t lora_bytes = 0;
-        switch (lora_packet_queue[p_idx][1]) { // check 2nd byte (packet type)
+        switch (lora_outgoing_queue[p_idx][1]) { // check 2nd byte (packet type)
           case PACKET_TYPE_STATUS:
              lora_bytes = 2;
              break;
         }
         for (uint8_t b = 0; b < lora_bytes; b++) {
-          LoRa.write(lora_packet_queue[p_idx][b]);
-          Serial.print(lora_packet_queue[p_idx][b], HEX);
+          LoRa.write(lora_outgoing_queue[p_idx][b]);
+          Serial.print(lora_outgoing_queue[p_idx][b], HEX);
           Serial.write(' ');
         }
         LoRa.endPacket(true); //tx in async mode
         lora_tx_ready = false;
 
-        lora_packet_queue_last_tx[p_idx] = millis();
-        lora_packet_queue_tx_attempts[p_idx]++;
-        if (lora_packet_queue_tx_attempts[p_idx] >= LORA_RETRANSMIT_TRIES) {
-          for (uint8_t i = 0; i < 48; i++) lora_packet_queue[p_idx][i] = 0; //clear packet if unsuccessful
-          lora_packet_queue_last_tx[p_idx] = millis();
+        lora_outgoing_queue_last_tx[p_idx] = millis();
+        lora_outgoing_queue_tx_attempts[p_idx]++;
+        if (lora_outgoing_queue_tx_attempts[p_idx] >= LORA_RETRANSMIT_TRIES) {
+          for (uint8_t i = 0; i < 48; i++) lora_outgoing_queue[p_idx][i] = 0; //clear packet if unsuccessful
+          lora_outgoing_queue_last_tx[p_idx] = millis();
         }
       }
     }
@@ -1380,11 +1406,37 @@ void handle_lora() {
     for (uint8_t s = 2; s<8; s++) if (last_system_states[s] != last_system_states[s-1]) return; //if states 2-8 not stable, wait
     if (last_system_states[0] != last_system_states[7] and millis() - last_lora_tx > LORA_TX_INTERVAL) { //if there was a change or timer
       //if new state, make lora packet
-      lora_packet_queue[lora_packet_queue_idx][0] = PACKET_TYPE_STATUS;
-      lora_packet_queue_idx++;
+      lora_outgoing_queue[lora_outgoing_queue_idx][0] = lora_outgoing_packet_id;
+      lora_outgoing_queue[lora_outgoing_queue_idx][1] = PACKET_TYPE_STATUS;
+      
+      lora_outgoing_queue[lora_outgoing_queue_idx][2] = uint8_t(max(0xF, system_state)); //fill 4 right bits with system state 0000SSSS
+      switch (system_state) {  //add extra status SSSSEEEE
+        case STATUS_IDLE:
+          lora_outgoing_queue[lora_outgoing_queue_idx][2] << 4; //shift bits over SSSS0000
+          if (settings.tank_capacity > 0 ? irrigation_timer.fillings_to_irrigate == 0 : irrigation_timer.liters_to_pump == 0) lora_outgoing_queue[lora_outgoing_queue_idx][2] |= 0x01;
+          else if (irrigation_timer.last_watering_day == current_time.Day) lora_outgoing_queue[lora_outgoing_queue_idx][2] |= 0x02;
+          else if (sensor_values.rain_detected) lora_outgoing_queue[lora_outgoing_queue_idx][2] |= 0x03;
+          else lora_outgoing_queue[lora_outgoing_queue_idx][2] |= 0x00;
+          break;
+        
+        case STATUS_GENERAL_FAIL:
+          //shift each error in
+          lora_outgoing_queue[lora_outgoing_queue_idx][2] << 1;
+          lora_outgoing_queue[lora_outgoing_queue_idx][2] |= uint8_t(component_errors.tank_sensors_irrational);
+          lora_outgoing_queue[lora_outgoing_queue_idx][2] << 1;
+          lora_outgoing_queue[lora_outgoing_queue_idx][2] |= uint8_t(component_errors.rtc_missing);
+          lora_outgoing_queue[lora_outgoing_queue_idx][2] << 1;
+          lora_outgoing_queue[lora_outgoing_queue_idx][2] |= uint8_t(component_errors.rtc_unset);
+          lora_outgoing_queue[lora_outgoing_queue_idx][2] << 1;
+          lora_outgoing_queue[lora_outgoing_queue_idx][2] |= uint8_t(0); //lora missing does not make sanse so i will reserve this for the future
+          break;
+      }
+
+      lora_outgoing_queue_idx++;
       last_lora_tx = millis();
-      lora_packet_queue_last_tx[lora_packet_queue_idx] = millis();
-      lora_packet_queue_tx_attempts[lora_packet_queue_idx]++;
+      lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis();
+      lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx]++;
+      lora_outgoing_packet_id++;
     }
   }
 }
