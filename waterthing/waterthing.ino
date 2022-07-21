@@ -177,7 +177,7 @@ bool lora_tx_ready = true;
 
 byte lora_incoming_queue[4][48] = {0}; //holds up to 4 messages that are to be sent with max 48 bits.
 uint8_t lora_incoming_queue_idx = 0; //idx where to write
-uint8_t lora_incoming_queue_len[4] = {0}; //lengths of recieved packages
+uint16_t lora_incoming_queue_len[4] = {0}; //lengths of recieved packages
 
 
 enum lora_packet_types_ws_to_gw { //water system to gateway
@@ -201,6 +201,7 @@ uint32_t last_display_update = 0; //this is a global var to allow calling for im
 uint8_t button_queue[32]; //0 means no btn, 1 means down, 2 means up, 3 means enter
 uint8_t button_queue_add_pos = 0; //0-31
 uint32_t last_interface_interaction = 0;
+bool redraw_display_fully = false;
 
 //menu vars for each page
 //1 manuell
@@ -434,6 +435,7 @@ void edit_change_callback() {
         EEPROM.put(0, settings);
         menu_editing = false;
       }
+      if (menu_entry_cursor == 2 and !menu_editing) redraw_display_fully = true;
       if (menu_entry_cursor == 1) {
         settings.lora_enable++;
         if (settings.lora_enable >= 3) settings.lora_enable = 0;
@@ -538,9 +540,9 @@ void handle_encoder_clk() {
 }
 
 void set_status_led(bool r, bool g, bool b) {
-  digitalWrite(pcf, RED_LED_PIN,r);
-  digitalWrite(pcf, GREEN_LED_PIN,g);
-  digitalWrite(pcf, BLUE_LED_PIN,b);
+  digitalWrite(pcf, RED_LED_PIN,!r);
+  digitalWrite(pcf, GREEN_LED_PIN,!g);
+  digitalWrite(pcf, BLUE_LED_PIN,!b);
 }
 
 ISR (PCINT1_vect) { //port B (analog pins)
@@ -554,16 +556,19 @@ ISR (PCINT1_vect) { //port B (analog pins)
 }
 
 void handle_lora_packet(uint16_t packet_size) {
+  digitalWrite(pcf, LORA_RX_LED, LOW);
   for (uint8_t b = 0; b <= packet_size; b++) {
     lora_incoming_queue[lora_incoming_queue_idx][b] = LoRa.read();
   }
 
+  lora_incoming_queue_len[lora_incoming_queue_idx] = packet_size;
   lora_incoming_queue_idx++;
   if (lora_incoming_queue_idx++ >= 4) lora_incoming_queue_idx = 0;
 }
 
 void handle_lora_tx_done() {
   lora_tx_ready = true;
+  digitalWrite(pcf, LORA_TX_LED, HIGH);
 }
 
 void setup() {
@@ -582,13 +587,11 @@ void setup() {
   analogReference(INTERNAL/*1V1*/); //set ADC voltage reference to stable internal 1.1V reference. uncomment the 1V1 part for arduino megas
   randomSeed(analogRead(BATTERY_VOLTAGE_PIN));
 
-  //rgb led
-  pinMode(pcf, RED_LED_PIN, OUTPUT);
-  pinMode(pcf, GREEN_LED_PIN, OUTPUT);
-  pinMode(pcf, BLUE_LED_PIN, OUTPUT);
-  digitalWrite(pcf, RED_LED_PIN, LOW);
-  digitalWrite(pcf, GREEN_LED_PIN, LOW);
-  digitalWrite(pcf, BLUE_LED_PIN, LOW);
+  //led pcf
+  for (uint8_t pin = 0; pin < 8; pin++) {
+    pinMode(pcf, pin, OUTPUT);
+    digitalWrite(pcf, pin, HIGH);
+  }
 
   //buttons
   pinMode(ENCODER_CLK_PIN, INPUT_PULLUP);
@@ -752,7 +755,6 @@ void setup() {
   set_status_led(0,0,0);
 }
 
-bool redraw_display_fully = false;
 void print_page_basics() {
   static system_state_e last_sys_state = 255;
   static pages_enum last_page = 255;
@@ -998,9 +1000,15 @@ void update_display() {
         case PAGE_LORA:
           if (menu_page == PAGE_LORA and menu_entry_cursor == 2 and menu_editing) {
             lcd.setCursor(0,0);
-            for (uint8_t b = 0; b < 8; b++) lcd.print(settings.lora_security_key[b],HEX);
+            for (uint8_t b = 0; b < 8; b++) {
+              if (settings.lora_security_key[b]<0xF0) lcd.print(0);
+              lcd.print(settings.lora_security_key[b],HEX);
+            }
             lcd.setCursor(0,1);
-            for (uint8_t b = 7; b < 16; b++) lcd.print(settings.lora_security_key[b],HEX);
+            for (uint8_t b = 8; b < 16; b++) {
+              if (settings.lora_security_key[b]<0xF0) lcd.print(0);
+              lcd.print(settings.lora_security_key[b],HEX);
+            }
           }
           else {
             lcd.createChar(GFX_ID_DYN_1, gfx_radio);
@@ -1355,16 +1363,19 @@ void handle_lora() {
   uint32_t last_lora_tx = 0;
 
   //recieve
-  for (uint8_t p_idx = 0; p_idx < 4; p_idx++) {
-    bool is_empty = true;
-    for (uint8_t i = 0; i < 48; i++) if (lora_incoming_queue[p_idx][i] != 0) {is_empty = false; break;} //check for data in packet
-    if (!is_empty) {
-      Serial.print(F("Recieved LoRa Packet: "));
-      for (uint8_t b = 0; b < lora_incoming_queue_len[p_idx]; b++) {
-        Serial.print(lora_incoming_queue[p_idx][b], HEX);
-        Serial.write(' ');
+  if (settings.lora_enable >= 2) {
+    for (uint8_t p_idx = 0; p_idx < 4; p_idx++) {
+      bool is_empty = true;
+      for (uint8_t i = 0; i < 48; i++) if (lora_incoming_queue[p_idx][i] != 0) {is_empty = false; break;} //check for data in packet
+      if (!is_empty) {
+        Serial.print(F("Recieved LoRa Packet: "));
+        for (uint8_t b = 0; b < lora_incoming_queue_len[p_idx]; b++) {
+          Serial.print(lora_incoming_queue[p_idx][b], HEX);
+          Serial.write(' ');
+        }
       }
     }
+    digitalWrite(pcf, LORA_RX_LED, HIGH);
   }
 
   //queue handle
@@ -1373,6 +1384,7 @@ void handle_lora() {
       bool is_empty = true;
       for (uint8_t i = 0; i < 48; i++) if (lora_outgoing_queue[p_idx][i] != 0) {is_empty = false; break;} //check for data in packet
       if (!is_empty and millis() - lora_outgoing_queue_last_tx[p_idx] > LORA_RETRANSMIT_TIME and lora_tx_ready) {
+        digitalWrite(pcf, LORA_TX_LED, LOW);
         Serial.print(F("Sending LoRa Packet: "));
 
         LoRa.beginPacket();
