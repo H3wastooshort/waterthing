@@ -84,11 +84,11 @@
     },
     {
       "type": "wokwi-slide-switch",
-      "id": "sw1",
+      "id": "rain_detect",
       "top": -268.71,
       "left": 202.91,
       "rotate": 270,
-      "attrs": {}
+      "attrs": { "value": "1" }
     }
   ],
   "connections": [
@@ -129,8 +129,8 @@
     [ "tank_full_sw:2", "uno:A3", "gold", [ "h297.36", "v217.58", "h-112.21" ] ],
     [ "tank_empty_sw:2", "uno:A2", "gold", [ "h281.01", "v249.89", "h-103.47" ] ],
     [ "low_water_sw:2", "uno:A1", "gold", [ "h265.15", "v282.01", "h-103.47" ] ],
-    [ "low_water_sw:3", "sw1:3", "red", [ "h19.15", "v-64.17" ] ],
-    [ "low_water_sw:1", "sw1:1", "black", [ "h10.08", "v-59.49" ] ],
-    [ "sw1:2", "uno:8", "gold", [ "h0" ] ]
+    [ "low_water_sw:3", "rain_detect:3", "red", [ "h19.15", "v-64.17" ] ],
+    [ "low_water_sw:1", "rain_detect:1", "black", [ "h10.08", "v-59.49" ] ],
+    [ "rain_detect:2", "uno:8", "gold", [ "h0" ] ]
   ]
 }
