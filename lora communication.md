@@ -7,9 +7,9 @@ Packet ID increment individually on each side and rolls over to 0 when going ove
 
 ## Gateway -> Water System
 Packet ID | Name | Anatomy | Description
-1 | Request Params | [Params ID] |
-2 | Add Water to Irrigate | [Liters 2 bytes] [Auth Response 32 bytes] |
-3 | Cancel Irrigation | [Auth Response 4 bytes] |
+1 | Add Water to Irrigate | [Liters 2 bytes] [Auth Response 32 bytes] |
+2 | Cancel Irrigation | [Auth Response 4 bytes] |
+? | Request Params | [Params ID] |
 250 | Ask for Auth challange | No Data |
 255 | Status/Broadcast ACK | [Packet ID] |
 

@@ -49,6 +49,10 @@ Zyklus:
 
 #define LORA_FREQ  869525000 //869.525mhz is allowed to be used at 100mW 10% duty cycle (360 sec an hour) in germany
 #define LORA_TX_PWR 20 //20dbm/100mW is max
+#define LORA_RETRANSMIT_TIME 5000 //time between retransmit attempts in ms
+#define LORA_RETRANSMIT_TRIES 5
+#define LORA_MAGIC 42
+#define LORA_TX_INTERVAL 300000 //time between beacon broadcasts in ms
 
 //library stuff
 LiquidCrystal_I2C lcd(0x27,16,2);
@@ -164,7 +168,24 @@ uint64_t cycle_finish_millis = 0xFFFFFFFF;
 
 //lora variables
 uint8_t package_id = 0; //increments every packet
-char lora_message_queue[4][48]; //holds up to 4 messages that are to be sent with max 48 bits. first byte is message id, 2nd is message type, rest is data. if all 0, no message in slot. set to 0 after up to 0 retransmits
+char lora_packet_queue[4][48] = {0}; //holds up to 4 messages that are to be sent with max 48 bits. first byte is message id, 2nd is message type, rest is data. if all 0, no message in slot. set to 0 after up to 0 retransmits
+uint8_t lora_packet_queue_idx = 0; //idx where to write
+uint32_t lora_packet_queue_last_tx[4] = {0};
+uint8_t lora_packet_queue_tx_attempts[4] = {0};
+bool lora_tx_ready = true;
+
+enum lora_packet_types_ws_to_gw { //water system to gateway
+  PACKET_TYPE_STATUS = 0,
+  PACKET_TYPE_WATER = 1,
+  PACKET_TYPE_AUTH_C_REQ = 250,
+  PACKET_TYPE_CMD_DISABLED = 253,
+  PACKET_TYPE_CMD_AUTH_FAIL = 254,
+  PACKET_TYPE_CMD_OK = 255,
+};
+
+enum lora_packet_types_gw_to_ws { //gateway to water system
+
+};
 
 //global menu variables
 int8_t menu_page = 0; // 0-> main page, 1 -> Timer Setup, 2 -> Tank Setup, 3 -> Clock Setup
@@ -530,6 +551,10 @@ void handle_lora_packet(uint16_t packet_size) {
   
 }
 
+void handle_lora_tx_done() {
+  lora_tx_ready = true;
+}
+
 void setup() {
   //pump stuff
   pinMode(LOW_WATER_PIN, INPUT_PULLUP);
@@ -678,6 +703,7 @@ void setup() {
     LoRa.setSignalBandwidth(250E3);
     LoRa.setCodingRate4(8); //sf,bw,cr make a data rate of 366 bits per sec or 45,75 bytes per sec
     LoRa.enableCrc();
+    LoRa.onTxDone(handle_lora_tx_done);
     LoRa.onReceive(handle_lora_packet);
     LoRa.receive();
     lcd.print(F("OK"));
@@ -1309,6 +1335,60 @@ void do_stored_buttons() {
   button_queue_add_pos = 0;
 }
 
+void handle_lora() {
+  static system_state_e last_system_states[8] = {255}; //just in case my stuff bounces between states a few times
+  uint32_t last_lora_tx = 0;
+
+  //recieve
+
+  //queue handle
+  if (lora_tx_ready) {
+    for (uint8_t p_idx = 0; p_idx < 4; p_idx++) {
+      bool is_empty = true;
+      for (uint8_t i = 0; i < 48; i++) if (lora_packet_queue[p_idx][i] != 0) {is_empty = false; break;} //check for data in packet
+      if (!is_empty and millis() - lora_packet_queue_last_tx[p_idx] > LORA_RETRANSMIT_TIME and lora_tx_ready) {
+        Serial.print(F("Sending LoRa Packet: "));
+
+        LoRa.beginPacket();
+        LoRa.write(LORA_MAGIC);
+        uint8_t lora_bytes = 0;
+        switch (lora_packet_queue[p_idx][1]) { // check 2nd byte (packet type)
+          case PACKET_TYPE_STATUS:
+             lora_bytes = 2;
+             break;
+        }
+        for (uint8_t b = 0; b < lora_bytes; b++) {
+          LoRa.write(lora_packet_queue[p_idx][b]);
+          Serial.print(lora_packet_queue[p_idx][b], HEX);
+          Serial.write(' ');
+        }
+        LoRa.endPacket(true); //tx in async mode
+        lora_tx_ready = false;
+
+        lora_packet_queue_last_tx[p_idx] = millis();
+        lora_packet_queue_tx_attempts[p_idx]++;
+        if (lora_packet_queue_tx_attempts[p_idx] >= LORA_RETRANSMIT_TRIES) {
+          for (uint8_t i = 0; i < 48; i++) lora_packet_queue[p_idx][i] = 0; //clear packet if unsuccessful
+          lora_packet_queue_last_tx[p_idx] = millis();
+        }
+      }
+    }
+  }
+
+  //tx making
+  if (settings.lora_enable >= 1) {
+    for (uint8_t s = 2; s<8; s++) if (last_system_states[s] != last_system_states[s-1]) return; //if states 2-8 not stable, wait
+    if (last_system_states[0] != last_system_states[7] and millis() - last_lora_tx > LORA_TX_INTERVAL) { //if there was a change or timer
+      //if new state, make lora packet
+      lora_packet_queue[lora_packet_queue_idx][0] = PACKET_TYPE_STATUS;
+      lora_packet_queue_idx++;
+      last_lora_tx = millis();
+      lora_packet_queue_last_tx[lora_packet_queue_idx] = millis();
+      lora_packet_queue_tx_attempts[lora_packet_queue_idx]++;
+    }
+  }
+}
+
 void loop() {
   read_sensors_and_clock();
   handle_pump_stuff();
@@ -1316,6 +1396,7 @@ void loop() {
 
   handle_serial();
   do_stored_buttons();
+  handle_lora();
 
   delay(1);
 }
