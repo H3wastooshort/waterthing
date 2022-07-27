@@ -2,12 +2,13 @@
 #include <LoRa.h>
 #include <Wire.h>
 #include "fonts.h"
+#include <OLEDDisplay.h>
 #include <SSD1306Wire.h> //https://github.com/ThingPulse/esp8266-oled-ssd1306
 #include <WiFi.h>
 #include <WiFiManager.h> //https://github.com/tzapu/WiFiManager
-#include <NTPClient.h> //https://github.com/arduino-libraries
-#include <ESPMail.h> //minimally fixed version: https://github.com/HACKER-3000/ESPMail32
+#include <NTPClient.h> //https://github.com/arduino-librariesESPMail32
 #include <WebServer.h>
+#include <EMailSender.h> //https://github.com/xreef/EMailSender
 #include <SPIFFS.h>
 #define ARDUINOJSON_USE_LONG_LONG 1
 #include <ArduinoJson.h>
@@ -18,8 +19,12 @@
 #undef LED_BUILTIN
 #define LED_BUILTIN 25
 
-#define LORA_FREQ  869525000 //869.525mhz is allowed to be used at 100mW 10% duty cycle (360 sec an hour) in germany
-#define LORA_TX_PWR 20 //20dbm/100mW is max
+#define RED_LED_PIN 12
+#define GREEN_LED_PIN 13
+#define BLUE_LED_PIN 21
+
+#define LORA_FREQ  869525000 //869.525mhz is allowed to be used at 100mW 10% duty cycle (360 sec an hour) in germany (NO WARRANTY ON THAT!)
+#define LORA_TX_PWR 20 // 20dbm/100mW is max
 #define LORA_RETRANSMIT_TIME 5000 //time between retransmit attempts in ms
 #define LORA_RETRANSMIT_TRIES 5
 #define LORA_MAGIC 42
@@ -39,12 +44,12 @@
 
 char host_name[18] = "WaterthingGW-XXXX"; // last 4 chars will be chip-id
 
-SSD1306Wire oled(OLED_ADDRESS, OLED_SDA_PIN, OLED_SCL_PIN, GEOMETRY_128_64);
+SSD1306Wire oled(OLED_ADDRESS, OLED_SDA_PIN, OLED_SCL_PIN, GEOMETRY_128_64, (HW_I2C)1 /*idk why i cant just I2C_TWO*/, 200000);
 WiFiManager wm;
 WiFiUDP ntpUDP;
 NTPClient ntp(ntpUDP, "europe.pool.ntp.org", 0, 60000);
 WebServer server(80);
-ESPMail email;
+EMailSender email;
 
 //conf
 struct settings_s {
@@ -55,6 +60,7 @@ struct settings_s {
   char smtp_server[32] = {0};
   char smtp_user[32] = {0};
   char smtp_pass[32] = {0};
+  uint16_t smtp_port = 21;
 } settings;
 
 //lora
@@ -167,6 +173,16 @@ void rest_admin_set() {
 
 }
 
+enum mail_alert_enum {
+  MAIL_ALERT_WATER,
+  MAIL_ALERT_BAT,
+  MAIL_ALERT_GENERAL
+};
+
+void send_email_alert (mail_alert_enum alert_type) {
+  
+}
+
 void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, LOW);
@@ -200,6 +216,7 @@ void setup() {
     EEPROM.put(0, settings);
     oled.drawString(0, 12, F("Initialized"));
   }
+  email = EMailSender(settings.smtp_user, settings.smtp_pass, settings.smtp_user, settings.smtp_server, settings.smtp_port);
   delay(100);
 
   //lora setup
@@ -244,9 +261,15 @@ void setup() {
   }
   MDNS.begin(host_name);
   MDNS.addService("http", "tcp", 80);
+  oled.drawString(0, 12, F("OK"));
+  oled.display();
   delay(100);
 
   //ota
+  Serial.println(F("OTA Setup..."));
+  oled.clear();
+  oled.drawString(0, 0, "OTA...");
+  oled.display();
   ArduinoOTA.setHostname(host_name);
   ArduinoOTA
   .onStart([]() {
@@ -333,7 +356,10 @@ void setup() {
     delay(5000);
     digitalWrite(LED_BUILTIN, HIGH);
   });
+  oled.drawString(0, 12, F("OK"));
+  oled.display();
   ArduinoOTA.begin();
+  delay(100);
 
   //ntp
   Serial.println(F("NTP Setup..."));
@@ -342,6 +368,18 @@ void setup() {
   oled.display();
   ntp.begin();
   ntp.update();
+  oled.drawString(0, 12, F("OK"));
+  oled.display();
+  delay(100);
+
+  //email
+  Serial.println(F("E-Mail Setup..."));
+  oled.clear();
+  oled.drawString(0, 0, "E-Mail...");
+  oled.display();
+  email.begin();
+  oled.drawString(0, 12, F("OK"));
+  oled.display();
   delay(100);
 
   //webserver
@@ -349,7 +387,6 @@ void setup() {
   oled.clear();
   oled.drawString(0, 0, "WebServer...");
   oled.display();
-  email.begin();
   SPIFFS.begin();
   server.on("/rest", HTTP_GET, rest_status);
   server.on("/admin/rest", HTTP_POST, rest_admin_set);
@@ -360,11 +397,14 @@ void setup() {
   });
   server.serveStatic("/", SPIFFS, "/www/");
   server.begin();
+  oled.drawString(0, 12, F("OK"));
+  oled.display();
   delay(100);
 
   oled.clear();
   oled.display();
 
+  Serial.println(F("Booted"));
   digitalWrite(LED_BUILTIN, HIGH);
 }
 
@@ -386,8 +426,8 @@ void update_display() {
 
 void loop() {
   ArduinoOTA.handle();
-  ntp.update();
   server.handleClient();
+  ntp.update();
 
   update_display();
 

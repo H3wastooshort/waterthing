@@ -18,7 +18,7 @@ Zyklus:
 #include <math.h>
 #include <pcf8574.h> //https://github.com/MSZ98/pcf8574
 #include <SPI.h>
-#include <LoRa.h>
+#include <LoRa.h> //https://github.com/sandeepmistry/arduino-LoRa
 
 #define LOW_WATER_PIN A1
 #define TANK_BOTTOM_PIN A2
@@ -84,6 +84,8 @@ struct settings_s {
   bool tank_bottom_on_level = HIGH; //level of TANK_BOTTOM_PIN when water has reached the bottom sensor. sensor will probably be mounted upside-down so on means high
   bool tank_top_on_level = LOW; //level of TANK_TOP_PIN when water has reached the top sensor
   bool rain_detected_on_level = LOW;
+  uint8_t rain_minutes_til_block = 5; //if rain is detected for more than this time, it is officially raining
+  uint8_t rain_minutes_til_clear = 60; //if its not rainf or at least this time, watering will resume as normal
   bool block_water_after_rain = false;
   byte lora_security_key[16];
   uint8_t lora_enable = 0; //0=off, 1=broadcast only, 2=control
@@ -128,6 +130,8 @@ struct sensor_s {
   bool tank_top = false;
   bool rain_detected = false;
   uint32_t water_flow_clicks = 0;
+  uint32_t rain_start_millis = 0;
+  uint32_t rain_end_millis = 0;
 } sensor_values;
 
 uint16_t tank_fillings_remaining = 0; //if over 0, run pumping stuff til 0. is in tank fillings normally, in liters in direct mode
@@ -675,7 +679,7 @@ void setup() {
   lcd.setCursor(0, 1);
   LoRa.setPins(10, 9, 2);
   LoRa.setSPIFrequency(1E6); //1mhz is way fast
-  if (LoRa.begin(LORA_FREQ)) { //if valid date read
+  if (LoRa.begin(LORA_FREQ)) {
     LoRa.idle();
     LoRa.setSyncWord(0x12);
     LoRa.setTxPower(LORA_TX_PWR);
@@ -1249,7 +1253,21 @@ void read_sensors_and_clock() {
   sensor_values.low_water = settings.low_water_on_level == digitalRead(LOW_WATER_PIN);
   sensor_values.tank_bottom = settings.tank_bottom_on_level == digitalRead(TANK_BOTTOM_PIN);
   sensor_values.tank_top = settings.tank_top_on_level == digitalRead(TANK_TOP_PIN);
-  sensor_values.rain_detected = settings.rain_detected_on_level == digitalRead(RAIN_DETECTOR_PIN);
+  
+  bool rain_condition_now = settings.rain_detected_on_level == digitalRead(RAIN_DETECTOR_PIN);
+  static bool last_rain_condition = false;
+  if (rain_condition_now != last_rain_condition and millis() - sensor_values.rain_start_millis > 10000 and millis() - sensor_values.rain_end_millis > 10000) { //if changed set millis vars and debounce rain sensor
+
+    if (rain_condition_now) sensor_values.rain_start_millis = millis();
+    else sensor_values.rain_end_millis = millis();
+
+    last_rain_condition = rain_condition_now;
+
+    if ((sensor_values.rain_end_millis - sensor_values.rain_start_millis > settings.rain_minutes_til_block or millis() - sensor_values.rain_start_millis > settings.rain_minutes_til_block) //if difference of current time or last rains time to rain start is big enough
+    and ((millis() - sensor_values.rain_end_millis < settings.rain_minutes_til_clear or millis() - sensor_values.rain_start_millis < settings.rain_minutes_til_clear) or rain_condition_now))
+      sensor_values.rain_detected = true;
+    else sensor_values.rain_detected = false;
+  }
 }
 
 void handle_serial() {
