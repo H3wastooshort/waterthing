@@ -15,8 +15,8 @@ Packet ID | Name | Anatomy | Description
 
 ## Water System -> Gateway
 Packet ID | Name | Anatomy | Description
-0 | System Status | [8 bit status] | Used to broadcast system state like STATUS_IDLE. Left 4 bits are system state, right 4 ones are more info (for ex in idle: alread watered, turned off, etc)
-1 | Watering State | [2 byte liters left] | broadcasts watering state if currently watering
+0 | System Status | [4+4 bit status] | Used to broadcast system state like STATUS_IDLE. Left 4 bits are system state, right 4 ones are more info (for ex in idle: alread watered, turned off, etc)
+1 | Watering State | [2 byte unsigned int: liters left] [2 byte unsigned int: liters left] | broadcasts watering state if currently watering
 250 | Auth challange | [Auth challange 16 bytes] |
 253 | Commands disabled | No Data |
 254 | Command Not Authenticated | No Data |
@@ -30,6 +30,28 @@ Packet ID | Name | Anatomy | Description
 ## broadcast
  * Broadcast packets are removed from queue after they get acknowledged by the gateway or after 5 retransmits (spaced 5 seconds apart)
  * 
+
+## system status
+0bLLLLRRRR
+### Left
+0000 | Idle
+0001 | Pumping
+0010 | Emptying
+0011 | Afterdrain
+0100 | NO WATER
+0101 | LOW BATTERY
+0110 | NO TIME
+0111 | GENERAL FAIL
+### Right
+#### Idle
+0000 | Normal | 
+0001 | Off | 
+0010 | Done Today | 
+0011 | Rain | 
+#### General Fail
+[] = 1 bit, each can be set individually
+
+[Tank Sensors][RTC Missing][RTC Unset][Unused]
 
 ## (probably insecure) Authentication
  0. User saves 16 byte password from Water Systems Serial Console into the Gateway and requests an action.
