@@ -2,7 +2,6 @@
 #include <LoRa.h>
 #include <Wire.h>
 #include "fonts.h"
-#include <OLEDDisplay.h>
 #include <SSD1306Wire.h> //https://github.com/ThingPulse/esp8266-oled-ssd1306
 #include <WiFi.h>
 #include <WiFiManager.h> //https://github.com/tzapu/WiFiManager
@@ -44,12 +43,17 @@
 
 char host_name[18] = "WaterthingGW-XXXX"; // last 4 chars will be chip-id
 
-SSD1306Wire oled(OLED_ADDRESS, OLED_SDA_PIN, OLED_SCL_PIN, GEOMETRY_128_64, (HW_I2C)1 /*idk why i cant just I2C_TWO*/, 200000);
+enum HW_I2C {
+  I2C_ONE,
+  I2C_TWO
+};
+
+SSD1306Wire oled(OLED_ADDRESS, OLED_SDA_PIN, OLED_SCL_PIN, GEOMETRY_128_64, I2C_ONE, 200000); //sometimes I2C_ONE is not decalred, sometimes it is, idk why
 WiFiManager wm;
 WiFiUDP ntpUDP;
 NTPClient ntp(ntpUDP, "europe.pool.ntp.org", 0, 60000);
 WebServer server(80);
-EMailSender email;
+EMailSender email("", "", "", "", 0);
 
 //conf
 struct settings_s {
@@ -77,6 +81,7 @@ uint16_t lora_incoming_queue_len[4] = {0}; //lengths of recieved packages
 
 //recieved stuff
 byte last_wt_status = 0xFF; //left bytes main status, right 4 bytes extra status
+uint64_t last_wt_status_millis = 0xFFFFFFFFFFFFFFFF;
 uint16_t last_liters_left = 0xFFFF; //0xFFFF means not known
 uint16_t last_liters_called = 0xFFFF; //0xFFFF means not known, 0x0000 means done
 int16_t last_lora_rssi = -999;
@@ -173,15 +178,15 @@ void rest_admin_set() {
 
 }
 
-enum mail_alert_enum {
+/*enum mail_alert_enum {
   MAIL_ALERT_WATER,
   MAIL_ALERT_BAT,
   MAIL_ALERT_GENERAL
-};
+  };
 
-void send_email_alert (mail_alert_enum alert_type) {
-  
-}
+  void send_email_alert(mail_alert_enum alert_type) {
+
+  }*/
 
 void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
@@ -304,13 +309,13 @@ void setup() {
     static bool led_flip = false;
     digitalWrite(LED_BUILTIN, led_flip);
     led_flip = !led_flip;
-    
+
     /*static uint8_t skipper = 0;
-    if (skipper == 0) skipper = 16;
-    else {
+      if (skipper == 0) skipper = 16;
+      else {
       skipper--;
       return;
-    }*/
+      }*/
     oled.clear();
     oled.setTextAlignment(TEXT_ALIGN_CENTER);
     String progress1_str;
@@ -372,16 +377,6 @@ void setup() {
   oled.display();
   delay(100);
 
-  //email
-  Serial.println(F("E-Mail Setup..."));
-  oled.clear();
-  oled.drawString(0, 0, "E-Mail...");
-  oled.display();
-  email.begin();
-  oled.drawString(0, 12, F("OK"));
-  oled.display();
-  delay(100);
-
   //webserver
   Serial.println(F("WebServer Setup..."));
   oled.clear();
@@ -415,7 +410,10 @@ void update_display() {
 
     oled.setFont(Lato_Thin_12);
     oled.setTextAlignment(TEXT_ALIGN_CENTER);
-    oled.drawString(63, 12, "Last Status:");
+    String status_time = "Last Status ( ";
+    status_time += ((millis() - last_wt_status_millis) / 1000) / 60 > 999 ? ">999" : round(((millis() - last_wt_status_millis) / 1000) / 60);
+    status_time += "m ago):";
+    oled.drawString(63, 12, status_time);
     oled.setFont(Lato_Thin_24);
     oled.drawString(63, 24, status_to_text[last_wt_status]);
     oled.display();
