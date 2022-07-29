@@ -60,7 +60,7 @@ struct settings_s {
   char smtp_server[32] = {0};
   char smtp_user[32] = {0};
   char smtp_pass[32] = {0};
-  uint16_t smtp_port = 21;
+  uint16_t smtp_port = 587;
 } settings;
 
 //lora
@@ -189,6 +189,10 @@ void rest_admin_set() {
 
 }
 
+void rest_debug() {
+  
+}
+
 /*enum mail_alert_enum {
   MAIL_ALERT_WATER,
   MAIL_ALERT_BAT,
@@ -232,7 +236,13 @@ void setup() {
     EEPROM.put(0, settings);
     oled.drawString(0, 12, F("Initialized"));
   }
-  email = EMailSender(settings.smtp_user, settings.smtp_pass, settings.smtp_user, settings.smtp_server, settings.smtp_port);
+  email.setSMTPServer(settings.smtp_server);
+  email.setNameFrom(host_name);
+  email.setEMailFrom(settings.smtp_user);
+  email.setEMailLogin(settings.smtp_user);
+  email.setEMailPassword(settings.smtp_pass);
+  email.setSMTPPort(settings.smtp_port);
+  email.setIsSecure(true);
   delay(100);
 
   //lora setup
@@ -395,8 +405,9 @@ void setup() {
   oled.display();
   SPIFFS.begin();
   server.on("/rest", HTTP_GET, rest_status);
-  server.on("/admin/rest", HTTP_POST, rest_admin_set);
-  server.on("/admin/rest", HTTP_GET, rest_admin_get);
+  server.on("/admin/settings_rest", HTTP_POST, rest_admin_set);
+  server.on("/admin/settings_rest", HTTP_GET, rest_admin_get);
+  server.on("/admin/debug_rest", HTTP_GET, rest_debug);
   server.on("/", []() { //redirect to index
     server.sendHeader("Location", "/index.html");
     server.send(300, "text/html", "<a href=\"/index.html\">click here</a>");

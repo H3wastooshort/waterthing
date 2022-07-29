@@ -2,14 +2,56 @@
 <html>
 <head>
 <title>Waterthing Gateway</title>
+<link rel="stylesheet" href="/waterthing.css">
+<meta charset="utf-8">
 </head>
 
 <body>
 <h1>Waterthing Gateway</h1>
 <hr>
-<noscript><p>JS required. Sorry.</p>
+<menu>
+<li class="current_page"><b>Status</b></li>
+<li class="logged_out_only"><a href="/admin/login.html">Login</a></li>
+<li class="logged_in_only"><a href="/admin/settings.html">Einstellungen</a></li>
+<li class="logged_in_only"><a href="/admin/debug.html">Debug</a></li>
+<li class="logged_in_only"><a href="/admin/logout.html">Log Out</a></li>
+</menu>
+<hr>
+
+<noscript><p>JS required. Sorry.</p></noscript>
+<div class="status_box">
+<h2>Status</h2>
+<div id="status_time"></div><br>
 <div id="status_main"></div><br>
 <div id="status_extra"></div>
-</body>
+</div>
 
+<script>
+const status_main = document.getElementById('status_main');
+const status_main = document.getElementById('status_extra');
+
+const ms_to_text = {
+	0 : "Bereitschaft",
+	1 : "Pumpen/Füllen",
+	2 : "Leeren",
+	3 : "Leeren Nachlauf",
+	4 : "KEIN WASSER!",
+	5 : "Akku Leer!",
+	6 : "Zeit nicht gesetzt!",
+	7 : "Genereller Fehler!",
+	
+	16 : "Unbekannt"
+};
+
+function update_status() {
+	fetch('/rest')
+	.then(response => response.json())
+	.then(data => {
+		status_main.innerText = ms_to_text[data.status.state];
+	});
+}
+
+setInterval(update_status, 1000);
+</script>
+</body>
 </html>
