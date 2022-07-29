@@ -148,7 +148,8 @@ bool lora_tx_ready = true;
 byte lora_incoming_queue[4][48] = {0}; //holds up to 4 messages that are to be sent with max 48 bits.
 uint8_t lora_incoming_queue_idx = 0; //idx where to write
 uint16_t lora_incoming_queue_len[4] = {0}; //lengths of recieved packages
-
+byte lora_last_incoming_message_IDs[16] = {255};
+uint8_t lora_last_incoming_message_IDs_idx = 0;
 
 enum lora_packet_types_ws_to_gw { //water system to gateway
   PACKET_TYPE_STATUS = 0,
@@ -160,7 +161,7 @@ enum lora_packet_types_ws_to_gw { //water system to gateway
 };
 
 enum lora_packet_types_gw_to_ws { //gateway to water system
-
+  PACKET_TYPE_ACK = 255
 };
 
 //global menu variables
@@ -1340,6 +1341,17 @@ void do_stored_buttons() {
   button_queue_add_pos = 0;
 }
 
+void send_ack(byte packet_id) {
+  lora_outgoing_queue[lora_outgoing_queue_idx][0] = lora_outgoing_packet_id;
+  lora_outgoing_queue[lora_outgoing_queue_idx][1] = PACKET_TYPE_ACK;
+  lora_outgoing_queue[lora_outgoing_queue_idx][2] = packet_id;
+
+  lora_outgoing_queue_idx++;
+  lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis();
+  lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] = 0;
+  lora_outgoing_packet_id++;
+}
+
 void handle_lora() {
   if (component_errors.lora_missing) return; // if there is no lora, dont even bother
 
@@ -1357,6 +1369,26 @@ void handle_lora() {
           Serial.print(lora_incoming_queue[p_idx][b], HEX);
           Serial.write(' ');
         }
+
+      if (lora_incoming_queue[p_idx][0] == 42) { //if magic correct
+        bool already_recieved = false;
+        for (uint8_t i = 0; i < 16; i++) if (lora_incoming_queue[p_idx][0] = lora_last_incoming_message_IDs[i]) already_recieved = true;
+
+        if (!already_recieved) {
+          Serial.print(F("Magic Correct.\nPacket type: "));
+          switch (lora_incoming_queue[p_idx][2]) {
+
+            default:
+              break;
+          }
+          lora_last_incoming_message_IDs[lora_last_incoming_message_IDs_idx] = lora_incoming_queue[p_idx][0];
+          if (lora_last_incoming_message_IDs_idx >= 16) lora_last_incoming_message_IDs_idx = 0;
+          lora_last_incoming_message_IDs_idx++;
+        }
+        send_ack(lora_incoming_queue[p_idx][1]); //respond so retransmits wont occur
+      }
+
+      for (uint8_t i = 0; i < 48; i++) lora_incoming_queue[p_idx][i] = 0; //clear after processing
       }
     }
     digitalWrite(pcf, LORA_RX_LED, HIGH);

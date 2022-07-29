@@ -2,10 +2,11 @@
 #include <LoRa.h>
 #include <Wire.h>
 #include "fonts.h"
+#include <OLEDDisplay.h>
 #include <SSD1306Wire.h> //https://github.com/ThingPulse/esp8266-oled-ssd1306
 #include <WiFi.h>
 #include <WiFiManager.h> //https://github.com/tzapu/WiFiManager
-#include <NTPClient.h> //https://github.com/arduino-librariesESPMail32
+#include <NTPClient.h> //https://github.com/arduino-libraries/NTPClient
 #include <WebServer.h>
 #include <EMailSender.h> //https://github.com/xreef/EMailSender
 #include <SPIFFS.h>
@@ -43,12 +44,7 @@
 
 char host_name[18] = "WaterthingGW-XXXX"; // last 4 chars will be chip-id
 
-enum HW_I2C {
-  I2C_ONE,
-  I2C_TWO
-};
-
-SSD1306Wire oled(OLED_ADDRESS, OLED_SDA_PIN, OLED_SCL_PIN, GEOMETRY_128_64, I2C_ONE, 200000); //sometimes I2C_ONE is not decalred, sometimes it is, idk why
+SSD1306Wire oled(OLED_ADDRESS, OLED_SDA_PIN, OLED_SCL_PIN, GEOMETRY_128_64/*, I2C_ONE, 200000*/);//sometimes I2C_ONE is not decalred, sometimes it is, idk why
 WiFiManager wm;
 WiFiUDP ntpUDP;
 NTPClient ntp(ntpUDP, "europe.pool.ntp.org", 0, 60000);
@@ -78,6 +74,21 @@ bool lora_tx_ready = true;
 byte lora_incoming_queue[4][48] = {0}; //holds up to 4 messages that are to be sent with max 48 bits.
 uint8_t lora_incoming_queue_idx = 0; //idx where to write
 uint16_t lora_incoming_queue_len[4] = {0}; //lengths of recieved packages
+byte lora_last_incoming_message_IDs[16] = {255};
+uint8_t lora_last_incoming_message_IDs_idx = 0;
+
+enum lora_packet_types_ws_to_gw { //water system to gateway
+  PACKET_TYPE_STATUS = 0,
+  PACKET_TYPE_WATER = 1,
+  PACKET_TYPE_AUTH_C_REQ = 250,
+  PACKET_TYPE_CMD_DISABLED = 253,
+  PACKET_TYPE_CMD_AUTH_FAIL = 254,
+  PACKET_TYPE_CMD_OK = 255,
+};
+
+enum lora_packet_types_gw_to_ws { //gateway to water system
+  PACKET_TYPE_ACK = 255
+};
 
 //recieved stuff
 byte last_wt_status = 0xFF; //left bytes main status, right 4 bytes extra status
@@ -112,7 +123,7 @@ std::map<byte, String> status_to_text {
 
 
 void handle_lora_packet(int packet_size) {
-  for (uint8_t b = 0; b <= packet_size; b++) {
+  for (uint8_t b = 1; b <= packet_size; b++) {
     lora_incoming_queue[lora_incoming_queue_idx][b] = LoRa.read();
   }
 
@@ -411,7 +422,7 @@ void update_display() {
     oled.setFont(Lato_Thin_12);
     oled.setTextAlignment(TEXT_ALIGN_CENTER);
     String status_time = "Last Status ( ";
-    status_time += ((millis() - last_wt_status_millis) / 1000) / 60 > 999 ? ">999" : round(((millis() - last_wt_status_millis) / 1000) / 60);
+    status_time += ((millis() - last_wt_status_millis) / 1000) / 60 > 999 ? ">999" : (String)(int)round(((millis() - last_wt_status_millis) / 1000) / 60);
     status_time += "m ago):";
     oled.drawString(63, 12, status_time);
     oled.setFont(Lato_Thin_24);
@@ -422,12 +433,107 @@ void update_display() {
   }
 }
 
+void send_ack(byte packet_id) {
+  lora_outgoing_queue[lora_outgoing_queue_idx][0] = lora_outgoing_packet_id;
+  lora_outgoing_queue[lora_outgoing_queue_idx][1] = PACKET_TYPE_ACK;
+  lora_outgoing_queue[lora_outgoing_queue_idx][2] = packet_id;
+
+  lora_outgoing_queue_idx++;
+  lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis();
+  lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] = 0;
+  lora_outgoing_packet_id++;
+}
+
+void handle_lora() {
+  uint32_t last_lora_tx = 0;
+
+  //recieve
+  for (uint8_t p_idx = 0; p_idx < 4; p_idx++) {
+    bool is_empty = true;
+    for (uint8_t i = 0; i < 48; i++) if (lora_incoming_queue[p_idx][i] != 0) {
+        is_empty = false;  //check for data in packet
+        break;
+      }
+    if (!is_empty) {
+      Serial.print(F("Recieved LoRa Packet: "));
+      for (uint8_t b = 0; b < lora_incoming_queue_len[p_idx]; b++) {
+        Serial.print(lora_incoming_queue[p_idx][b], HEX);
+        Serial.write(' ');
+      }
+
+      if (lora_incoming_queue[p_idx][0] == 42) { //if magic correct
+        bool already_recieved = false;
+        for (uint8_t i = 0; i < 16; i++) if (lora_incoming_queue[p_idx][0] = lora_last_incoming_message_IDs[i]) already_recieved = true;
+
+        if (!already_recieved) {
+          Serial.print(F("Magic Correct.\nPacket type: "));
+          switch (lora_incoming_queue[p_idx][2]) {
+            case PACKET_TYPE_STATUS:
+              Serial.println(F("Status"));
+              last_wt_status = lora_incoming_queue[p_idx][3];
+              last_wt_status_millis = millis();
+              break;
+
+            default:
+              break;
+          }
+          lora_last_incoming_message_IDs[lora_last_incoming_message_IDs_idx] = lora_incoming_queue[p_idx][0];
+          if (lora_last_incoming_message_IDs_idx >= 16) lora_last_incoming_message_IDs_idx = 0;
+          lora_last_incoming_message_IDs_idx++;
+          last_recieved_packet_time = ntp.getEpochTime();
+        }
+        send_ack(lora_incoming_queue[p_idx][1]); //respond so retransmits wont occur
+      }
+
+      for (uint8_t i = 0; i < 48; i++) lora_incoming_queue[p_idx][i] = 0;
+    }
+  }
+
+  //queue handle
+  if (lora_tx_ready) {
+    for (uint8_t p_idx = 0; p_idx < 4; p_idx++) {
+      bool is_empty = true;
+      for (uint8_t i = 0; i < 48; i++) if (lora_outgoing_queue[p_idx][i] != 0) {
+          is_empty = false;  //check for data in packet
+          break;
+        }
+      if (!is_empty and millis() - lora_outgoing_queue_last_tx[p_idx] > LORA_RETRANSMIT_TIME and lora_tx_ready) {
+        Serial.print(F("Sending LoRa Packet: "));
+
+        LoRa.beginPacket();
+        LoRa.write(LORA_MAGIC);
+        uint8_t lora_bytes = 0;
+        switch (lora_outgoing_queue[p_idx][1]) { // check 2nd byte (packet type)
+            /*case :
+              lora_bytes = 2;
+              break;*/
+        }
+        for (uint8_t b = 0; b < lora_bytes; b++) {
+          LoRa.write(lora_outgoing_queue[p_idx][b]);
+          Serial.print(lora_outgoing_queue[p_idx][b], HEX);
+          Serial.write(' ');
+        }
+        LoRa.endPacket(true); //tx in async mode
+        lora_tx_ready = false;
+
+        lora_outgoing_queue_last_tx[p_idx] = millis();
+        lora_outgoing_queue_tx_attempts[p_idx]++;
+        if (lora_outgoing_queue_tx_attempts[p_idx] >= LORA_RETRANSMIT_TRIES) {
+          for (uint8_t i = 0; i < 48; i++) lora_outgoing_queue[p_idx][i] = 0; //clear packet if unsuccessful
+          lora_outgoing_queue_last_tx[p_idx] = millis();
+        }
+      }
+    }
+  }
+}
+
 void loop() {
   ArduinoOTA.handle();
   server.handleClient();
   ntp.update();
 
   update_display();
+  handle_lora();
 
   delay(5);
 }
