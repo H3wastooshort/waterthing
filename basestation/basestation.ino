@@ -172,6 +172,14 @@ void draw_display_boilerplate() {
 
 void config_ap_callback() {
   //put conf AP credentials on screen
+  oled.clear();
+  oled.setColor(WHITE);
+  oled.setFont(Lato_Thin_8);
+  oled.setTextAlignment(TEXT_ALIGN_LEFT);
+
+
+  oled.drawString(0, 0, settings.conf_ssid);
+  oled.drawString(0, 16, settings.conf_pass);
 }
 
 size_t get_charstring_len(char * charstring) {
@@ -224,30 +232,35 @@ void rest_status() {
 
 void rest_login() {
   if (check_auth()) {
-    server.send(200, "text/plain", "{\"success\":\"Already Authenticated.\"}");
+    server.send(200, "application/json", "{\"success\":\"Already Authenticated.\"}");
     return;
   }
-
-  DynamicJsonDocument login(128);
-  deserializeJson(login, server.arg("plain"));
   bool matching = true;
 
-  const char * user = login["user"];
-  const char * pass = login["pass"];
+
+  DynamicJsonDocument login(128);  
+  deserializeJson(login, server.arg("plain"));
+  const char * user = server.hasArg("plain") ? login["user"] : server.arg("user").c_str();
+  const char * pass = server.hasArg("plain") ? login["pass"] : server.arg("pass").c_str();
+
+  
   uint8_t user_len = get_charstring_len(settings.web_user);
   uint8_t pass_len = get_charstring_len(settings.web_pass);
-  for (uint8_t b = 0; b < user_len; b++) {
-    if (user[b] != settings.web_user[b]) {
-      matching = false;
-      break;
+  if (user_len == strlen(user) and pass_len == strlen(pass)) {
+    for (uint8_t b = 0; b < user_len; b++) {
+      if (user[b] != settings.web_user[b]) {
+        matching = false;
+        break;
+      }
+    }
+    for (uint8_t b = 0; b < pass_len; b++) {
+      if (pass[b] != settings.web_pass[b]) {
+        matching = false;
+        break;
+      }
     }
   }
-  for (uint8_t b = 0; b < pass_len; b++) {
-    if (pass[b] != settings.web_pass[b]) {
-      matching = false;
-      break;
-    }
-  }
+  else matching = false;
 
   if (matching) {
     for (uint8_t b = 0; b < 32; b++) web_login_cookies[web_login_cookies_idx][b] = LoRa.random();
@@ -256,6 +269,10 @@ void rest_login() {
     cookiestring += "; Path=/admin/; SameSite=Strict; Max-Age=86400"; //cookie kept for a day
 
     server.sendHeader("Set-Cookie", cookiestring);
+    server.send(200, "application/json", "{\"success\":\"Authenticated\"}");
+  }
+  else {
+    server.send(403, "application/json", "{\"error\":\"Credentials invalid.\"}");
   }
 }
 
