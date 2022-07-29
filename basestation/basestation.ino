@@ -61,6 +61,8 @@ struct settings_s {
   char smtp_user[32] = {0};
   char smtp_pass[32] = {0};
   uint16_t smtp_port = 587;
+  char web_user[32] = "waterthing";
+  char web_pass[32] = "thisisnotsecure";
 } settings;
 
 //lora
@@ -74,7 +76,7 @@ bool lora_tx_ready = true;
 byte lora_incoming_queue[4][48] = {0}; //holds up to 4 messages that are to be sent with max 48 bits.
 uint8_t lora_incoming_queue_idx = 0; //idx where to write
 uint16_t lora_incoming_queue_len[4] = {0}; //lengths of recieved packages
-byte lora_last_incoming_message_IDs[16] = {255};
+byte lora_last_incoming_message_IDs[16] = {0};
 uint8_t lora_last_incoming_message_IDs_idx = 0;
 
 enum lora_packet_types_ws_to_gw { //water system to gateway
@@ -96,7 +98,13 @@ uint64_t last_wt_status_millis = 0xFFFFFFFFFFFFFFFF;
 uint16_t last_liters_left = 0xFFFF; //0xFFFF means not known
 uint16_t last_liters_called = 0xFFFF; //0xFFFF means not known, 0x0000 means done
 int16_t last_lora_rssi = -999;
+int16_t last_lora_snr = -999;
 uint64_t last_recieved_packet_time = 0; //time in unix timestamp
+
+//web
+char web_login_cookies[255][32];
+uint8_t web_login_cookies_idx = 0;
+
 
 std::map<byte, String> status_to_text {
   // SSSSEEEE
@@ -127,6 +135,8 @@ void handle_lora_packet(int packet_size) {
     lora_incoming_queue[lora_incoming_queue_idx][b] = LoRa.read();
   }
 
+  last_lora_rssi = LoRa.packetRssi();
+  last_lora_snr = LoRa.packetSnr();
   lora_incoming_queue_len[lora_incoming_queue_idx] = packet_size;
   lora_incoming_queue_idx++;
   if (lora_incoming_queue_idx++ >= 4) lora_incoming_queue_idx = 0;
@@ -164,6 +174,36 @@ void config_ap_callback() {
   //put conf AP credentials on screen
 }
 
+size_t get_charstring_len(char * charstring) {
+  for (uint16_t b = 0; b > sizeof(charstring); b++) if (charstring[b] == 0) return b - 1;
+}
+
+bool check_auth() {
+  String cookie_header = server.header("Cookie");
+  uint16_t lc_start = cookie_header.indexOf("login_cookie=");
+  uint16_t lc_end = cookie_header.substring(lc_start).indexOf("; ");
+
+  char login_cookie[32]; cookie_header.substring(lc_start, lc_end).toCharArray(login_cookie, 32);
+
+  bool authed = false;
+  for (uint16_t c; c <= 255; c++) { //check if login cookie valid
+    bool matching = true;
+    for (uint8_t b = 0; b < 32; b++) { //compare each byte
+      if (web_login_cookies[c][b] != login_cookie[b]) {
+        matching = false;
+        break;
+      }
+      if (matching) {
+        authed = true;
+        break;
+      }
+    }
+    if (authed) break;
+  }
+
+  return authed;
+}
+
 void rest_status() {
   DynamicJsonDocument stuff(512);
   stuff["status"]["state"] = last_wt_status >> 4;
@@ -172,6 +212,7 @@ void rest_status() {
   stuff["irrigation"]["left"] = last_liters_left;
   stuff["irrigation"]["called"] = last_liters_called;
   stuff["lora_rx"]["last_rssi"] = last_lora_rssi;
+  stuff["lora_rx"]["last_snr"] = last_lora_snr;
   stuff["lora_rx"]["last_packet_time"] = last_recieved_packet_time;
   stuff["lora_tx"]["send_queue_entries"] = -1;
   stuff["lora_tx"]["send_queue_attempts"] = lora_outgoing_queue_tx_attempts;
@@ -181,16 +222,76 @@ void rest_status() {
 
 }
 
-void rest_admin_get() {
+void rest_login() {
+  if (check_auth()) {
+    server.send(200, "text/plain", "{\"success\":\"Already Authenticated.\"}");
+    return;
+  }
 
+  DynamicJsonDocument login(128);
+  deserializeJson(login, server.arg("plain"));
+  bool matching = true;
+
+  const char * user = login["user"];
+  const char * pass = login["pass"];
+  uint8_t user_len = get_charstring_len(settings.web_user);
+  uint8_t pass_len = get_charstring_len(settings.web_pass);
+  for (uint8_t b = 0; b < user_len; b++) {
+    if (user[b] != settings.web_user[b]) {
+      matching = false;
+      break;
+    }
+  }
+  for (uint8_t b = 0; b < pass_len; b++) {
+    if (pass[b] != settings.web_pass[b]) {
+      matching = false;
+      break;
+    }
+  }
+
+  if (matching) {
+    for (uint8_t b = 0; b < 32; b++) web_login_cookies[web_login_cookies_idx][b] = LoRa.random();
+    String cookiestring = "login_cookie=";
+    cookiestring += web_login_cookies[web_login_cookies_idx];
+    cookiestring += "; Path=/admin/; SameSite=Strict; Max-Age=86400"; //cookie kept for a day
+
+    server.sendHeader("Set-Cookie", cookiestring);
+  }
+}
+
+void rest_admin_get() {
+  if (!check_auth()) {
+    server.send(403, "application/json", "{\"error\":403}");
+    return;
+  }
+  uint16_t status_code = 200;
+  DynamicJsonDocument resp(512);
+
+  char buf[512];
+  serializeJson(resp, buf);
+  server.send(status_code, "application/json", buf);
 }
 
 void rest_admin_set() {
+  if (!check_auth()) {
+    server.send(403, "application/json", "{\"error\":403}");
+    return;
+  }
+
 
 }
 
 void rest_debug() {
-  
+  if (!check_auth()) {
+    server.send(403, "application/json", "{\"error\":403}");
+    return;
+  }
+  uint16_t status_code = 200;
+  DynamicJsonDocument resp(512);
+
+  char buf[512];
+  serializeJson(resp, buf);
+  server.send(status_code, "application/json", buf);
 }
 
 /*enum mail_alert_enum {
@@ -262,7 +363,7 @@ void setup() {
     LoRa.enableCrc();
     LoRa.onTxDone(handle_lora_tx_done);
     LoRa.onReceive(handle_lora_packet);
-    LoRa.receive();
+    //LoRa.receive(); //why do i get tons of random garbage?
     oled.drawString(0, 12, F("OK"));
     oled.display();
   }
@@ -405,6 +506,7 @@ void setup() {
   oled.display();
   SPIFFS.begin();
   server.on("/rest", HTTP_GET, rest_status);
+  server.on("/admin/login", HTTP_POST, rest_login);
   server.on("/admin/settings_rest", HTTP_POST, rest_admin_set);
   server.on("/admin/settings_rest", HTTP_GET, rest_admin_get);
   server.on("/admin/debug_rest", HTTP_GET, rest_debug);
@@ -413,6 +515,7 @@ void setup() {
     server.send(300, "text/html", "<a href=\"/index.html\">click here</a>");
   });
   server.serveStatic("/", SPIFFS, "/www/");
+  for (uint16_t c; c <= 255; c++) for (uint8_t b = 0; b < 32; b++) web_login_cookies[c][b] = LoRa.random(); //reset login cookies
   server.begin();
   oled.drawString(0, 12, F("OK"));
   oled.display();
