@@ -96,7 +96,7 @@ enum lora_packet_types_gw_to_ws { //gateway to water system
 //recieved stuff
 byte last_wt_status = 0xFF; //left bytes main status, right 4 bytes extra status
 uint64_t last_wt_status_millis = 0xFFFFFFFFFFFFFFFF;
-uint16_t last_liters_left = 0xFFFF; //0xFFFF means not known
+uint16_t last_liters_left = 0xFFFF; //0xFFFF means not known, 0x0000 means done
 uint16_t last_liters_called = 0xFFFF; //0xFFFF means not known, 0x0000 means done
 int16_t last_lora_rssi = -999;
 int16_t last_lora_snr = -999;
@@ -193,11 +193,16 @@ bool check_auth() {
   uint16_t lc_end = cookie_header.substring(lc_start).indexOf("; ");
 
   char login_cookie[32]; cookie_header.substring(lc_start, lc_end).toCharArray(login_cookie, 32);
+  uint8_t lc_len = 0;
+  for (uint8_t b = 0; b < 32; b++) if (b == 0) {
+    lc_len = b;
+    break;
+  }
 
   bool authed = false;
   for (uint16_t c; c <= 255; c++) { //check if login cookie valid
     bool matching = true;
-    for (uint8_t b = 0; b < 32; b++) { //compare each byte
+    for (uint8_t b = 0; b < min((uint8_t)32, lc_len); b++) { //compare each byte
       if (web_login_cookies[c][b] != login_cookie[b]) {
         matching = false;
         break;
@@ -223,8 +228,6 @@ void rest_status() {
   stuff["lora_rx"]["last_rssi"] = last_lora_rssi;
   stuff["lora_rx"]["last_snr"] = last_lora_snr;
   stuff["lora_rx"]["last_packet_time"] = last_recieved_packet_time;
-  stuff["lora_tx"]["send_queue_entries"] = -1;
-  stuff["lora_tx"]["send_queue_attempts"] = lora_outgoing_queue_tx_attempts;
   char json_stuff[512];
   serializeJsonPretty(stuff, json_stuff);
   server.send(200, "application/json", json_stuff);
@@ -239,12 +242,12 @@ void rest_login() {
   bool matching = true;
 
 
-  DynamicJsonDocument login(128);  
+  DynamicJsonDocument login(128);
   deserializeJson(login, server.arg("plain"));
   const char * user = server.hasArg("plain") ? login["user"] : server.arg("user").c_str();
   const char * pass = server.hasArg("plain") ? login["pass"] : server.arg("pass").c_str();
 
-  
+
   uint8_t user_len = get_charstring_len(settings.web_user);
   uint8_t pass_len = get_charstring_len(settings.web_pass);
   if (user_len == strlen(user) and pass_len == strlen(pass)) {
@@ -318,10 +321,32 @@ void rest_debug() {
     return;
   }
   uint16_t status_code = 200;
-  DynamicJsonDocument resp(512);
+  DynamicJsonDocument stuff(1024);
 
-  char buf[512];
-  serializeJson(resp, buf);
+//lora queues
+  stuff["lora_tx"]["next_packet_id"] = lora_outgoing_packet_id;
+  for (uint8_t i = 0; i < 4; i++) for (uint8_t b = 0; b < 48; b++) stuff["lora_tx"]["send_queue"]["entries"][i][b] = lora_outgoing_queue[i][b];
+  for (uint8_t i = 0; i < 4; i++) stuff["lora_tx"]["send_queue"]["entry_attempts"][i] = lora_outgoing_queue_tx_attempts[i];
+
+  for (uint8_t i = 0; i < 16; i++) stuff["lora_rx"]["last_packet_IDs"][i] = lora_incoming_message_IDs[i];
+  for (uint8_t i = 0; i < 4; i++) for (uint8_t b = 0; b < 48; b++) stuff["lora_rx"]["recive_queue"]["entries"][i][b] = lora_incoming_queue[i][b];
+  for (uint8_t i = 0; i < 4; i++) stuff["lora_rx"]["recive_queue"]["entry_len"][i] = lora_incoming_queue_len[i];
+
+  //settings
+  stuff["settings"]["conf_ssid"] = conf_ssid;
+  stuff["settings"]["conf_pass"] = conf_pass;
+  stuff["settings"]["lora_security_key"] = lora_security_key;
+  stuff["settings"]["alert_email"] = alert_email;
+  stuff["settings"]["smtp_server"] = smtp_server;
+  stuff["settings"]["smtp_user"] = smtp_user;
+  stuff["settings"]["smtp_pass"] = smtp_pass;
+  stuff["settings"]["smtp_port"] = smtp_port;
+  stuff["settings"]["web_user"] = web_user;
+  stuff["settings"]["web_pass"] = web_pass;
+  stuff["settings"]["display_brightness"] = display_brightness;
+  
+  char buf[1024];
+  serializeJson(stuff, buf);
   server.send(status_code, "application/json", buf);
 }
 
@@ -604,7 +629,7 @@ void handle_lora() {
       }
     if (!is_empty) {
       Serial.print(F("Recieved LoRa Packet: "));
-      for (uint8_t b = 0; b < max(lora_incoming_queue_len[p_idx]-1, 47); b++) {
+      for (uint8_t b = 0; b < max(lora_incoming_queue_len[p_idx] - 1, 47); b++) {
         Serial.print(lora_incoming_queue[p_idx][b], HEX);
         Serial.write(' ');
       }

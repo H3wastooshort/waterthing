@@ -29,7 +29,7 @@ menu li a {
 }
 
 /*status box*/
-.status_box {
+.box {
   border: 2px solid white;
   background-color: #000;
   min-width: 75%;
