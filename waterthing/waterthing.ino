@@ -32,6 +32,9 @@ Zyklus:
 #define RED_LED_PIN 0
 #define GREEN_LED_PIN 1
 #define BLUE_LED_PIN 2
+#define TB_SENSOR_LED 3
+#define TT_SENSOR_LED 4
+#define ACTIVITY_LED 5
 #define LORA_TX_LED 6
 #define LORA_RX_LED 7
 
@@ -85,7 +88,7 @@ struct settings_s {
   bool tank_top_on_level = LOW; //level of TANK_TOP_PIN when water has reached the top sensor
   bool rain_detected_on_level = LOW;
   uint8_t rain_minutes_til_block = 5; //if rain is detected for more than this time, it is officially raining
-  uint8_t rain_minutes_til_clear = 60; //if its not rainf or at least this time, watering will resume as normal
+  uint16_t rain_minutes_til_clear = 60; //if its not rainf or at least this time, watering will resume as normal
   bool block_water_after_rain = false;
   byte lora_security_key[16];
   uint8_t lora_enable = 0; //0=off, 1=broadcast only, 2=control
@@ -194,7 +197,7 @@ enum pages_enum {
 
 #define N_OF_PAGES 10
 const char* page_names[N_OF_PAGES] = {"Status", "Manuell", "Regen", "Timer", "LoRa", "Tank", "Uhr1", "Uhr2", "Akku", "Sensor"};
-const uint8_t page_max_cursor[N_OF_PAGES] = {0, 1, 1, 3, 3, 2, 3, 3, 2, 3};
+const uint8_t page_max_cursor[N_OF_PAGES] = {0, 1, 3, 3, 3, 2, 3, 3, 2, 3};
 
 
 int16_t literToTanks(uint16_t liters_to_convert) {
@@ -237,6 +240,24 @@ void change_menu_entry(bool dir) { //true is up
           }
         }
       }
+      break;
+
+    case PAGE_RAIN:
+      switch (menu_entry_cursor) {
+        case 2:
+          settings.rain_minutes_til_block += dir ? 1 : -1;
+          if (settings.rain_minutes_til_block > 0xFE) settings.rain_minutes_til_block = 0;
+          if (settings.rain_minutes_til_block >= 99) settings.rain_minutes_til_block = 99;
+          break;
+        case 3:
+            settings.rain_minutes_til_clear += dir ? 1 : -1;
+          if (settings.rain_minutes_til_clear > 0xFFF0) settings.rain_minutes_til_clear = 0;
+          if (settings.rain_minutes_til_clear >= 999) settings.rain_minutes_til_clear = 999;
+          break;
+        default:
+          break;
+      }
+      RTC.write(current_time);
       break;
 
     case PAGE_TIMER:
@@ -386,10 +407,17 @@ void edit_change_callback() {
       }
       break;
     case PAGE_RAIN:
-      if (menu_entry_cursor == 1) {
-        settings.block_water_after_rain = !settings.block_water_after_rain;
-        EEPROM.put(0, settings);
-        menu_editing = false;
+      switch (menu_entry_cursor) {
+        case 1:
+          settings.block_water_after_rain = !settings.block_water_after_rain;
+          menu_editing = false;
+          EEPROM.put(0, settings);
+          break;
+        case 2:
+        case 3: 
+          if (!menu_editing) EEPROM.put(0, settings);
+          break;
+
       }
       break;
     case PAGE_TIMER:
@@ -916,9 +944,28 @@ void update_display() {
           break;
         
         case PAGE_RAIN:
+          lcd.createChar(GFX_ID_DYN_1, gfx_rain);
+          lcd.createChar(GFX_ID_DYN_2, gfx_rise);
+          lcd.createChar(GFX_ID_DYN_3, gfx_fall);
+          lcd.setCursor(0,1); //this is needed so the disp takes the custom char
+          
+          lcd.write(GFX_ID_DYN_1);
           lcd_print_menu_bracket(1,false);
-          lcd.print(settings.block_water_after_rain ? F("Nicht Gie\x04\x65n") : F("Egal"));
+          lcd.print(settings.block_water_after_rain ? 'B' : 'I');
           lcd_print_menu_bracket(1,true);
+
+          lcd.write(GFX_ID_DYN_2);
+          lcd_print_menu_bracket(2,false);
+          lcd.print(settings.rain_minutes_til_block);
+          lcd.write('m');
+          lcd_print_menu_bracket(2,true);
+
+          lcd.write(GFX_ID_DYN_3);
+          lcd_print_menu_bracket(3,false);
+          lcd.print(settings.rain_minutes_til_clear);
+          lcd.write('m');
+          lcd_print_menu_bracket(3,true);
+
           break;
 
         case PAGE_TANK:
