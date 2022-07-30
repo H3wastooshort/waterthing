@@ -11,8 +11,8 @@
 <hr>
 <menu>
 <li><a href="/index.html">Status</a></li>
-<li class="current_page"><b>Login</b></li>
-<li class="logged_in_only"><a href="/admin/control.html">Steuerung</a></li>
+<li class="logged_out_only"><a href="/admin/login.html">Login</a></li>
+<li class="current_page"><b>Steuerung</b></li>
 <li class="logged_in_only"><a href="/admin/settings.html">Einstellungen</a></li>
 <li class="logged_in_only"><a href="/admin/debug.html">Debug</a></li>
 <li class="logged_in_only"><a href="/admin/logout.html">Log Out</a></li>
@@ -29,17 +29,7 @@
 </div>
 
 <script>
-submit_btn.onclick = function () {
-	let login = {'user': user_field.value, 'pass': pass_field.value};
-	fetch("/admin/login_rest", {
-		'method':'POST',
-		'body': JSON.stringify(login)
-	})
-	.then(r => {r.json()})
-	.then(jr => {
-		alert(jr);
-	});
-}
+
 </script>
 
 </body>

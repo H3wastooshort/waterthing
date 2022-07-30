@@ -44,7 +44,7 @@
 
 char host_name[18] = "WaterthingGW-XXXX"; // last 4 chars will be chip-id
 
-SSD1306Wire oled(OLED_ADDRESS, OLED_SDA_PIN, OLED_SCL_PIN, GEOMETRY_128_64/*, I2C_ONE, 200000*/);//sometimes I2C_ONE is not decalred, sometimes it is, idk why
+SSD1306Wire oled(OLED_ADDRESS, -1, -1, GEOMETRY_128_64/*, I2C_ONE, 200000*/);//sometimes I2C_ONE is not decalred, sometimes it is, idk why
 WiFiManager wm;
 WiFiUDP ntpUDP;
 NTPClient ntp(ntpUDP, "europe.pool.ntp.org", 0, 60000);
@@ -63,6 +63,7 @@ struct settings_s {
   uint16_t smtp_port = 587;
   char web_user[32] = "waterthing";
   char web_pass[32] = "thisisnotsecure";
+  uint8_t display_brightness = 255;
 } settings;
 
 //lora
@@ -276,6 +277,19 @@ void rest_login() {
   }
 }
 
+void rest_control() {
+  if (!check_auth()) {
+    server.send(403, "application/json", "{\"error\":403}");
+    return;
+  }
+  uint16_t status_code = 200;
+  DynamicJsonDocument resp(512);
+
+  char buf[512];
+  serializeJson(resp, buf);
+  server.send(status_code, "application/json", buf);
+}
+
 void rest_admin_get() {
   if (!check_auth()) {
     server.send(403, "application/json", "{\"error\":403}");
@@ -333,12 +347,14 @@ void setup() {
 
   //oled
   Serial.println(F("OLED Setup..."));
+  Wire.begin(OLED_SDA_PIN, OLED_SCL_PIN);
+  Wire.setClock(200000);
   oled.init();
   oled.displayOn();
   oled.clear();
   oled.setColor(WHITE);
   oled.setFont(Lato_Thin_12);
-  oled.setContrast(255);
+  oled.setContrast(settings.display_brightness);
   oled.flipScreenVertically();
 
   //eeprom setup
@@ -523,7 +539,8 @@ void setup() {
   oled.display();
   SPIFFS.begin();
   server.on("/rest", HTTP_GET, rest_status);
-  server.on("/admin/login", HTTP_POST, rest_login);
+  server.on("/admin/login_rest", HTTP_POST, rest_login);
+  server.on("/admin/control_rest", HTTP_POST, rest_control);
   server.on("/admin/settings_rest", HTTP_POST, rest_admin_set);
   server.on("/admin/settings_rest", HTTP_GET, rest_admin_get);
   server.on("/admin/debug_rest", HTTP_GET, rest_debug);
@@ -587,7 +604,7 @@ void handle_lora() {
       }
     if (!is_empty) {
       Serial.print(F("Recieved LoRa Packet: "));
-      for (uint8_t b = 0; b < lora_incoming_queue_len[p_idx]; b++) {
+      for (uint8_t b = 0; b < max(lora_incoming_queue_len[p_idx]-1, 47); b++) {
         Serial.print(lora_incoming_queue[p_idx][b], HEX);
         Serial.write(' ');
       }
