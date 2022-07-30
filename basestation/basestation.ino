@@ -56,7 +56,7 @@ struct settings_s {
   char conf_ssid[16] = "WaterthingGW\0\0\0";
   char conf_pass[16] = "524901457882057";
   uint8_t lora_security_key[16] = {0};
-  char alert_email[32] = {0};
+  char alert_email[32] = "max.mustermann@example.com";
   char smtp_server[32] = {0};
   char smtp_user[32] = {0};
   char smtp_pass[32] = {0};
@@ -171,16 +171,20 @@ void draw_display_boilerplate() {
   //oled.display();
 }
 
-void config_ap_callback() {
+void config_ap_callback(WiFiManager *myWiFiManager) {
   //put conf AP credentials on screen
   oled.clear();
   oled.setColor(WHITE);
   oled.setFont(Lato_Thin_8);
   oled.setTextAlignment(TEXT_ALIGN_LEFT);
 
-
-  oled.drawString(0, 0, settings.conf_ssid);
-  oled.drawString(0, 16, settings.conf_pass);
+  oled.drawString(0, 0, "Connect AP and visit");
+  oled.drawString(0, 10, "http://192.168.4.1/");
+  oled.drawString(0, 20, "SSID:");
+  oled.drawString(0, 30, settings.conf_ssid);
+  oled.drawString(0, 40, "Password:");
+  oled.drawString(0, 50, settings.conf_pass);
+  oled.display();
 }
 
 
@@ -255,14 +259,14 @@ void rest_login() {
 
   bool matching = false;
   if (strlen((char*)settings.web_user) == strlen((char*)user) and strlen((char*)settings.web_pass) == strlen((char*)pass)) {
-  if (strcmp(user, (char*)settings.web_user) == 0 and strcmp(pass, (char*)settings.web_pass) == 0) {
+    if (strcmp(user, (char*)settings.web_user) == 0 and strcmp(pass, (char*)settings.web_pass) == 0) {
       matching = true;
     }
   }
 
 
   if (matching) {
-  for (uint8_t b = 0; b < 32; b++) web_login_cookies[web_login_cookies_idx][b] = min(65, max(122, (LoRa.random() / 2) + 65)); //wierd math is for really badly keeping it in ascii char range. yes ik its bad
+    for (uint8_t b = 0; b < 32; b++) web_login_cookies[web_login_cookies_idx][b] = min(65, max(122, (LoRa.random() / 2) + 65)); //wierd math is for really badly keeping it in ascii char range. yes ik its bad
     String cookiestring = "login_cookie=";
     cookiestring += web_login_cookies[web_login_cookies_idx];
     cookiestring += "; Path=/admin/; SameSite=Strict; Max-Age=86400"; //cookie kept for a day
@@ -349,15 +353,63 @@ void rest_debug() {
   server.send(status_code, "application/json", buf);
 }
 
-/*enum mail_alert_enum {
-  MAIL_ALERT_WATER,
+/*
+  enum mail_alert_enum {
+  MAIL_ALERT_WATER = 0,
   MAIL_ALERT_BAT,
   MAIL_ALERT_GENERAL
   };
 
-  void send_email_alert(mail_alert_enum alert_type) {
+  void send_email_alert(mail_alert_enum alert_type) { //TODO: fugure out why "variable or field 'send_email_alert' declared void" when i use the mail_alert_enum
+  Serial.println(F("Sending mail alert:"));
+  EMailSender::EMailMessage msg;
+  msg.mime = "text/html";
 
-  }*/
+  switch (alert_type) { //read in first part of mail and add values
+    case MAIL_ALERT_WATER:
+      File msg_body_file;
+      msg.subject = "[WT] ACHTUNG: Wassertank Leer!";
+      msg_body_file = SPIFFS.open("/mail/de_alert_water.html", "r");
+      while (msg_body_file.available()) msg.message += msg_body_file.read();
+      msg_body_file.close();
+      break;
+    case MAIL_ALERT_BAT:
+      File msg_body_file;
+      msg.subject = "[WT] ACHTUNG: Batterie Leer!";
+      msg_body_file = SPIFFS.open("/mail/de_alert_battery.html", "r");
+      while (msg_body_file.available()) msg.message += msg_body_file.read();
+      msg_body_file.close();
+      //msg.message += last_wt_battery_voltage;
+      msg.message += 'V';
+      break;
+    case MAIL_ALERT_WATER:
+      File msg_body_file;
+      msg.subject = "[WT] ACHTUNG: Systemfehler!";
+      msg_body_file = SPIFFS.open("/mail/de_alert_gen_fail.html", "r");
+      while (msg_body_file.available()) msg.message += msg_body_file.read();
+      msg_body_file.close();
+      //                     XXXXTMU?
+      if (last_wt_status & 0b00001000) msg.message += " * Tanksensoren Werte Unsinnig";
+      if (last_wt_status & 0b00000100) msg.message += " * RTC fehlt.";
+      if (last_wt_status & 0b00000010) msg.message += " * RTC nicht eingestellt.";
+      break;
+  }
+
+  msg.message += "\n<br><br>\nUNIX Zeist.: ";
+  msg.message += ntp.getEpochTime();
+  msg.message += "\n</p>\n</body>\n</html>";
+
+  EMailSender::Response r = email.send(settings.alert_email, msg);
+
+  Serial.print(F(" * Status: "));
+  Serial.println(r.status);
+  Serial.print(F(" * Code: "));
+  Serial.println(r.code);
+  Serial.print(F(" * Description: "));
+  Serial.println(r.desc);
+  Serial.println();
+  }
+*/
 
 void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
@@ -386,16 +438,19 @@ void setup() {
   Serial.println(F("EEPROM Setup..."));
   oled.clear();
   oled.drawString(0, 0, "EEPROM...");
-  oled.drawString(0, 55, "Hold PRG button to reset.");
+  oled.drawString(0, 40, "Hold PRG button NOW");
+  oled.drawString(0, 50, "to reset to factory.");
   oled.display();
   delay(1000);
   if (EEPROM.begin(EEPROM_SIZE) and digitalRead(0)) { //hold GPIO0 low to reset conf at boot
     EEPROM.get(0, settings);
     oled.drawString(0, 12, F("OK"));
+    oled.display();
   }
   else {
     EEPROM.put(0, settings);
     oled.drawString(0, 12, F("Initialized"));
+    oled.display();
     delay(900);
   }
   delay(100);
@@ -433,10 +488,18 @@ void setup() {
   Serial.println(F("Connecting WiFi..."));
   oled.clear();
   oled.drawString(0, 0, "WiFi...");
+  oled.drawString(0, 40, "Hold PRG button NOW");
+  oled.drawString(0, 50, "to start config AP.");
   oled.display();
+  delay(1000);
+
   WiFi.mode(WIFI_STA);
   WiFi.hostname(host_name);
-  //wm.setAPCallback(config_ap_callback);
+  wm.setAPCallback(config_ap_callback);
+  if (!digitalRead(0)) {
+    wm.startConfigPortal(settings.conf_ssid, settings.conf_pass);
+    ESP.reset();
+  }
   if (!wm.autoConnect(settings.conf_ssid, settings.conf_pass)) {
     ESP.restart();
   }
@@ -589,7 +652,7 @@ void setup() {
   oled.clear();
   oled.display();
 
-  Serial.println(F("Booted"));
+  Serial.println(F("Booted\n"));
   digitalWrite(LED_BUILTIN, HIGH);
 }
 
