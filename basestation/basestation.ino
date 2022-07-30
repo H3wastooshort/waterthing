@@ -183,9 +183,6 @@ void config_ap_callback() {
   oled.drawString(0, 16, settings.conf_pass);
 }
 
-size_t get_charstring_len(char * charstring) {
-  for (uint16_t b = 0; b > sizeof(charstring); b++) if (charstring[b] == 0) return b - 1;
-}
 
 bool check_auth() {
   String cookie_header = server.header("Cookie");
@@ -193,28 +190,27 @@ bool check_auth() {
   uint16_t lc_end = cookie_header.substring(lc_start).indexOf("; ");
 
   char login_cookie[32]; cookie_header.substring(lc_start, lc_end).toCharArray(login_cookie, 32);
-  uint8_t lc_len = 0;
-  for (uint8_t b = 0; b < 32; b++) if (b == 0) {
-    lc_len = b;
-    break;
-  }
+  uint8_t lc_len = strlen((char*)login_cookie);
+
+  Serial.println(F("Authed Access Attempt"));
+  Serial.print(F(" * Cookie: "));
+  Serial.println(login_cookie);
+  Serial.print(F(" * Cookie Len: "));
+  Serial.println(lc_len);
 
   bool authed = false;
   for (uint16_t c; c <= 255; c++) { //check if login cookie valid
-    bool matching = true;
-    for (uint8_t b = 0; b < min((uint8_t)32, lc_len); b++) { //compare each byte
-      if (web_login_cookies[c][b] != login_cookie[b]) {
-        matching = false;
-        break;
-      }
-      if (matching) {
+    if (32 == strlen((char*)login_cookie)) {
+      if (strcmp((char*)web_login_cookies[c], (char*)login_cookie) == 0) {
         authed = true;
         break;
       }
     }
-    if (authed) break;
   }
 
+  Serial.print(F(" * "));
+  Serial.println(authed ? F("SUCCESS") : F("FAIL"));
+  Serial.println();
   return authed;
 }
 
@@ -237,47 +233,50 @@ void rest_status() {
 void rest_login() {
   if (check_auth()) {
     server.send(200, "application/json", "{\"success\":\"Already Authenticated.\"}");
+    Serial.println(F("Login Attempt: Already Authed"));
     return;
   }
-  bool matching = true;
 
+  Serial.println(F("Login Attempt"));
 
   DynamicJsonDocument login(128);
   deserializeJson(login, server.arg("plain"));
   const char * user = server.hasArg("plain") ? login["user"] : server.arg("user").c_str();
   const char * pass = server.hasArg("plain") ? login["pass"] : server.arg("pass").c_str();
 
+  Serial.print(F(" * User: "));
+  Serial.println(user);
+  Serial.print(F(" * Pass: "));
+  Serial.println(pass);
+  Serial.print(F(" * Correct User: "));
+  Serial.println(settings.web_user);
+  Serial.print(F(" * Correct Pass: "));
+  Serial.println(settings.web_pass);
 
-  uint8_t user_len = get_charstring_len(settings.web_user);
-  uint8_t pass_len = get_charstring_len(settings.web_pass);
-  if (user_len == strlen(user) and pass_len == strlen(pass)) {
-    for (uint8_t b = 0; b < user_len; b++) {
-      if (user[b] != settings.web_user[b]) {
-        matching = false;
-        break;
-      }
-    }
-    for (uint8_t b = 0; b < pass_len; b++) {
-      if (pass[b] != settings.web_pass[b]) {
-        matching = false;
-        break;
-      }
+  bool matching = false;
+  if (strlen((char*)settings.web_user) == strlen((char*)user) and strlen((char*)settings.web_pass) == strlen((char*)pass)) {
+  if (strcmp(user, (char*)settings.web_user) == 0 and strcmp(pass, (char*)settings.web_pass) == 0) {
+      matching = true;
     }
   }
-  else matching = false;
+
 
   if (matching) {
-    for (uint8_t b = 0; b < 32; b++) web_login_cookies[web_login_cookies_idx][b] = LoRa.random();
+  for (uint8_t b = 0; b < 32; b++) web_login_cookies[web_login_cookies_idx][b] = min(65, max(122, (LoRa.random() / 2) + 65)); //wierd math is for really badly keeping it in ascii char range. yes ik its bad
     String cookiestring = "login_cookie=";
     cookiestring += web_login_cookies[web_login_cookies_idx];
     cookiestring += "; Path=/admin/; SameSite=Strict; Max-Age=86400"; //cookie kept for a day
 
     server.sendHeader("Set-Cookie", cookiestring);
     server.send(200, "application/json", "{\"success\":\"Authenticated\"}");
+    Serial.println(F(" * SUCCESS"));
   }
   else {
     server.send(403, "application/json", "{\"error\":\"Credentials invalid.\"}");
+    Serial.println(F(" * FAIL"));
   }
+
+  Serial.println();
 }
 
 void rest_control() {
@@ -323,28 +322,28 @@ void rest_debug() {
   uint16_t status_code = 200;
   DynamicJsonDocument stuff(1024);
 
-//lora queues
+  //lora queues
   stuff["lora_tx"]["next_packet_id"] = lora_outgoing_packet_id;
   for (uint8_t i = 0; i < 4; i++) for (uint8_t b = 0; b < 48; b++) stuff["lora_tx"]["send_queue"]["entries"][i][b] = lora_outgoing_queue[i][b];
   for (uint8_t i = 0; i < 4; i++) stuff["lora_tx"]["send_queue"]["entry_attempts"][i] = lora_outgoing_queue_tx_attempts[i];
 
-  for (uint8_t i = 0; i < 16; i++) stuff["lora_rx"]["last_packet_IDs"][i] = lora_incoming_message_IDs[i];
+  for (uint8_t i = 0; i < 16; i++) stuff["lora_rx"]["last_packet_IDs"][i] = lora_last_incoming_message_IDs[i];
   for (uint8_t i = 0; i < 4; i++) for (uint8_t b = 0; b < 48; b++) stuff["lora_rx"]["recive_queue"]["entries"][i][b] = lora_incoming_queue[i][b];
   for (uint8_t i = 0; i < 4; i++) stuff["lora_rx"]["recive_queue"]["entry_len"][i] = lora_incoming_queue_len[i];
 
   //settings
-  stuff["settings"]["conf_ssid"] = conf_ssid;
-  stuff["settings"]["conf_pass"] = conf_pass;
-  stuff["settings"]["lora_security_key"] = lora_security_key;
-  stuff["settings"]["alert_email"] = alert_email;
-  stuff["settings"]["smtp_server"] = smtp_server;
-  stuff["settings"]["smtp_user"] = smtp_user;
-  stuff["settings"]["smtp_pass"] = smtp_pass;
-  stuff["settings"]["smtp_port"] = smtp_port;
-  stuff["settings"]["web_user"] = web_user;
-  stuff["settings"]["web_pass"] = web_pass;
-  stuff["settings"]["display_brightness"] = display_brightness;
-  
+  stuff["settings"]["conf_ssid"] = settings.conf_ssid;
+  stuff["settings"]["conf_pass"] = settings.conf_pass;
+  stuff["settings"]["lora_security_key"] = settings.lora_security_key;
+  stuff["settings"]["alert_email"] = settings.alert_email;
+  stuff["settings"]["smtp_server"] = settings.smtp_server;
+  stuff["settings"]["smtp_user"] = settings.smtp_user;
+  //stuff["settings"]["smtp_pass"] = settings.smtp_pass;
+  stuff["settings"]["smtp_port"] = settings.smtp_port;
+  stuff["settings"]["web_user"] = settings.web_user;
+  stuff["settings"]["web_pass"] = settings.web_pass;
+  stuff["settings"]["display_brightness"] = settings.display_brightness;
+
   char buf[1024];
   serializeJson(stuff, buf);
   server.send(status_code, "application/json", buf);
@@ -362,6 +361,7 @@ void rest_debug() {
 
 void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(0, INPUT_PULLUP);
   digitalWrite(LED_BUILTIN, LOW);
   pinMode(OLED_RST_PIN, OUTPUT);
   digitalWrite(OLED_RST_PIN, LOW);
@@ -386,22 +386,18 @@ void setup() {
   Serial.println(F("EEPROM Setup..."));
   oled.clear();
   oled.drawString(0, 0, "EEPROM...");
+  oled.drawString(0, 55, "Hold PRG button to reset.");
   oled.display();
-  if (EEPROM.begin(EEPROM_SIZE)) {
+  delay(1000);
+  if (EEPROM.begin(EEPROM_SIZE) and digitalRead(0)) { //hold GPIO0 low to reset conf at boot
     EEPROM.get(0, settings);
     oled.drawString(0, 12, F("OK"));
   }
   else {
     EEPROM.put(0, settings);
     oled.drawString(0, 12, F("Initialized"));
+    delay(900);
   }
-  email.setSMTPServer(settings.smtp_server);
-  email.setNameFrom(host_name);
-  email.setEMailFrom(settings.smtp_user);
-  email.setEMailLogin(settings.smtp_user);
-  email.setEMailPassword(settings.smtp_pass);
-  email.setSMTPPort(settings.smtp_port);
-  email.setIsSecure(true);
   delay(100);
 
   //lora setup
@@ -556,6 +552,16 @@ void setup() {
   oled.drawString(0, 12, F("OK"));
   oled.display();
   delay(100);
+
+  //email
+  Serial.println(F("E-Mail Setup..."));
+  email.setSMTPServer(settings.smtp_server);
+  email.setNameFrom(host_name);
+  email.setEMailFrom(settings.smtp_user);
+  email.setEMailLogin(settings.smtp_user);
+  email.setEMailPassword(settings.smtp_pass);
+  email.setSMTPPort(settings.smtp_port);
+  email.setIsSecure(true);
 
   //webserver
   Serial.println(F("WebServer Setup..."));

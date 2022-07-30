@@ -32,8 +32,8 @@ menu li a {
 .box {
   border: 2px solid white;
   background-color: #000;
-  min-width: 75%;
   width: max-content;
+  padding: 4px;
   margin: auto;
 }
 
@@ -45,4 +45,17 @@ menu li a {
 }
 #status_extra {
   font-size: 1.5em;
+}
+
+
+input, button {
+  background-color: black;
+  border: 1px solid cyan;
+  padding: 2px;
+  margin: 2px;
+  color: white;
+}
+
+button {
+  border-width: 2px;
 }
