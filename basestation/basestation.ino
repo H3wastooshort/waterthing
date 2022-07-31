@@ -83,6 +83,7 @@ uint8_t lora_last_incoming_message_IDs_idx = 0;
 enum lora_packet_types_ws_to_gw { //water system to gateway
   PACKET_TYPE_STATUS = 0,
   PACKET_TYPE_WATER = 1,
+  PACKET_TYPE_BATTERY = 2,
   PACKET_TYPE_AUTH_C_REQ = 250,
   PACKET_TYPE_CMD_DISABLED = 253,
   PACKET_TYPE_CMD_AUTH_FAIL = 254,
@@ -98,9 +99,11 @@ byte last_wt_status = 0xFF; //left bytes main status, right 4 bytes extra status
 uint64_t last_wt_status_millis = 0xFFFFFFFFFFFFFFFF;
 uint16_t last_liters_left = 0xFFFF; //0xFFFF means not known, 0x0000 means done
 uint16_t last_liters_called = 0xFFFF; //0xFFFF means not known, 0x0000 means done
+uint64_t last_wt_liters_millis = 0xFFFFFFFFFFFFFFFF;
 int16_t last_lora_rssi = -999;
 int16_t last_lora_snr = -999;
 uint64_t last_recieved_packet_time = 0; //time in unix timestamp
+uint64_t last_wt_battery_voltage_millis = 0xFFFFFFFFFFFFFFFF;
 
 //web
 char web_login_cookies[255][32];
@@ -223,16 +226,20 @@ void rest_status() {
   stuff["status"]["state"] = last_wt_status >> 4;
   stuff["status"]["extra"] = last_wt_status & 0b00001111;
   stuff["status"]["as_text"] = status_to_text[last_wt_status];
+  stuff["status"]["seconds_since_last_reception"] = round((millis() - last_wt_status_millis) / 1000);
   stuff["irrigation"]["left"] = last_liters_left;
   stuff["irrigation"]["called"] = last_liters_called;
+  stuff["irrigation"]["seconds_since_last_reception"] = round((millis() - last_wt_liters_millis) / 1000);
+  stuff["battery"]["voltage"] = last_wt_battery_voltage;
+  stuff["battery"]["seconds_since_last_reception"] = round((millis() - last_wt_battery_voltage_millis) / 1000);
   stuff["lora_rx"]["last_rssi"] = last_lora_rssi;
   stuff["lora_rx"]["last_snr"] = last_lora_snr;
   stuff["lora_rx"]["last_packet_time"] = last_recieved_packet_time;
   char json_stuff[512];
   serializeJsonPretty(stuff, json_stuff);
   server.send(200, "application/json", json_stuff);
-
 }
+
 
 void rest_login() {
   if (check_auth()) {
@@ -379,7 +386,7 @@ void rest_debug() {
       msg_body_file = SPIFFS.open("/mail/de_alert_battery.html", "r");
       while (msg_body_file.available()) msg.message += msg_body_file.read();
       msg_body_file.close();
-      //msg.message += last_wt_battery_voltage;
+      msg.message += last_wt_battery_voltage;
       msg.message += 'V';
       break;
     case MAIL_ALERT_WATER:
@@ -703,6 +710,13 @@ void handle_lora() {
         Serial.write(' ');
       }
 
+      /*
+         0 -> magic
+         1 -> packet id
+         2 -> packet type
+         3... -> data
+      */
+
       if (lora_incoming_queue[p_idx][0] == 42) { //if magic correct
         bool already_recieved = false;
         for (uint8_t i = 0; i < 16; i++) if (lora_incoming_queue[p_idx][0] = lora_last_incoming_message_IDs[i]) already_recieved = true;
@@ -710,11 +724,34 @@ void handle_lora() {
         if (!already_recieved) {
           Serial.print(F("Magic Correct.\nPacket type: "));
           switch (lora_incoming_queue[p_idx][2]) {
-            case PACKET_TYPE_STATUS:
-              Serial.println(F("Status"));
-              last_wt_status = lora_incoming_queue[p_idx][3];
-              last_wt_status_millis = millis();
-              break;
+            case PACKET_TYPE_STATUS: {
+                Serial.println(F("Status"));
+                last_wt_status = lora_incoming_queue[p_idx][3];
+                last_wt_status_millis = millis();
+              }
+
+            case PACKET_TYPE_WATER: {
+                last_liters_left = 0;
+                last_liters_left <<= lora_incoming_queue[p_idx][3];
+                last_liters_left <<= lora_incoming_queue[p_idx][4];
+
+                last_liters_called = 0;
+                last_liters_called <<= lora_incoming_queue[p_idx][5];
+                last_liters_called <<= lora_incoming_queue[p_idx][6];
+
+                last_wt_liters_millis = millis();
+              }
+
+            case PACKET_TYPE_BATTERY:{ //todo: im lazy, this should be a for loop
+                byte temp_float[] = {
+                  lora_incoming_queue[p_idx][3],
+                  lora_incoming_queue[p_idx][4],
+                  lora_incoming_queue[p_idx][5],
+                  lora_incoming_queue[p_idx][6]
+                };
+                memcpy(&last_wt_battery_voltage, &temp_float, sizeof(last_wt_battery_voltage));
+                last_wt_battery_voltage_millis = millis();
+              }
 
             default:
               break;
