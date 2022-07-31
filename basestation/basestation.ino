@@ -498,7 +498,7 @@ void setup() {
   wm.setAPCallback(config_ap_callback);
   if (!digitalRead(0)) {
     wm.startConfigPortal(settings.conf_ssid, settings.conf_pass);
-    ESP.reset();
+    ESP.restart();
   }
   if (!wm.autoConnect(settings.conf_ssid, settings.conf_pass)) {
     ESP.restart();

@@ -32,9 +32,9 @@ Zyklus:
 #define RED_LED_PIN 0
 #define GREEN_LED_PIN 1
 #define BLUE_LED_PIN 2
-#define TB_SENSOR_LED 3
-#define TT_SENSOR_LED 4
-#define ACTIVITY_LED 5
+#define TB_SENSOR_LED 3 //tank bottom sensor indicator
+#define TT_SENSOR_LED 4 //tank top sensor indicator
+#define ACTIVITY_LED 5 //lights up on operations that take a bit longer (like drawing siplay and commonicating with lora module)
 #define LORA_TX_LED 6
 #define LORA_RX_LED 7
 
@@ -586,12 +586,6 @@ void setup() {
   analogReference(INTERNAL/*1V1*/); //set ADC voltage reference to stable internal 1.1V reference. uncomment the 1V1 part for arduino megas
   randomSeed(analogRead(BATTERY_VOLTAGE_PIN));
 
-  //led pcf
-  for (uint8_t pin = 0; pin < 8; pin++) {
-    pinMode(pcf, pin, OUTPUT);
-    digitalWrite(pcf, pin, HIGH);
-  }
-
   //buttons
   pinMode(ENCODER_CLK_PIN, INPUT_PULLUP);
   pinMode(ENCODER_DT_PIN, INPUT_PULLUP);
@@ -641,6 +635,13 @@ void setup() {
   lcd.setCursor(0, 1);
   Wire.beginTransmission(LED_PCF_ADDR);
   if (Wire.endTransmission() == 0) {
+    for (uint8_t pin = 0; pin < 8; pin++) {
+    pinMode(pcf, pin, OUTPUT);
+    digitalWrite(pcf, pin, HIGH);
+    delay(50);
+    digitalWrite(pcf, pin, LOW)
+    delay(50);
+    }
     lcd.print(F("OK"));
   }
   else {
@@ -817,6 +818,7 @@ skip_page_basics:
 
 void update_display() {
   if (millis() - last_display_update > 1000) {
+      digitalWrite(pcf, ACTIVITY_LED, LOW);
       uint16_t uint16_temp;
       char char_5_temp[5];
       uint8_t disp_pad = 8;
@@ -1160,6 +1162,7 @@ void update_display() {
 
     //Serial.print(F("Display drawing time [ms]: "));
     //Serial.println(last_display_update - display_draw_start_time);
+    digitalWrite(pcf, ACTIVITY_LED, HIGH);
   }
 
   //status led
@@ -1301,7 +1304,10 @@ void read_sensors_and_clock() {
   sensor_values.low_water = settings.low_water_on_level == digitalRead(LOW_WATER_PIN);
   sensor_values.tank_bottom = settings.tank_bottom_on_level == digitalRead(TANK_BOTTOM_PIN);
   sensor_values.tank_top = settings.tank_top_on_level == digitalRead(TANK_TOP_PIN);
-  
+
+  digitalWrite(pcf, TT_SENSOR_PIN, !sensor_values.tank_top);
+  digitalWrite(pcf, TB_SENSOR_PIN, !sensor_values.tank_bottom);
+
   bool rain_condition_now = settings.rain_detected_on_level == digitalRead(RAIN_DETECTOR_PIN);
   static bool last_rain_condition = false;
   if (rain_condition_now != last_rain_condition and millis() - sensor_values.rain_start_millis > 10000 and millis() - sensor_values.rain_end_millis > 10000) { //if changed set millis vars and debounce rain sensor
@@ -1320,6 +1326,7 @@ void read_sensors_and_clock() {
 
 void handle_serial() {
   if (Serial.available()) {
+    digitalWrite(pcf, ACTIVITY_LED, LOW);
     uint8_t controlCharacter = Serial.read();
 
     if (controlCharacter == 'd') up_callback();
@@ -1364,6 +1371,7 @@ void handle_serial() {
       //todo: write this
     } 
   }
+  digitalWrite(pcf, ACTIVITY_LED, HIGH);
 }
 
 void do_stored_buttons() {
@@ -1411,6 +1419,7 @@ void handle_lora() {
       bool is_empty = true;
       for (uint8_t i = 0; i < 48; i++) if (lora_incoming_queue[p_idx][i] != 0) {is_empty = false; break;} //check for data in packet
       if (!is_empty) {
+        digitalWrite(pcf, ACTIVITY_LED, LOW);
         Serial.print(F("Recieved LoRa Packet: "));
         for (uint8_t b = 0; b < lora_incoming_queue_len[p_idx]; b++) {
           Serial.print(lora_incoming_queue[p_idx][b], HEX);
@@ -1436,6 +1445,7 @@ void handle_lora() {
       }
 
       for (uint8_t i = 0; i < 48; i++) lora_incoming_queue[p_idx][i] = 0; //clear after processing
+      digitalWrite(pcf, ACTIVITY_LED, HIGH);
       }
     }
     digitalWrite(pcf, LORA_RX_LED, HIGH);
@@ -1447,6 +1457,7 @@ void handle_lora() {
       bool is_empty = true;
       for (uint8_t i = 0; i < 48; i++) if (lora_outgoing_queue[p_idx][i] != 0) {is_empty = false; break;} //check for data in packet
       if (!is_empty and millis() - lora_outgoing_queue_last_tx[p_idx] > LORA_RETRANSMIT_TIME and lora_tx_ready) {
+        digitalWrite(pcf, ACTIVITY_LED, LOW);
         digitalWrite(pcf, LORA_TX_LED, LOW);
         Serial.print(F("Sending LoRa Packet: "));
 
@@ -1472,6 +1483,7 @@ void handle_lora() {
           for (uint8_t i = 0; i < 48; i++) lora_outgoing_queue[p_idx][i] = 0; //clear packet if unsuccessful
           lora_outgoing_queue_last_tx[p_idx] = millis();
         }
+        digitalWrite(pcf, ACTIVITY_LED, HIGH);
       }
     }
   }
@@ -1525,5 +1537,5 @@ void loop() {
   do_stored_buttons();
   handle_lora();
 
-  delay(1);
+  delay(10);
 }
