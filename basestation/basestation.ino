@@ -103,7 +103,19 @@ uint64_t last_wt_liters_millis = 0xFFFFFFFFFFFFFFFF;
 int16_t last_lora_rssi = -999;
 int16_t last_lora_snr = -999;
 uint64_t last_recieved_packet_time = 0; //time in unix timestamp
+float last_wt_battery_voltage = -1;
 uint64_t last_wt_battery_voltage_millis = 0xFFFFFFFFFFFFFFFF;
+
+//authed lora cmds
+enum auth_state_e {
+  AUTH_STEP_IDLE = 0,
+  AUTH_STEP_TX_CHALLANGE_REQUEST = 1,
+  AUTH_STEP_WAIT_CHALLANGE = 2,
+  AUTH_STEP_RX_CHALLANGE = 3,
+  AUTH_STEP_TX_ANSWER = 4,
+  AUTH_STEP_WAIT_CMD_SUCCESS = 5,
+} auth_state;
+byte last_wt_challange[16] = {0};
 
 //web
 char web_login_cookies[255][32];
@@ -135,7 +147,7 @@ std::map<byte, String> status_to_text {
 
 
 void handle_lora_packet(int packet_size) {
-  for (uint8_t b = 1; b <= packet_size; b++) {
+  for (uint8_t b = 0; b <= packet_size; b++) {
     lora_incoming_queue[lora_incoming_queue_idx][b] = LoRa.read();
   }
 
@@ -479,7 +491,7 @@ void setup() {
     LoRa.enableCrc();
     LoRa.onTxDone(handle_lora_tx_done);
     LoRa.onReceive(handle_lora_packet);
-    //LoRa.receive(); //why do i get tons of random garbage?
+    LoRa.receive();
     oled.drawString(0, 12, F("OK"));
     oled.display();
   }
