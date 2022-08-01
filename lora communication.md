@@ -6,26 +6,28 @@ Magic Number is just 42
 Packet ID increment individually on each side and rolls over to 0 when going over 255
 
 ## Gateway -> Water System
-Packet ID | Name | Anatomy | Description
+Packet Type | Name | Anatomy | Description
+0 | Current Time | [Last Auth Response 32 bytes] | 
 1 | Add Water to Irrigate | [Liters 2 bytes] [Auth Response 32 bytes] |
 2 | Cancel Irrigation | [Auth Response 4 bytes] |
-? | Request Params | [Params ID] |
 250 | Ask for Auth challange | No Data |
+251 | Ping | |
+252 | Check Auth | [Auth Response 32 bytes] | Debug command to see if you have the right key without doing sth
 255 | Status/Broadcast ACK | [Packet ID] |
 
 ## Water System -> Gateway
-Packet ID | Name | Anatomy | Description
+Packet Type | Name | Anatomy | Description
 0 | System Status | [4+4 bit status] | Used to broadcast system state like STATUS_IDLE. Left 4 bits are system state, right 4 ones are more info (for ex in idle: alread watered, turned off, etc)
 1 | Watering State | [2 byte unsigned int: liters left] [2 byte unsigned int: liters called] | broadcasts watering state if currently watering
 2 | Battery State | [4 byte float] | broadcasts battery state regularly
 250 | Auth challange | [Auth challange 16 bytes] |
 253 | Commands disabled | No Data |
-254 | Command Not Authenticated | No Data |
-255 | Command OK | No Data |
+254 | Command Not Authenticated | [1 byte Packet ID] |
+255 | Command OK | [1 byte Packet ID] |
 
 ## Ground Sensor -> Water System
 **JUST AN IDEA. PROBABLY WON'T HAPPEN**
-Packet ID | Name | Anatomy | Description
+Packet Type | Name | Anatomy | Description
 100 | Ground Data | [Wetness 1 byte] | ground wetness is 0%-100% in 0.5% steps (so 0-200 in the wetness byte)
 
 ## broadcast

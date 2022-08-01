@@ -525,7 +525,7 @@ ISR (PCINT2_vect) { //port D
 
 uint32_t last_encoder_clock = 0;
 void handle_encoder_clk() {
-  delay(2);
+  delay(3);
   bool immidiate_dt = digitalRead(ENCODER_DT_PIN); //read dt as quickly as possible
   if (digitalRead(ENCODER_CLK_PIN)) return; //ignore clock going back up
 
