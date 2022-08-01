@@ -1,12 +1,12 @@
 //Bewässerungssystem
 /*
-Zyklus:
- * Pumpe An
- * Warten Bis Tank Voll
- * Pumpe Aus
- * Ventil Auf
- * Warten bis Tank leer
- * wiederholen bis gewünschte menge bewässert
+  Zyklus:
+   Pumpe An
+   Warten Bis Tank Voll
+   Pumpe Aus
+   Ventil Auf
+   Warten bis Tank leer
+   wiederholen bis gewünschte menge bewässert
 */
 
 #include <EEPROM.h>
@@ -24,7 +24,7 @@ Zyklus:
 #define TANK_BOTTOM_PIN A2
 #define TANK_TOP_PIN A3 //reused for water flow sensor when in direct mode. WARNING! change PCINT suff in setup() too!!
 #define PUMP_PIN 6
-#define VALVE_PIN 7 
+#define VALVE_PIN 7
 #define RAIN_DETECTOR_PIN 8
 
 //pcf
@@ -59,7 +59,7 @@ Zyklus:
 #define LORA_TX_INTERVAL 300000 //time between beacon broadcasts in ms
 
 //library stuff
-LiquidCrystal_I2C lcd(0x27,16,2);
+LiquidCrystal_I2C lcd(0x27, 16, 2);
 PCF8574 pcf(LED_PCF_ADDR); //all addr pins to high
 
 enum gfx_IDs { //enum for naming display gfx ids
@@ -103,7 +103,7 @@ struct i_timer_s {
 } irrigation_timer;
 
 //and also just to organize things
-struct c_error_s{
+struct c_error_s {
   bool rtc_missing = false;
   bool rtc_unset = false;
   bool tank_sensors_irrational = false;
@@ -111,7 +111,7 @@ struct c_error_s{
 } component_errors;
 
 //enums for easier code reading
-enum system_state_e { 
+enum system_state_e {
   STATUS_IDLE = 0, //doing nothing
   STATUS_PUMPING = 1, //pumping water in tank
   STATUS_EMPTYING = 2, //emptying tank
@@ -205,7 +205,7 @@ int16_t literToTanks(uint16_t liters_to_convert) {
     return liters_to_convert / settings.tank_capacity;
   }
   else {
-    return ((float)liters_to_convert / (float)settings.tank_capacity)+1;
+    return ((float)liters_to_convert / (float)settings.tank_capacity) + 1;
   }
 }
 
@@ -220,16 +220,16 @@ void change_menu_entry(bool dir) { //true is up
   if (menu_entry_cursor == 0) {
     menu_page += dir ? 1 : -1;
     if (menu_page < 0) menu_page = 0;
-    if (menu_page >= N_OF_PAGES) menu_page = N_OF_PAGES-1;
+    if (menu_page >= N_OF_PAGES) menu_page = N_OF_PAGES - 1;
     return;
   }
   switch (menu_page) {
     case PAGE_MAN: //manual
       if (menu_entry_cursor == 1) {
         if (tank_fillings_remaining == 0) {
-          if (settings.tank_capacity>0)
+          if (settings.tank_capacity > 0)
           {
-            page_1_irrigate_order += dir ? settings.tank_capacity : settings.tank_capacity*-1;
+            page_1_irrigate_order += dir ? settings.tank_capacity : settings.tank_capacity * -1;
             if (page_1_irrigate_order > 0xFF00 /* overflow */) page_1_irrigate_order = 0;
             if (page_1_irrigate_order > 990) page_1_irrigate_order = 990;
           }
@@ -250,7 +250,7 @@ void change_menu_entry(bool dir) { //true is up
           if (settings.rain_minutes_til_block >= 99) settings.rain_minutes_til_block = 99;
           break;
         case 3:
-            settings.rain_minutes_til_clear += dir ? 1 : -1;
+          settings.rain_minutes_til_clear += dir ? 1 : -1;
           if (settings.rain_minutes_til_clear > 0xFFF0) settings.rain_minutes_til_clear = 0;
           if (settings.rain_minutes_til_clear >= 999) settings.rain_minutes_til_clear = 999;
           break;
@@ -298,7 +298,7 @@ void change_menu_entry(bool dir) { //true is up
           if (settings.tank_capacity >= 200) settings.tank_capacity = 200;
           break;
         case 2:
-          if (settings.tank_capacity>0) {
+          if (settings.tank_capacity > 0) {
             settings.afterdrain_time += dir ? 1 : -1;
             if (settings.afterdrain_time > 250 /*overflow*/) settings.afterdrain_time = 0;
             if (settings.afterdrain_time >= 90) settings.afterdrain_time = 90;
@@ -392,10 +392,10 @@ void edit_change_callback() {
             if (settings.tank_capacity > 0) tank_fillings_remaining = literToTanks(page_1_irrigate_order);
             else tank_fillings_remaining = page_1_irrigate_order;
             /*Serial.print(F("Manual water call for "));
-            Serial.print(page_1_irrigate_order);
-            Serial.print(F("L wich makes "));
-            Serial.print(tank_fillings_remaining);
-            Serial.println(F(" tank fillings"));*/
+              Serial.print(page_1_irrigate_order);
+              Serial.print(F("L wich makes "));
+              Serial.print(tank_fillings_remaining);
+              Serial.println(F(" tank fillings"));*/
           }
         }
         else {
@@ -414,7 +414,7 @@ void edit_change_callback() {
           EEPROM.put(0, settings);
           break;
         case 2:
-        case 3: 
+        case 3:
           if (!menu_editing) EEPROM.put(0, settings);
           break;
 
@@ -424,7 +424,7 @@ void edit_change_callback() {
       if (!menu_editing) { //if leaving edit mode
         if (menu_entry_cursor > 1) {
           irrigation_timer.last_watering_day = 0;
-          EEPROM.put(0+sizeof(settings), irrigation_timer); //save timer settings when leaving
+          EEPROM.put(0 + sizeof(settings), irrigation_timer); //save timer settings when leaving
         }
       }
       break;
@@ -441,7 +441,7 @@ void edit_change_callback() {
         EEPROM.put(0, settings);
         menu_editing = false;
       }
-      break;  
+      break;
     case PAGE_TANK:
     case PAGE_BATTERY:
       if (!menu_editing) { //if leaving edit mode
@@ -468,10 +468,10 @@ void edit_change_callback() {
           break;
 
         default:
-        break;
+          break;
       }
       EEPROM.put(0, settings);
-      menu_editing = false;
+      if (menu_entry_cursor > 0) menu_editing = false;
       break;
 
     default:
@@ -513,7 +513,8 @@ void btn_callback() {
 
 uint32_t last_btn_down = 0;
 ISR (PCINT2_vect) { //port D
-  if (!digitalRead(BTN_PIN)) return; //ignore falling edge
+  delay(3);
+  if (digitalRead(BTN_PIN)) return; //ignore rising edge
   if (millis() - last_btn_down >= DEBOUNCE_DELAY) {
     if (button_queue_add_pos >= 32) return; //too many buttons in queue, ignoring
     button_queue[button_queue_add_pos] = 3; //3 is for enter button
@@ -524,7 +525,9 @@ ISR (PCINT2_vect) { //port D
 
 uint32_t last_encoder_clock = 0;
 void handle_encoder_clk() {
+  delay(2);
   bool immidiate_dt = digitalRead(ENCODER_DT_PIN); //read dt as quickly as possible
+  if (digitalRead(ENCODER_CLK_PIN)) return; //ignore clock going back up
 
   if (button_queue_add_pos >= 32) return; //too many buttons in queue, ignoring
   if (millis() - last_encoder_clock <= DEBOUNCE_DELAY) return; //to quick, may be a bounce
@@ -539,9 +542,9 @@ void handle_encoder_clk() {
 }
 
 void set_status_led(bool r, bool g, bool b) {
-  digitalWrite(pcf, RED_LED_PIN,!r);
-  digitalWrite(pcf, GREEN_LED_PIN,!g);
-  digitalWrite(pcf, BLUE_LED_PIN,!b);
+  digitalWrite(pcf, RED_LED_PIN, !r);
+  digitalWrite(pcf, GREEN_LED_PIN, !g);
+  digitalWrite(pcf, BLUE_LED_PIN, !b);
 }
 
 ISR (PCINT1_vect) { //port B (analog pins)
@@ -591,7 +594,7 @@ void setup() {
   pinMode(ENCODER_DT_PIN, INPUT_PULLUP);
   pinMode(BTN_PIN, INPUT_PULLUP);
 
-  set_status_led(1,1,0);
+  set_status_led(1, 1, 0);
 
   Serial.begin(9600);
   Serial.println(F("H3 Bewässerungssystem\nhttps://blog.hacker3000.cf/waterthing.php"));
@@ -601,10 +604,10 @@ void setup() {
   lcd.init();
   lcd.backlight();
   /*lcd.createChar(GFX_ID_IDLE, gfx_idle);
-  //lcd.createChar(GFX_ID_DROP, gfx_drop);
-  lcd.createChar(GFX_ID_NO_WATER, gfx_no_water);
-  lcd.createChar(GFX_ID_FILL, gfx_fill);
-  lcd.createChar(GFX_ID_DRAIN, gfx_drain);*/
+    //lcd.createChar(GFX_ID_DROP, gfx_drop);
+    lcd.createChar(GFX_ID_NO_WATER, gfx_no_water);
+    lcd.createChar(GFX_ID_FILL, gfx_fill);
+    lcd.createChar(GFX_ID_DRAIN, gfx_drain);*/
   lcd.createChar(GFX_ID_STATUS, gfx_error);
   lcd.createChar(GFX_ID_DYN_1, gfx_error);
   lcd.createChar(GFX_ID_DYN_2, gfx_error);
@@ -617,13 +620,13 @@ void setup() {
   lcd.clear();
   lcd.home();
   lcd.print(F("Bew\x05sserungs"));
-  lcd.setCursor(0,1);
+  lcd.setCursor(0, 1);
   lcd.print(F("System by H3"));
   delay(1000);
   lcd.clear();
   lcd.home();
   lcd.print(F("Blog-Artikel/Doku"));
-  lcd.setCursor(0,1);
+  lcd.setCursor(0, 1);
   lcd.print(F("-> hacker3000.cf"));
   delay(1000);
 
@@ -636,11 +639,11 @@ void setup() {
   Wire.beginTransmission(LED_PCF_ADDR);
   if (Wire.endTransmission() == 0) {
     for (uint8_t pin = 0; pin < 8; pin++) {
-    pinMode(pcf, pin, OUTPUT);
-    digitalWrite(pcf, pin, HIGH);
-    delay(50);
-    digitalWrite(pcf, pin, LOW)
-    delay(50);
+      pinMode(pcf, pin, OUTPUT);
+      digitalWrite(pcf, pin, HIGH);
+      delay(50);
+      digitalWrite(pcf, pin, LOW);
+      delay(50);
     }
     lcd.print(F("OK"));
   }
@@ -657,16 +660,21 @@ void setup() {
   lcd.home();
   lcd.print(F("EEPROM..."));
   lcd.setCursor(0, 1);
-  if (EEPROM.read(EEPROM.length() - 1) == EEPROM_MAGIC_NUMBER) {
-    EEPROM.get(0,settings);
-    EEPROM.get(0+sizeof(settings), irrigation_timer);
+  lcd.print(F("Halte f\x07r Reset"));
+  delay(900);
+  lcd.setCursor(0, 1);
+  for (uint8_t c = 0; c < 16; c++) lcd.write(' ');
+  lcd.setCursor(0, 1);
+  if ((EEPROM.read(EEPROM.length() - 1) == EEPROM_MAGIC_NUMBER) and digitalRead(BTN_PIN)) { //hold btn on boot to reset
+    EEPROM.get(0, settings);
+    EEPROM.get(0 + sizeof(settings), irrigation_timer);
     //EEPROM.get(0+sizeof(settings)+sizeof(irrigation_timer), something_else);
     lcd.print(F("OK"));
   }
   else {
-    for (uint8_t b = 0; b < 16; b++) settings.lora_security_key[b] = random(0,255);
-    EEPROM.put(0,settings);
-    EEPROM.put(0+sizeof(settings), irrigation_timer);
+    for (uint8_t b = 0; b < 16; b++) settings.lora_security_key[b] = random(0, 255);
+    EEPROM.put(0, settings);
+    EEPROM.put(0 + sizeof(settings), irrigation_timer);
     //EEPROM.put(0+sizeof(settings)+sizeof(irrigation_timer), something_else);
     EEPROM.write(EEPROM.length() - 1, EEPROM_MAGIC_NUMBER);
     lcd.print(F("Initialized"));
@@ -693,9 +701,9 @@ void setup() {
       Serial.println(F("RTC MISSING!"));
       lcd.print(F("RTC MISSING"));
       while (true) {
-        set_status_led(1,0,0);
+        set_status_led(1, 0, 0);
         delay(100);
-        set_status_led(0,0,0);
+        set_status_led(0, 0, 0);
         delay(100);
       }
     }
@@ -742,7 +750,7 @@ void setup() {
   //              dcb
   PCICR |= 0b00000100; //allow pcint on port d
   //      Pin 76543210
-  PCMSK2 |= 0b00100000; //enable pcint for pin 
+  PCMSK2 |= 0b00100000; //enable pcint for pin
 
   //water sensor
   //              dcb
@@ -752,7 +760,7 @@ void setup() {
 
 
   Serial.println();
-  set_status_led(0,0,0);
+  set_status_led(0, 0, 0);
 }
 
 void print_page_basics() {
@@ -793,12 +801,12 @@ void print_page_basics() {
 
   lcd.clear();
   lcd.home();
-  lcd_print_menu_bracket(0,false);
+  lcd_print_menu_bracket(0, false);
   lcd.print(menu_page);
-  lcd_print_menu_bracket(0,true);
+  lcd_print_menu_bracket(0, true);
   lcd.print(F(""));
   lcd.print(page_names[menu_page]);
-  lcd.setCursor(10,0);
+  lcd.setCursor(10, 0);
 
   lcd.write(byte(GFX_ID_STATUS));
   char clock_buf[5];
@@ -806,7 +814,7 @@ void print_page_basics() {
   lcd.print(clock_buf);
 
 skip_page_basics:
-  lcd.setCursor(0,1);
+  lcd.setCursor(0, 1);
 
   last_cursor = menu_entry_cursor + menu_editing ? 0x80 : 0;
   last_sys_state = system_state;
@@ -818,340 +826,340 @@ skip_page_basics:
 
 void update_display() {
   if (millis() - last_display_update > 1000) {
-      digitalWrite(pcf, ACTIVITY_LED, LOW);
-      uint16_t uint16_temp;
-      char char_5_temp[5];
-      uint8_t disp_pad = 8;
-      //uint32_t display_draw_start_time = millis();
-      print_page_basics();
-      switch (menu_page) {
-        default:
-          Serial.println(F("Unknown Menu Entry Selected!"));
-          lcd.print(F("PAGE UNKNOWN!!"));
-          //menu_page = 0;
-          break;
-        case PAGE_STATUS:
-            switch (system_state) {
-              case STATUS_IDLE:
-                if (settings.tank_capacity > 0 ? irrigation_timer.fillings_to_irrigate == 0 : irrigation_timer.liters_to_pump == 0) {
-                  lcd.print(F("Ausgeschaltet"));
-                }
-                else if (irrigation_timer.last_watering_day == current_time.Day) {
-                  lcd.print(F("Fertig f\x07r Heute"));
-                }
-                else if (sensor_values.rain_detected) {
-                  lcd.print(F("Regen erkannt"));
-                }
-                else {
-                  lcd.print(F("Stby. bis"));
-                  lcd.setCursor(11,1);
-                  sprintf(char_5_temp, "%02u:%02u", irrigation_timer.start_hour, irrigation_timer.start_minute);
-                  lcd.print(char_5_temp);
-                }
-                break;
-              case STATUS_EMPTYING:
-                lcd.print(F("Leere Tank  "));
-                lcd.print(tank_fillings_remaining);
-                lcd.print(F("/"));
-                lcd.print(settings.tank_capacity > 0 ? irrigation_timer.fillings_to_irrigate : irrigation_timer.liters_to_pump);
-                break;
-              case STATUS_PUMPING:
-                lcd.print(F("F"));lcd.write(byte(GFX_ID_UML_U));lcd.print(F("lle Tank  "));
-                lcd.print(tank_fillings_remaining);
-                lcd.print(F("/"));
-                lcd.print(settings.tank_capacity > 0 ? irrigation_timer.fillings_to_irrigate : irrigation_timer.liters_to_pump);
-                break;
-              case STATUS_AFTERDRAIN:
-                char ad_buf[16];
-                if (settings.afterdrain_time < 15) {
-                  sprintf(ad_buf, "Nachlauf %03u/%03u", ((uint64_t)settings.afterdrain_time * 60) - (uint64_t(millis() - cycle_finish_millis) / 1000L), settings.afterdrain_time * 60);
-                }
-                else {
-                  sprintf(ad_buf, "Nachlauf %02um/%02um", (uint64_t)settings.afterdrain_time - ((uint64_t(millis() - cycle_finish_millis) / 1000L) / 60L), settings.afterdrain_time);
-                }
-                lcd.print(ad_buf);
-                break;
-              case STATUS_NO_WATER:
-                lcd.print(F("WASSER LEER!!"));
-                break;
-              case STATUS_NO_TIME:
-                lcd.print(F("Uhrzeit fehlt!"));
-                break;
-              case STATUS_LOW_BATTERY:
-                lcd.print(F("Akku Leer!"));
-                lcd.setCursor(11,1);
-                dtostrf(battery_voltage,4,1,char_5_temp);
-                lcd.print(char_5_temp);
-                lcd.write('V');
-                break;
-
-              default:
-              case STATUS_GENERAL_FAIL:
-                bool no_error_desc_found = true;
-
-                if (component_errors.tank_sensors_irrational) { //tank sensor error
-                  lcd.print(F("TS "));
-                  no_error_desc_found = false;
-                }
-
-                if (component_errors.rtc_missing or component_errors.rtc_unset) { //rtc error
-                  lcd.print(F("RTC "));
-                  no_error_desc_found = false;
-                }
-
-                if (no_error_desc_found) lcd.print(F("Algem. "));
-
-                lcd.print(F("Fehler"));
-
-                if (component_errors.rtc_unset) system_state = STATUS_NO_TIME;
-                break;
+    digitalWrite(pcf, ACTIVITY_LED, LOW);
+    uint16_t uint16_temp;
+    char char_5_temp[5];
+    uint8_t disp_pad = 8;
+    //uint32_t display_draw_start_time = millis();
+    print_page_basics();
+    switch (menu_page) {
+      default:
+        Serial.println(F("Unknown Menu Entry Selected!"));
+        lcd.print(F("PAGE UNKNOWN!!"));
+        //menu_page = 0;
+        break;
+      case PAGE_STATUS:
+        switch (system_state) {
+          case STATUS_IDLE:
+            if (settings.tank_capacity > 0 ? irrigation_timer.fillings_to_irrigate == 0 : irrigation_timer.liters_to_pump == 0) {
+              lcd.print(F("Ausgeschaltet"));
             }
-          break;
-        case PAGE_MAN:
-          if (tank_fillings_remaining == 0) {
-            lcd.print(F("Gie\x04\x65 "));
-            lcd_print_menu_bracket(1,false);
-            lcd.print(page_1_irrigate_order);
-            lcd.print('L');
-            lcd_print_menu_bracket(1,true);
-            lcd.print(F(" jetzt")); //the jetzt gets cut off when selecting more than 0L but thats not too bad
-          }
-          else {
-            lcd_print_menu_bracket(1,false);
-            lcd.print(F("Abbrechen"));
-            lcd_print_menu_bracket(1,true);
-          }
-          disp_pad = 0;
-          break;
-        
-        case PAGE_TIMER:          
-          lcd_print_menu_bracket(1,false);
-          if (irrigation_timer.start_hour<10) lcd.print(0);
-          lcd.print(irrigation_timer.start_hour);
-          lcd_print_menu_bracket(1,true);
-          lcd.print(F(":"));
-          lcd_print_menu_bracket(2,false);
-          if (irrigation_timer.start_minute<10) lcd.print(0);
-          lcd.print(irrigation_timer.start_minute);
-          lcd_print_menu_bracket(2,true);
-          lcd.write(byte(126));
-          lcd_print_menu_bracket(3,false);
-          uint16_temp = settings.tank_capacity > 0 ? round(irrigation_timer.fillings_to_irrigate * settings.tank_capacity) : irrigation_timer.liters_to_pump;
-          if (uint16_temp<10) lcd.print(0);
-          if (uint16_temp<100) lcd.print(0);
-          lcd.print(uint16_temp);
-          lcd.print(F("L"));
-          lcd_print_menu_bracket(3,true);
-          disp_pad = 4;
-          break;
-        
-        case PAGE_RAIN:
-          lcd.createChar(GFX_ID_DYN_1, gfx_rain);
-          lcd.createChar(GFX_ID_DYN_2, gfx_rise);
-          lcd.createChar(GFX_ID_DYN_3, gfx_fall);
-          lcd.setCursor(0,1); //this is needed so the disp takes the custom char
-          
-          lcd.write(GFX_ID_DYN_1);
-          lcd_print_menu_bracket(1,false);
-          lcd.print(settings.block_water_after_rain ? 'B' : 'I');
-          lcd_print_menu_bracket(1,true);
-
-          lcd.write(GFX_ID_DYN_2);
-          lcd_print_menu_bracket(2,false);
-          lcd.print(settings.rain_minutes_til_block);
-          lcd.write('m');
-          lcd_print_menu_bracket(2,true);
-
-          lcd.write(GFX_ID_DYN_3);
-          lcd_print_menu_bracket(3,false);
-          lcd.print(settings.rain_minutes_til_clear);
-          lcd.write('m');
-          lcd_print_menu_bracket(3,true);
-
-          break;
-
-        case PAGE_TANK:
-          lcd.createChar(GFX_ID_DYN_1, gfx_drop);
-          if (settings.tank_capacity>0) lcd.createChar(GFX_ID_DYN_2, gfx_clock);
-          else {
-            lcd.createChar(GFX_ID_DYN_2, gfx_flow);
-            lcd.createChar(GFX_ID_DYN_3, gfx_pulse);
-          }
-          lcd.setCursor(0,1); //this is needed so the disp takes the custom char
-
-          //lcd.print(F("Vl"));
-          lcd.write(byte(GFX_ID_DYN_1));
-          lcd_print_menu_bracket(1,false);
-          if (settings.tank_capacity>0) {
-            if (settings.tank_capacity<10) lcd.print(0);
-            if (settings.tank_capacity<100) lcd.print(0);
-            lcd.print(settings.tank_capacity);
-            lcd.print(F("L"));
-          }
-          else lcd.print(F("D"));
-          lcd_print_menu_bracket(1,true);
-          
-          if (settings.tank_capacity>0) {
-            lcd.setCursor(8,1);
-            lcd.write(byte(GFX_ID_DYN_2));
-            //lcd.print(F("Nl"));
-            lcd_print_menu_bracket(2,false);
-            if (settings.afterdrain_time<10) lcd.print(0);
-            lcd.print(settings.afterdrain_time);
-            lcd.print(F("min"));
-            lcd_print_menu_bracket(2,true);
-          }
-          else {
-            lcd.write(' ');
-            lcd.write(byte(GFX_ID_DYN_2));
-            lcd_print_menu_bracket(2,false);
-            if (settings.clicks_per_liter<10) lcd.print(0);
-            if (settings.clicks_per_liter<100) lcd.print(0);
-            if (settings.clicks_per_liter<1000) lcd.print(0);
-            if (settings.clicks_per_liter<10000) lcd.print(0);
-            lcd.print(settings.clicks_per_liter);
-            lcd.write(byte(GFX_ID_DYN_3));
-            lcd.print(F("/L"));
-            lcd_print_menu_bracket(2,true);
-          }
-          disp_pad = 0;
-          break;
-
-        case PAGE_LORA:
-          if (menu_page == PAGE_LORA and menu_entry_cursor == 2 and menu_editing) {
-            lcd.setCursor(0,0);
-            for (uint8_t b = 0; b < 8; b++) {
-              if (settings.lora_security_key[b]<0xF0) lcd.print(0);
-              lcd.print(settings.lora_security_key[b],HEX);
+            else if (irrigation_timer.last_watering_day == current_time.Day) {
+              lcd.print(F("Fertig f\x07r Heute"));
             }
-            lcd.setCursor(0,1);
-            for (uint8_t b = 8; b < 16; b++) {
-              if (settings.lora_security_key[b]<0xF0) lcd.print(0);
-              lcd.print(settings.lora_security_key[b],HEX);
+            else if (sensor_values.rain_detected) {
+              lcd.print(F("Regen erkannt"));
             }
-          }
-          else {
-            lcd.createChar(GFX_ID_DYN_1, gfx_radio);
-            lcd.createChar(GFX_ID_DYN_3, gfx_key);
-            lcd.setCursor(0,1);
-            
-            lcd.write(GFX_ID_DYN_1);
-            lcd_print_menu_bracket(1,false);
-            switch (settings.lora_enable) {
-              case 0:
-                lcd.print(F("OFF"));
-                break;
-              case 1:
-                lcd.print(F("TX"));
-                break;
-              case 2:
-                lcd.print(F("TX+RX"));
-                break;
-
-              default:
-                lcd.write('?');
-                break;
+            else {
+              lcd.print(F("Stby. bis"));
+              lcd.setCursor(11, 1);
+              sprintf(char_5_temp, "%02u:%02u", irrigation_timer.start_hour, irrigation_timer.start_minute);
+              lcd.print(char_5_temp);
             }
-            lcd_print_menu_bracket(1,true);
-
-            lcd_print_menu_bracket(2,false);
+            break;
+          case STATUS_EMPTYING:
+            lcd.print(F("Leere Tank  "));
+            lcd.print(tank_fillings_remaining);
+            lcd.print(F("/"));
+            lcd.print(settings.tank_capacity > 0 ? irrigation_timer.fillings_to_irrigate : irrigation_timer.liters_to_pump);
+            break;
+          case STATUS_PUMPING:
+            lcd.print(F("F")); lcd.write(byte(GFX_ID_UML_U)); lcd.print(F("lle Tank  "));
+            lcd.print(tank_fillings_remaining);
+            lcd.print(F("/"));
+            lcd.print(settings.tank_capacity > 0 ? irrigation_timer.fillings_to_irrigate : irrigation_timer.liters_to_pump);
+            break;
+          case STATUS_AFTERDRAIN:
+            char ad_buf[16];
+            if (settings.afterdrain_time < 15) {
+              sprintf(ad_buf, "Nachlauf %03u/%03u", ((uint64_t)settings.afterdrain_time * 60) - (uint64_t(millis() - cycle_finish_millis) / 1000L), settings.afterdrain_time * 60);
+            }
+            else {
+              sprintf(ad_buf, "Nachlauf %02um/%02um", (uint64_t)settings.afterdrain_time - ((uint64_t(millis() - cycle_finish_millis) / 1000L) / 60L), settings.afterdrain_time);
+            }
+            lcd.print(ad_buf);
+            break;
+          case STATUS_NO_WATER:
+            lcd.print(F("WASSER LEER!!"));
+            break;
+          case STATUS_NO_TIME:
+            lcd.print(F("Uhrzeit fehlt!"));
+            break;
+          case STATUS_LOW_BATTERY:
+            lcd.print(F("Akku Leer!"));
+            lcd.setCursor(11, 1);
+            dtostrf(battery_voltage, 4, 1, char_5_temp);
+            lcd.print(char_5_temp);
             lcd.write('V');
-            lcd.write(GFX_ID_DYN_3);
-            lcd_print_menu_bracket(2,true);
+            break;
 
-            lcd_print_menu_bracket(3,false);
-            lcd.write('G');
-            lcd.write(GFX_ID_DYN_3);
-            lcd_print_menu_bracket(3,true);
-          }
-          break;
+          default:
+          case STATUS_GENERAL_FAIL:
+            bool no_error_desc_found = true;
 
-        case PAGE_CLOCK1:
-          lcd_print_menu_bracket(1,false);
-          if (current_time.Hour<10) lcd.print(0);
-          lcd.print(current_time.Hour);
-          lcd_print_menu_bracket(1,true);
-          lcd.print(F(":"));
-          lcd_print_menu_bracket(2,false);
-          if (current_time.Minute<10) lcd.print(0);
-          lcd.print(current_time.Minute);
-          lcd_print_menu_bracket(2,true);
-          lcd.print(F(":"));
-          lcd_print_menu_bracket(3,false);
-          if (current_time.Second<10) lcd.print(0);
-          lcd.print(current_time.Second);
-          lcd_print_menu_bracket(3,true);
-          break;
-        
-        case PAGE_CLOCK2:
-          lcd_print_menu_bracket(1,false);
-          if (current_time.Day<10) lcd.print(0);
-          lcd.print(current_time.Day);
-          lcd_print_menu_bracket(1,true);
-          lcd.print(F("."));
-          lcd_print_menu_bracket(2,false);
-          if (current_time.Month<10) lcd.print(0);
-          lcd.print(current_time.Month);
-          lcd_print_menu_bracket(2,true);
-          lcd.print(F("."));
-          lcd_print_menu_bracket(3,false);
-          lcd.print(tmYearToCalendar(current_time.Year));
-          lcd_print_menu_bracket(3,true);
-          break;
-        
-        case PAGE_BATTERY:
-          lcd.createChar(GFX_ID_DYN_3, gfx_hyst);
-          lcd.setCursor(0,1); //this is needed so the disp takes the custom char
+            if (component_errors.tank_sensors_irrational) { //tank sensor error
+              lcd.print(F("TS "));
+              no_error_desc_found = false;
+            }
 
-          lcd.write('0');
+            if (component_errors.rtc_missing or component_errors.rtc_unset) { //rtc error
+              lcd.print(F("RTC "));
+              no_error_desc_found = false;
+            }
 
-          //lcd.print(F("OFF"));
-          //lcd.write(byte(GFX_ID_ARROW_L));
-          lcd_print_menu_bracket(1,false);
-          dtostrf(settings.battery_voltage_cutoff,4,1,char_5_temp);
-          lcd.print(char_5_temp);
-          lcd_print_menu_bracket(1,true);
+            if (no_error_desc_found) lcd.print(F("Algem. "));
 
+            lcd.print(F("Fehler"));
+
+            if (component_errors.rtc_unset) system_state = STATUS_NO_TIME;
+            break;
+        }
+        break;
+      case PAGE_MAN:
+        if (tank_fillings_remaining == 0) {
+          lcd.print(F("Gie\x04\x65 "));
+          lcd_print_menu_bracket(1, false);
+          lcd.print(page_1_irrigate_order);
+          lcd.print('L');
+          lcd_print_menu_bracket(1, true);
+          lcd.print(F(" jetzt")); //the jetzt gets cut off when selecting more than 0L but thats not too bad
+        }
+        else {
+          lcd_print_menu_bracket(1, false);
+          lcd.print(F("Abbrechen"));
+          lcd_print_menu_bracket(1, true);
+        }
+        disp_pad = 0;
+        break;
+
+      case PAGE_TIMER:
+        lcd_print_menu_bracket(1, false);
+        if (irrigation_timer.start_hour < 10) lcd.print(0);
+        lcd.print(irrigation_timer.start_hour);
+        lcd_print_menu_bracket(1, true);
+        lcd.print(F(":"));
+        lcd_print_menu_bracket(2, false);
+        if (irrigation_timer.start_minute < 10) lcd.print(0);
+        lcd.print(irrigation_timer.start_minute);
+        lcd_print_menu_bracket(2, true);
+        lcd.write(byte(126));
+        lcd_print_menu_bracket(3, false);
+        uint16_temp = settings.tank_capacity > 0 ? round(irrigation_timer.fillings_to_irrigate * settings.tank_capacity) : irrigation_timer.liters_to_pump;
+        if (uint16_temp < 10) lcd.print(0);
+        if (uint16_temp < 100) lcd.print(0);
+        lcd.print(uint16_temp);
+        lcd.print(F("L"));
+        lcd_print_menu_bracket(3, true);
+        disp_pad = 4;
+        break;
+
+      case PAGE_RAIN:
+        lcd.createChar(GFX_ID_DYN_1, gfx_rain);
+        lcd.createChar(GFX_ID_DYN_2, gfx_rise);
+        lcd.createChar(GFX_ID_DYN_3, gfx_fall);
+        lcd.setCursor(0, 1); //this is needed so the disp takes the custom char
+
+        lcd.write(GFX_ID_DYN_1);
+        lcd_print_menu_bracket(1, false);
+        lcd.print(settings.block_water_after_rain ? 'B' : 'I');
+        lcd_print_menu_bracket(1, true);
+
+        lcd.write(GFX_ID_DYN_2);
+        lcd_print_menu_bracket(2, false);
+        lcd.print(settings.rain_minutes_til_block);
+        lcd.write('m');
+        lcd_print_menu_bracket(2, true);
+
+        lcd.write(GFX_ID_DYN_3);
+        lcd_print_menu_bracket(3, false);
+        lcd.print(settings.rain_minutes_til_clear);
+        lcd.write('m');
+        lcd_print_menu_bracket(3, true);
+
+        break;
+
+      case PAGE_TANK:
+        lcd.createChar(GFX_ID_DYN_1, gfx_drop);
+        if (settings.tank_capacity > 0) lcd.createChar(GFX_ID_DYN_2, gfx_clock);
+        else {
+          lcd.createChar(GFX_ID_DYN_2, gfx_flow);
+          lcd.createChar(GFX_ID_DYN_3, gfx_pulse);
+        }
+        lcd.setCursor(0, 1); //this is needed so the disp takes the custom char
+
+        //lcd.print(F("Vl"));
+        lcd.write(byte(GFX_ID_DYN_1));
+        lcd_print_menu_bracket(1, false);
+        if (settings.tank_capacity > 0) {
+          if (settings.tank_capacity < 10) lcd.print(0);
+          if (settings.tank_capacity < 100) lcd.print(0);
+          lcd.print(settings.tank_capacity);
+          lcd.print(F("L"));
+        }
+        else lcd.print(F("D"));
+        lcd_print_menu_bracket(1, true);
+
+        if (settings.tank_capacity > 0) {
+          lcd.setCursor(8, 1);
+          lcd.write(byte(GFX_ID_DYN_2));
+          //lcd.print(F("Nl"));
+          lcd_print_menu_bracket(2, false);
+          if (settings.afterdrain_time < 10) lcd.print(0);
+          lcd.print(settings.afterdrain_time);
+          lcd.print(F("min"));
+          lcd_print_menu_bracket(2, true);
+        }
+        else {
+          lcd.write(' ');
+          lcd.write(byte(GFX_ID_DYN_2));
+          lcd_print_menu_bracket(2, false);
+          if (settings.clicks_per_liter < 10) lcd.print(0);
+          if (settings.clicks_per_liter < 100) lcd.print(0);
+          if (settings.clicks_per_liter < 1000) lcd.print(0);
+          if (settings.clicks_per_liter < 10000) lcd.print(0);
+          lcd.print(settings.clicks_per_liter);
           lcd.write(byte(GFX_ID_DYN_3));
+          lcd.print(F("/L"));
+          lcd_print_menu_bracket(2, true);
+        }
+        disp_pad = 0;
+        break;
 
-          lcd_print_menu_bracket(2,false);
-          dtostrf(settings.battery_voltage_reset,4,1,char_5_temp);
-          lcd.print(char_5_temp);
-          lcd_print_menu_bracket(2,true);
-
-          //lcd.write(byte(GFX_ID_ARROW_R));
-          //lcd.print(F("ON"));
-
-          lcd.write('1');
-
-          disp_pad = 4;
-          break;
-
-        case PAGE_SENSORS:
-          lcd.createChar(GFX_ID_DYN_1, gfx_tank_top);
-          lcd.createChar(GFX_ID_DYN_2, gfx_tank_bottom);
-          lcd.createChar(GFX_ID_DYN_3, gfx_no_water);
-          lcd.setCursor(0,1); //this is needed so the disp takes the custom char
+      case PAGE_LORA:
+        if (menu_page == PAGE_LORA and menu_entry_cursor == 2 and menu_editing) {
+          lcd.setCursor(0, 0);
+          for (uint8_t b = 0; b < 8; b++) {
+            if (settings.lora_security_key[b] < 0xF0) lcd.print(0);
+            lcd.print(settings.lora_security_key[b], HEX);
+          }
+          lcd.setCursor(0, 1);
+          for (uint8_t b = 8; b < 16; b++) {
+            if (settings.lora_security_key[b] < 0xF0) lcd.print(0);
+            lcd.print(settings.lora_security_key[b], HEX);
+          }
+        }
+        else {
+          lcd.createChar(GFX_ID_DYN_1, gfx_radio);
+          lcd.createChar(GFX_ID_DYN_3, gfx_key);
+          lcd.setCursor(0, 1);
 
           lcd.write(GFX_ID_DYN_1);
-          lcd_print_menu_bracket(1,false);
-          lcd.print(settings.tank_top_on_level ? 'H' : 'L');
-          lcd_print_menu_bracket(1,true);
+          lcd_print_menu_bracket(1, false);
+          switch (settings.lora_enable) {
+            case 0:
+              lcd.print(F("OFF"));
+              break;
+            case 1:
+              lcd.print(F("TX"));
+              break;
+            case 2:
+              lcd.print(F("TX+RX"));
+              break;
 
-          lcd.write(' ');
-          lcd.write(GFX_ID_DYN_2);
-          lcd_print_menu_bracket(2,false);
-          lcd.print(settings.tank_bottom_on_level ? 'H' : 'L');
-          lcd_print_menu_bracket(2,true);
+            default:
+              lcd.write('?');
+              break;
+          }
+          lcd_print_menu_bracket(1, true);
 
-          lcd.write(' ');
+          lcd_print_menu_bracket(2, false);
+          lcd.write('V');
           lcd.write(GFX_ID_DYN_3);
-          lcd_print_menu_bracket(3,false);
-          lcd.print(settings.low_water_on_level ? 'H' : 'L');
-          lcd_print_menu_bracket(3,true);
-          
-          disp_pad = 2;
-          break;
+          lcd_print_menu_bracket(2, true);
+
+          lcd_print_menu_bracket(3, false);
+          lcd.write('G');
+          lcd.write(GFX_ID_DYN_3);
+          lcd_print_menu_bracket(3, true);
+        }
+        break;
+
+      case PAGE_CLOCK1:
+        lcd_print_menu_bracket(1, false);
+        if (current_time.Hour < 10) lcd.print(0);
+        lcd.print(current_time.Hour);
+        lcd_print_menu_bracket(1, true);
+        lcd.print(F(":"));
+        lcd_print_menu_bracket(2, false);
+        if (current_time.Minute < 10) lcd.print(0);
+        lcd.print(current_time.Minute);
+        lcd_print_menu_bracket(2, true);
+        lcd.print(F(":"));
+        lcd_print_menu_bracket(3, false);
+        if (current_time.Second < 10) lcd.print(0);
+        lcd.print(current_time.Second);
+        lcd_print_menu_bracket(3, true);
+        break;
+
+      case PAGE_CLOCK2:
+        lcd_print_menu_bracket(1, false);
+        if (current_time.Day < 10) lcd.print(0);
+        lcd.print(current_time.Day);
+        lcd_print_menu_bracket(1, true);
+        lcd.print(F("."));
+        lcd_print_menu_bracket(2, false);
+        if (current_time.Month < 10) lcd.print(0);
+        lcd.print(current_time.Month);
+        lcd_print_menu_bracket(2, true);
+        lcd.print(F("."));
+        lcd_print_menu_bracket(3, false);
+        lcd.print(tmYearToCalendar(current_time.Year));
+        lcd_print_menu_bracket(3, true);
+        break;
+
+      case PAGE_BATTERY:
+        lcd.createChar(GFX_ID_DYN_3, gfx_hyst);
+        lcd.setCursor(0, 1); //this is needed so the disp takes the custom char
+
+        lcd.write('0');
+
+        //lcd.print(F("OFF"));
+        //lcd.write(byte(GFX_ID_ARROW_L));
+        lcd_print_menu_bracket(1, false);
+        dtostrf(settings.battery_voltage_cutoff, 4, 1, char_5_temp);
+        lcd.print(char_5_temp);
+        lcd_print_menu_bracket(1, true);
+
+        lcd.write(byte(GFX_ID_DYN_3));
+
+        lcd_print_menu_bracket(2, false);
+        dtostrf(settings.battery_voltage_reset, 4, 1, char_5_temp);
+        lcd.print(char_5_temp);
+        lcd_print_menu_bracket(2, true);
+
+        //lcd.write(byte(GFX_ID_ARROW_R));
+        //lcd.print(F("ON"));
+
+        lcd.write('1');
+
+        disp_pad = 4;
+        break;
+
+      case PAGE_SENSORS:
+        lcd.createChar(GFX_ID_DYN_1, gfx_tank_top);
+        lcd.createChar(GFX_ID_DYN_2, gfx_tank_bottom);
+        lcd.createChar(GFX_ID_DYN_3, gfx_no_water);
+        lcd.setCursor(0, 1); //this is needed so the disp takes the custom char
+
+        lcd.write(GFX_ID_DYN_1);
+        lcd_print_menu_bracket(1, false);
+        lcd.print(settings.tank_top_on_level ? 'H' : 'L');
+        lcd_print_menu_bracket(1, true);
+
+        lcd.write(' ');
+        lcd.write(GFX_ID_DYN_2);
+        lcd_print_menu_bracket(2, false);
+        lcd.print(settings.tank_bottom_on_level ? 'H' : 'L');
+        lcd_print_menu_bracket(2, true);
+
+        lcd.write(' ');
+        lcd.write(GFX_ID_DYN_3);
+        lcd_print_menu_bracket(3, false);
+        lcd.print(settings.low_water_on_level ? 'H' : 'L');
+        lcd_print_menu_bracket(3, true);
+
+        disp_pad = 2;
+        break;
     }
     last_display_update = millis();
 
@@ -1168,28 +1176,28 @@ void update_display() {
   //status led
   switch (system_state) {
     case STATUS_IDLE:
-      if (settings.tank_capacity > 0 ? irrigation_timer.fillings_to_irrigate == 0 : irrigation_timer.liters_to_pump == 0) set_status_led(1,0,1); //turned off
-      else if (irrigation_timer.last_watering_day == current_time.Day) set_status_led(0,1,0); //done
-      else if (sensor_values.rain_detected) set_status_led(1,0,1); //rain
-      else set_status_led(0,1,0); //waiting
+      if (settings.tank_capacity > 0 ? irrigation_timer.fillings_to_irrigate == 0 : irrigation_timer.liters_to_pump == 0) set_status_led(1, 0, 1); //turned off
+      else if (irrigation_timer.last_watering_day == current_time.Day) set_status_led(0, 1, 0); //done
+      else if (sensor_values.rain_detected) set_status_led(1, 0, 1); //rain
+      else set_status_led(0, 1, 0); //waiting
       break;
     case STATUS_AFTERDRAIN:
     case STATUS_EMPTYING:
-      set_status_led(0,1,1);
+      set_status_led(0, 1, 1);
       break;
     case STATUS_PUMPING:
-      set_status_led(0,0,1);
+      set_status_led(0, 0, 1);
       break;
     case STATUS_NO_WATER:
     case STATUS_NO_TIME:
     case STATUS_LOW_BATTERY:
-      set_status_led(1,0,0);
+      set_status_led(1, 0, 0);
       break;
 
-     default:
-     case STATUS_GENERAL_FAIL:
-       set_status_led(1,0,0);
-       break;
+    default:
+    case STATUS_GENERAL_FAIL:
+      set_status_led(1, 0, 0);
+      break;
   }
 }
 
@@ -1198,20 +1206,23 @@ void handle_pump_stuff() {
     component_errors.tank_sensors_irrational = true;
     system_state = STATUS_GENERAL_FAIL;
   }
-  if((irrigation_timer.start_hour <= current_time.Hour and irrigation_timer.start_minute <= current_time.Minute) and (irrigation_timer.last_watering_day != current_time.Day) and (!sensor_values.rain_detected and settings.block_water_after_rain)) { //
+  if ((irrigation_timer.start_hour <= current_time.Hour and irrigation_timer.start_minute <= current_time.Minute) and (irrigation_timer.last_watering_day != current_time.Day) and (!sensor_values.rain_detected and settings.block_water_after_rain)) { //
     tank_fillings_remaining +=  (settings.tank_capacity > 0) ? irrigation_timer.fillings_to_irrigate : irrigation_timer.liters_to_pump;
     irrigation_timer.last_watering_day = current_time.Day;
-    EEPROM.put(0+sizeof(settings),irrigation_timer);
+    EEPROM.put(0 + sizeof(settings), irrigation_timer);
   }
   switch (system_state) {
     case STATUS_IDLE:
       digitalWrite(PUMP_PIN, LOW);
       digitalWrite(VALVE_PIN, LOW);
-      //the further sth is down in this case, the higher it's priority 
+      //the further sth is down in this case, the higher it's priority
 
       if (battery_voltage <= settings.battery_voltage_cutoff and tank_fillings_remaining == 0) system_state = STATUS_LOW_BATTERY; //low battery is lowest priority. this is so a currently running irrigation is completed even if the pump motor drops the voltage
 
-      if (tank_fillings_remaining > 0 and !sensor_values.low_water) {sensor_values.water_flow_clicks = 0; system_state = STATUS_PUMPING;}
+      if (tank_fillings_remaining > 0 and !sensor_values.low_water) {
+        sensor_values.water_flow_clicks = 0;
+        system_state = STATUS_PUMPING;
+      }
 
       if (sensor_values.low_water) system_state = STATUS_NO_WATER;
       if (component_errors.rtc_unset) system_state = STATUS_NO_TIME;
@@ -1223,7 +1234,10 @@ void handle_pump_stuff() {
     case STATUS_AFTERDRAIN:
       digitalWrite(PUMP_PIN, LOW);
       digitalWrite(VALVE_PIN, HIGH);
-      if (tank_fillings_remaining > 0) {sensor_values.water_flow_clicks = 0; system_state = STATUS_PUMPING;} //return if for some reason there is more irrigation commanded
+      if (tank_fillings_remaining > 0) {
+        sensor_values.water_flow_clicks = 0;  //return if for some reason there is more irrigation commanded
+        system_state = STATUS_PUMPING;
+      }
       if (millis() - cycle_finish_millis > (uint64_t(settings.afterdrain_time) * 60L * 1000L)) system_state = STATUS_IDLE;
       break;
 
@@ -1237,7 +1251,7 @@ void handle_pump_stuff() {
           system_state = STATUS_NO_WATER;
           return;
         }
-        if (tank_fillings_remaining==0) {
+        if (tank_fillings_remaining == 0) {
           cycle_finish_millis = millis();
           system_state = STATUS_AFTERDRAIN;
         }
@@ -1271,7 +1285,10 @@ void handle_pump_stuff() {
     case STATUS_NO_TIME:
       digitalWrite(PUMP_PIN, LOW);
       digitalWrite(VALVE_PIN, LOW);
-      if (!component_errors.rtc_unset) {system_state = STATUS_IDLE; return;}
+      if (!component_errors.rtc_unset) {
+        system_state = STATUS_IDLE;
+        return;
+      }
       break;
 
     case STATUS_LOW_BATTERY:
@@ -1280,8 +1297,8 @@ void handle_pump_stuff() {
       if (battery_voltage >= settings.battery_voltage_reset) system_state = STATUS_IDLE;
       break;
 
-     default:
-     case STATUS_GENERAL_FAIL:
+    default:
+    case STATUS_GENERAL_FAIL:
       digitalWrite(PUMP_PIN, LOW);
       digitalWrite(VALVE_PIN, LOW);
       if (((sensor_values.tank_top) <= (sensor_values.tank_bottom)) or (settings.tank_capacity == 0)) component_errors.tank_sensors_irrational = false; //if the top sensor is the same or lower than the bottom sensor, its fine
@@ -1296,8 +1313,15 @@ void read_sensors_and_clock() {
     component_errors.rtc_unset = false;
   }
   else {
-    if (RTC.chipPresent()) {component_errors.rtc_missing = false; component_errors.rtc_unset = true; system_state = STATUS_NO_TIME;}
-    else {component_errors.rtc_missing = true; component_errors.rtc_unset = false;}
+    if (RTC.chipPresent()) {
+      component_errors.rtc_missing = false;
+      component_errors.rtc_unset = true;
+      system_state = STATUS_NO_TIME;
+    }
+    else {
+      component_errors.rtc_missing = true;
+      component_errors.rtc_unset = false;
+    }
   }
   battery_voltage = (float)analogRead(BATTERY_VOLTAGE_PIN) / BATTERY_VOLTAGE_ADC_DIVIDER;
 
@@ -1305,8 +1329,8 @@ void read_sensors_and_clock() {
   sensor_values.tank_bottom = settings.tank_bottom_on_level == digitalRead(TANK_BOTTOM_PIN);
   sensor_values.tank_top = settings.tank_top_on_level == digitalRead(TANK_TOP_PIN);
 
-  digitalWrite(pcf, TT_SENSOR_PIN, !sensor_values.tank_top);
-  digitalWrite(pcf, TB_SENSOR_PIN, !sensor_values.tank_bottom);
+  digitalWrite(pcf, TT_SENSOR_LED, !sensor_values.tank_top);
+  digitalWrite(pcf, TB_SENSOR_LED, !sensor_values.tank_bottom);
 
   bool rain_condition_now = settings.rain_detected_on_level == digitalRead(RAIN_DETECTOR_PIN);
   static bool last_rain_condition = false;
@@ -1318,7 +1342,7 @@ void read_sensors_and_clock() {
     last_rain_condition = rain_condition_now;
 
     if ((sensor_values.rain_end_millis - sensor_values.rain_start_millis > settings.rain_minutes_til_block or millis() - sensor_values.rain_start_millis > settings.rain_minutes_til_block) //if difference of current time or last rains time to rain start is big enough
-    and ((millis() - sensor_values.rain_end_millis < settings.rain_minutes_til_clear or millis() - sensor_values.rain_start_millis < settings.rain_minutes_til_clear) or rain_condition_now))
+        and ((millis() - sensor_values.rain_end_millis < settings.rain_minutes_til_clear or millis() - sensor_values.rain_start_millis < settings.rain_minutes_til_clear) or rain_condition_now))
       sensor_values.rain_detected = true;
     else sensor_values.rain_detected = false;
   }
@@ -1369,7 +1393,7 @@ void handle_serial() {
 
     if (controlCharacter == 'R') { //reset all settings
       //todo: write this
-    } 
+    }
   }
   digitalWrite(pcf, ACTIVITY_LED, HIGH);
 }
@@ -1387,7 +1411,7 @@ void do_stored_buttons() {
         btn_callback();
         break;
       case 0:
-        //return; //save time by stopping at first sight of 0, not needed due to only going up button_queue_add_pos
+      //return; //save time by stopping at first sight of 0, not needed due to only going up button_queue_add_pos
       default:
         break;
     }
@@ -1417,7 +1441,10 @@ void handle_lora() {
   if (settings.lora_enable >= 2) {
     for (uint8_t p_idx = 0; p_idx < 4; p_idx++) {
       bool is_empty = true;
-      for (uint8_t i = 0; i < 48; i++) if (lora_incoming_queue[p_idx][i] != 0) {is_empty = false; break;} //check for data in packet
+      for (uint8_t i = 0; i < 48; i++) if (lora_incoming_queue[p_idx][i] != 0) {
+          is_empty = false;  //check for data in packet
+          break;
+        }
       if (!is_empty) {
         digitalWrite(pcf, ACTIVITY_LED, LOW);
         Serial.print(F("Recieved LoRa Packet: "));
@@ -1426,26 +1453,26 @@ void handle_lora() {
           Serial.write(' ');
         }
 
-      if (lora_incoming_queue[p_idx][0] == 42) { //if magic correct
-        bool already_recieved = false;
-        for (uint8_t i = 0; i < 16; i++) if (lora_incoming_queue[p_idx][0] = lora_last_incoming_message_IDs[i]) already_recieved = true;
+        if (lora_incoming_queue[p_idx][0] == 42) { //if magic correct
+          bool already_recieved = false;
+          for (uint8_t i = 0; i < 16; i++) if (lora_incoming_queue[p_idx][0] = lora_last_incoming_message_IDs[i]) already_recieved = true;
 
-        if (!already_recieved) {
-          Serial.print(F("Magic Correct.\nPacket type: "));
-          switch (lora_incoming_queue[p_idx][2]) {
+          if (!already_recieved) {
+            Serial.print(F("Magic Correct.\nPacket type: "));
+            switch (lora_incoming_queue[p_idx][2]) {
 
-            default:
-              break;
+              default:
+                break;
+            }
+            lora_last_incoming_message_IDs[lora_last_incoming_message_IDs_idx] = lora_incoming_queue[p_idx][0];
+            if (lora_last_incoming_message_IDs_idx >= 16) lora_last_incoming_message_IDs_idx = 0;
+            lora_last_incoming_message_IDs_idx++;
           }
-          lora_last_incoming_message_IDs[lora_last_incoming_message_IDs_idx] = lora_incoming_queue[p_idx][0];
-          if (lora_last_incoming_message_IDs_idx >= 16) lora_last_incoming_message_IDs_idx = 0;
-          lora_last_incoming_message_IDs_idx++;
+          send_ack(lora_incoming_queue[p_idx][1]); //respond so retransmits wont occur
         }
-        send_ack(lora_incoming_queue[p_idx][1]); //respond so retransmits wont occur
-      }
 
-      for (uint8_t i = 0; i < 48; i++) lora_incoming_queue[p_idx][i] = 0; //clear after processing
-      digitalWrite(pcf, ACTIVITY_LED, HIGH);
+        for (uint8_t i = 0; i < 48; i++) lora_incoming_queue[p_idx][i] = 0; //clear after processing
+        digitalWrite(pcf, ACTIVITY_LED, HIGH);
       }
     }
     digitalWrite(pcf, LORA_RX_LED, HIGH);
@@ -1455,7 +1482,10 @@ void handle_lora() {
   if (lora_tx_ready) {
     for (uint8_t p_idx = 0; p_idx < 4; p_idx++) {
       bool is_empty = true;
-      for (uint8_t i = 0; i < 48; i++) if (lora_outgoing_queue[p_idx][i] != 0) {is_empty = false; break;} //check for data in packet
+      for (uint8_t i = 0; i < 48; i++) if (lora_outgoing_queue[p_idx][i] != 0) {
+          is_empty = false;  //check for data in packet
+          break;
+        }
       if (!is_empty and millis() - lora_outgoing_queue_last_tx[p_idx] > LORA_RETRANSMIT_TIME and lora_tx_ready) {
         digitalWrite(pcf, ACTIVITY_LED, LOW);
         digitalWrite(pcf, LORA_TX_LED, LOW);
@@ -1466,8 +1496,8 @@ void handle_lora() {
         uint8_t lora_bytes = 0;
         switch (lora_outgoing_queue[p_idx][1]) { // check 2nd byte (packet type)
           case PACKET_TYPE_STATUS:
-             lora_bytes = 2;
-             break;
+            lora_bytes = 2;
+            break;
         }
         for (uint8_t b = 0; b < lora_bytes; b++) {
           LoRa.write(lora_outgoing_queue[p_idx][b]);
@@ -1490,12 +1520,12 @@ void handle_lora() {
 
   //tx making
   if (settings.lora_enable >= 1) {
-    for (uint8_t s = 2; s<8; s++) if (last_system_states[s] != last_system_states[s-1]) return; //if states 2-8 not stable, wait
+    for (uint8_t s = 2; s < 8; s++) if (last_system_states[s] != last_system_states[s - 1]) return; //if states 2-8 not stable, wait
     if (last_system_states[0] != last_system_states[7] and millis() - last_lora_tx > LORA_TX_INTERVAL) { //if there was a change or timer
       //if new state, make lora packet
       lora_outgoing_queue[lora_outgoing_queue_idx][0] = lora_outgoing_packet_id;
       lora_outgoing_queue[lora_outgoing_queue_idx][1] = PACKET_TYPE_STATUS;
-      
+
       lora_outgoing_queue[lora_outgoing_queue_idx][2] = uint8_t(max(0xF, system_state)); //fill 4 right bits with system state 0000SSSS
       switch (system_state) {  //add extra status SSSSEEEE
         case STATUS_IDLE:
@@ -1505,7 +1535,7 @@ void handle_lora() {
           else if (sensor_values.rain_detected) lora_outgoing_queue[lora_outgoing_queue_idx][2] |= 0x03;
           else lora_outgoing_queue[lora_outgoing_queue_idx][2] |= 0x00;
           break;
-        
+
         case STATUS_GENERAL_FAIL:
           //shift each error in
           lora_outgoing_queue[lora_outgoing_queue_idx][2] << 1;
