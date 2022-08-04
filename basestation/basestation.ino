@@ -121,6 +121,45 @@ byte last_wt_challange[16] = {0};
 char web_login_cookies[255][32];
 uint8_t web_login_cookies_idx = 0;
 
+//shared stuff start
+enum lora_packet_types_ws_to_gw { //water system to gateway
+  PACKET_TYPE_STATUS = 0,
+  PACKET_TYPE_WATER = 1,
+  PACKET_TYPE_BATTERY = 2,
+  PACKET_TYPE_TEST = 69,
+  PACKET_TYPE_AUTH_CHALLANGE = 250,
+  PACKET_TYPE_CMD_DISABLED = 253,
+  PACKET_TYPE_CMD_AUTH_FAIL = 254,
+  PACKET_TYPE_CMD_OK = 255,
+};
+
+enum lora_packet_types_gw_to_ws { //gateway to water system
+  PACKET_TYPE_CURRENT_TIME = 0,
+  PACKET_TYPE_ADD_WATER = 1,
+  PACKET_TYPE_CANCEL_WATER = 2,
+  PACKET_TYPE_REQUST_CHALLANGE = 250,
+  PACKET_TYPE_ACK = 255
+};
+
+std::map<lora_packet_types_ws_to_gw, uint8_t> ws_to_gw_packet_type_to_length {
+  //ws->gw
+  {PACKET_TYPE_STATUS, 2},
+  {PACKET_TYPE_WATER, 8},
+  {PACKET_TYPE_BATTERY, 4},
+  {PACKET_TYPE_TEST, 69},
+  {PACKET_TYPE_AUTH_CHALLANGE, 16},
+  {PACKET_TYPE_CMD_DISABLED, 0},
+  {PACKET_TYPE_CMD_AUTH_FAIL, 1},
+  {PACKET_TYPE_CMD_OK, 1}
+}
+
+std::map<lora_packet_types_gw_to_ws, uint8_t> gw_to_ws_packet_type_to_length {
+  //gw->ws
+  {PACKET_TYPE_AUTH_C_REQ, 0},
+  {PACKET_TYPE_REQUST_CHALLANGE, 0}
+}
+//shared stuff end
+
 
 std::map<byte, String> status_to_text {
   // SSSSEEEE
@@ -147,7 +186,9 @@ std::map<byte, String> status_to_text {
 
 
 void handle_lora_packet(int packet_size) {
-  for (uint8_t b = 0; b <= packet_size; b++) {
+  for (uint8_t b = 0; b < 48; b++) lora_incoming_queue[lora_incoming_queue_idx][b] = 0; //firstly clear
+
+  for (uint8_t b = 0; (b < packet_size) and LoRa.available(); b++) {
     lora_incoming_queue[lora_incoming_queue_idx][b] = LoRa.read();
   }
 

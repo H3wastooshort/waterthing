@@ -19,6 +19,7 @@
 #include <pcf8574.h> //https://github.com/MSZ98/pcf8574
 #include <SPI.h>
 #include <LoRa.h> //https://github.com/sandeepmistry/arduino-LoRa
+#include <map>
 
 #define LOW_WATER_PIN A1
 #define TANK_BOTTOM_PIN A2
@@ -155,30 +156,44 @@ uint16_t lora_incoming_queue_len[4] = {0}; //lengths of recieved packages
 byte lora_last_incoming_message_IDs[16] = {255};
 uint8_t lora_last_incoming_message_IDs_idx = 0;
 
+//shared stuff start
 enum lora_packet_types_ws_to_gw { //water system to gateway
   PACKET_TYPE_STATUS = 0,
   PACKET_TYPE_WATER = 1,
-  PACKET_TYPE_BATTERY = 1,
-  PACKET_TYPE_AUTH_C_REQ = 250,
+  PACKET_TYPE_BATTERY = 2,
+  PACKET_TYPE_TEST = 69,
+  PACKET_TYPE_AUTH_CHALLANGE = 250,
   PACKET_TYPE_CMD_DISABLED = 253,
   PACKET_TYPE_CMD_AUTH_FAIL = 254,
   PACKET_TYPE_CMD_OK = 255,
 };
 
 enum lora_packet_types_gw_to_ws { //gateway to water system
+  PACKET_TYPE_CURRENT_TIME = 0,
+  PACKET_TYPE_ADD_WATER = 1,
+  PACKET_TYPE_CANCEL_WATER = 2,
+  PACKET_TYPE_REQUST_CHALLANGE = 250,
   PACKET_TYPE_ACK = 255
 };
 
-/*std::map lora_packet_sizes <uint8_t, uint8_t> {
+std::map<lora_packet_types_ws_to_gw, uint8_t> ws_to_gw_packet_type_to_length {
+  //ws->gw
   {PACKET_TYPE_STATUS, 2},
-  {PACKET_TYPE_WATER,},
-  {PACKET_TYPE_BATTERY,},
-  {PACKET_TYPE_AUTH_C_REQ,},
-  {PACKET_TYPE_CMD_DISABLED,},
-  {PACKET_TYPE_CMD_AUTH_FAIL,},
-  {PACKET_TYPE_CMD_OK,},
-  {PACKET_TYPE_ACK, 0}
-  }*/
+  {PACKET_TYPE_WATER, 8},
+  {PACKET_TYPE_BATTERY, 4},
+  {PACKET_TYPE_TEST, 69},
+  {PACKET_TYPE_AUTH_CHALLANGE, 16},
+  {PACKET_TYPE_CMD_DISABLED, 0},
+  {PACKET_TYPE_CMD_AUTH_FAIL, 1},
+  {PACKET_TYPE_CMD_OK, 1}
+}
+
+std::map<lora_packet_types_gw_to_ws, uint8_t> gw_to_ws_packet_type_to_length {
+  //gw->ws
+  {PACKET_TYPE_AUTH_C_REQ, 0},
+  {PACKET_TYPE_REQUST_CHALLANGE, 0}
+}
+//shared stuff end
 
 //global menu variables
 int8_t menu_page = 0; // 0-> main page, 1 -> Timer Setup, 2 -> Tank Setup, 3 -> Clock Setup
@@ -572,12 +587,12 @@ ISR (PCINT1_vect) { //port B (analog pins)
   if (tank_fillings_remaining > 60000) tank_fillings_remaining = 0;
 }
 
-void handle_lora_packet(uint16_t packet_size) {
+void handle_lora_packet(uint16_t packet_size) { //TODO: maybe move magic checking here
   if (packet_size <= 255) { //3840 is an erronious recieve
     digitalWrite(pcf, LORA_RX_LED, LOW);
     for (uint8_t b = 0; b < 48; b++) lora_incoming_queue[lora_incoming_queue_idx][b] = 0; //firstly clear
-    
-    for (uint8_t b = 0; b < packet_size; b++) {
+
+    for (uint8_t b = 0; (b < packet_size) and LoRa.available(); b++) {
       lora_incoming_queue[lora_incoming_queue_idx][b] = LoRa.read();
     }
 
@@ -1415,7 +1430,7 @@ void handle_serial() {
 
     if (controlCharacter == 'P') {
       lora_outgoing_queue[lora_outgoing_queue_idx][0] = lora_outgoing_packet_id;
-      lora_outgoing_queue[lora_outgoing_queue_idx][1] = 0x69;
+      lora_outgoing_queue[lora_outgoing_queue_idx][1] = PACKET_TYPE_TEST;
       lora_outgoing_queue[lora_outgoing_queue_idx][2] = 0xDE;
       lora_outgoing_queue[lora_outgoing_queue_idx][3] = 0xEA;
       lora_outgoing_queue[lora_outgoing_queue_idx][4] = 0xDB;
@@ -1500,9 +1515,7 @@ void handle_lora() {
           if (!already_recieved) {
             Serial.print(F("Magic Correct.\nPacket type: "));
             switch (lora_incoming_queue[p_idx][2]) {
-
-              default:
-                break;
+              default: break;
             }
             lora_last_incoming_message_IDs[lora_last_incoming_message_IDs_idx] = lora_incoming_queue[p_idx][0];
             if (lora_last_incoming_message_IDs_idx >= 16) lora_last_incoming_message_IDs_idx = 0;
@@ -1538,11 +1551,7 @@ void handle_lora() {
         LoRa.write(LORA_MAGIC);
         uint8_t lora_bytes = 0;
         Serial.print(F(" * Length: "));
-        switch (lora_outgoing_queue[p_idx][1]) { // check 2nd byte (packet type)
-          case PACKET_TYPE_STATUS:
-            lora_bytes = 2;
-            break;
-        }
+        lora_bytes = ws_to_gw_packet_type_to_length[lora_outgoing_queue[p_idx][1]]; // check 2nd byte (packet type)
         Serial.println(lora_bytes);
 
         Serial.print(F(" * Content: "));
@@ -1551,7 +1560,7 @@ void handle_lora() {
           Serial.print(lora_outgoing_queue[p_idx][b], HEX);
           Serial.write(' ');
         }
-        LoRa.endPacket(/*true*/false); //tx in not async mode
+        LoRa.endPacket(/*true*/false); //tx in not async mode becaus that never seems to work
         Serial.println();
 
         lora_outgoing_queue_last_tx[p_idx] = millis();
