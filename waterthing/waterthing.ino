@@ -26,6 +26,7 @@
 #define PUMP_PIN 6
 #define VALVE_PIN 7
 #define RAIN_DETECTOR_PIN 8
+#define CONTROL_RELAY_INVERTED true
 
 //pcf
 #define LED_PCF_ADDR 0x3F
@@ -38,7 +39,7 @@
 #define LORA_TX_LED 6
 #define LORA_RX_LED 7
 
-#define DEBOUNCE_DELAY 100
+#define DEBOUNCE_DELAY 150
 #define BTN_PIN 5 //PCINT
 #define ENCODER_CLK_PIN 3 //WARNING! change PCINT suff in setup() too!!
 #define ENCODER_DT_PIN 4
@@ -157,6 +158,7 @@ uint8_t lora_last_incoming_message_IDs_idx = 0;
 enum lora_packet_types_ws_to_gw { //water system to gateway
   PACKET_TYPE_STATUS = 0,
   PACKET_TYPE_WATER = 1,
+  PACKET_TYPE_BATTERY = 1,
   PACKET_TYPE_AUTH_C_REQ = 250,
   PACKET_TYPE_CMD_DISABLED = 253,
   PACKET_TYPE_CMD_AUTH_FAIL = 254,
@@ -166,6 +168,17 @@ enum lora_packet_types_ws_to_gw { //water system to gateway
 enum lora_packet_types_gw_to_ws { //gateway to water system
   PACKET_TYPE_ACK = 255
 };
+
+/*std::map lora_packet_sizes <uint8_t, uint8_t> {
+  {PACKET_TYPE_STATUS, 2},
+  {PACKET_TYPE_WATER,},
+  {PACKET_TYPE_BATTERY,},
+  {PACKET_TYPE_AUTH_C_REQ,},
+  {PACKET_TYPE_CMD_DISABLED,},
+  {PACKET_TYPE_CMD_AUTH_FAIL,},
+  {PACKET_TYPE_CMD_OK,},
+  {PACKET_TYPE_ACK, 0}
+  }*/
 
 //global menu variables
 int8_t menu_page = 0; // 0-> main page, 1 -> Timer Setup, 2 -> Tank Setup, 3 -> Clock Setup
@@ -513,23 +526,25 @@ void btn_callback() {
 
 uint32_t last_btn_down = 0;
 ISR (PCINT2_vect) { //port D
-  delay(3);
-  if (digitalRead(BTN_PIN)) return; //ignore rising edge
+  delay(1);
   if (millis() - last_btn_down >= DEBOUNCE_DELAY) {
+    if (digitalRead(BTN_PIN)) return; //ignore rising edge
+    last_btn_down = millis();
     if (button_queue_add_pos >= 32) return; //too many buttons in queue, ignoring
     button_queue[button_queue_add_pos] = 3; //3 is for enter button
     button_queue_add_pos++;
   }
-  last_btn_down = millis();
 }
 
 uint32_t last_encoder_clock = 0;
 void handle_encoder_clk() {
-  delay(3);
+  delay(2);
   bool immidiate_dt = digitalRead(ENCODER_DT_PIN); //read dt as quickly as possible
-  if (digitalRead(ENCODER_CLK_PIN)) return; //ignore clock going back up
+
+  if (digitalRead(ENCODER_CLK_PIN)) return;
 
   if (button_queue_add_pos >= 32) return; //too many buttons in queue, ignoring
+
   if (millis() - last_encoder_clock <= DEBOUNCE_DELAY) return; //to quick, may be a bounce
   if (immidiate_dt != ENCODER_INVERT_DIRECTION) {
     button_queue[button_queue_add_pos] = 2; //2 is for up
@@ -558,18 +573,24 @@ ISR (PCINT1_vect) { //port B (analog pins)
 }
 
 void handle_lora_packet(uint16_t packet_size) {
-  digitalWrite(pcf, LORA_RX_LED, LOW);
-  for (uint8_t b = 0; b <= packet_size; b++) {
-    lora_incoming_queue[lora_incoming_queue_idx][b] = LoRa.read();
-  }
+  if (packet_size <= 255) { //3840 is an erronious recieve
+    digitalWrite(pcf, LORA_RX_LED, LOW);
+    for (uint8_t b = 0; b < 48; b++) lora_incoming_queue[lora_incoming_queue_idx][b] = 0; //firstly clear
+    
+    for (uint8_t b = 0; b < packet_size; b++) {
+      lora_incoming_queue[lora_incoming_queue_idx][b] = LoRa.read();
+    }
 
-  lora_incoming_queue_len[lora_incoming_queue_idx] = packet_size;
-  lora_incoming_queue_idx++;
-  if (lora_incoming_queue_idx++ >= 4) lora_incoming_queue_idx = 0;
+    lora_incoming_queue_len[lora_incoming_queue_idx] = packet_size;
+    lora_incoming_queue_idx++;
+    if (lora_incoming_queue_idx++ >= 4) lora_incoming_queue_idx = 0;
+  }
+  while (LoRa.available()) LoRa.read(); //clear packet if for some reason the is anything left
 }
 
 void handle_lora_tx_done() {
   lora_tx_ready = true;
+  LoRa.receive();
   digitalWrite(pcf, LORA_TX_LED, HIGH);
 }
 
@@ -581,8 +602,8 @@ void setup() {
   pinMode(RAIN_DETECTOR_PIN, INPUT_PULLUP);
   pinMode(PUMP_PIN, OUTPUT);
   pinMode(VALVE_PIN, OUTPUT);
-  digitalWrite(PUMP_PIN, LOW);
-  digitalWrite(VALVE_PIN, LOW);
+  digitalWrite(PUMP_PIN, CONTROL_RELAY_INVERTED);
+  digitalWrite(VALVE_PIN, CONTROL_RELAY_INVERTED);
 
   //vbat
   pinMode(BATTERY_VOLTAGE_PIN, INPUT);
@@ -759,6 +780,7 @@ void setup() {
   PCMSK1 |= 0b00001000; //enable pcint for pin A3
 
 
+  Serial.println(F("System Started."));
   Serial.println();
   set_status_led(0, 0, 0);
 }
@@ -1213,8 +1235,8 @@ void handle_pump_stuff() {
   }
   switch (system_state) {
     case STATUS_IDLE:
-      digitalWrite(PUMP_PIN, LOW);
-      digitalWrite(VALVE_PIN, LOW);
+      digitalWrite(PUMP_PIN, CONTROL_RELAY_INVERTED);
+      digitalWrite(VALVE_PIN, CONTROL_RELAY_INVERTED);
       //the further sth is down in this case, the higher it's priority
 
       if (battery_voltage <= settings.battery_voltage_cutoff and tank_fillings_remaining == 0) system_state = STATUS_LOW_BATTERY; //low battery is lowest priority. this is so a currently running irrigation is completed even if the pump motor drops the voltage
@@ -1232,8 +1254,8 @@ void handle_pump_stuff() {
       break;
 
     case STATUS_AFTERDRAIN:
-      digitalWrite(PUMP_PIN, LOW);
-      digitalWrite(VALVE_PIN, HIGH);
+      digitalWrite(PUMP_PIN, CONTROL_RELAY_INVERTED);
+      digitalWrite(VALVE_PIN, !CONTROL_RELAY_INVERTED);
       if (tank_fillings_remaining > 0) {
         sensor_values.water_flow_clicks = 0;  //return if for some reason there is more irrigation commanded
         system_state = STATUS_PUMPING;
@@ -1242,8 +1264,8 @@ void handle_pump_stuff() {
       break;
 
     case STATUS_EMPTYING:
-      digitalWrite(PUMP_PIN, LOW);
-      digitalWrite(VALVE_PIN, HIGH);
+      digitalWrite(PUMP_PIN, CONTROL_RELAY_INVERTED);
+      digitalWrite(VALVE_PIN, !CONTROL_RELAY_INVERTED);
       if (!sensor_values.tank_bottom and !sensor_values.tank_top) {
         tank_fillings_remaining--;
         if (tank_fillings_remaining > 60000) tank_fillings_remaining = 0; //against integer rollover
@@ -1262,8 +1284,8 @@ void handle_pump_stuff() {
       break;
 
     case STATUS_PUMPING:
-      digitalWrite(PUMP_PIN, HIGH);
-      digitalWrite(VALVE_PIN, LOW);
+      digitalWrite(PUMP_PIN, !CONTROL_RELAY_INVERTED);
+      digitalWrite(VALVE_PIN, CONTROL_RELAY_INVERTED);
       if (settings.tank_capacity > 0) {
         if (sensor_values.tank_top or sensor_values.low_water) {
           system_state = STATUS_EMPTYING;
@@ -1277,14 +1299,14 @@ void handle_pump_stuff() {
       break;
 
     case STATUS_NO_WATER:
-      digitalWrite(PUMP_PIN, LOW);
-      digitalWrite(VALVE_PIN, LOW);
+      digitalWrite(PUMP_PIN, CONTROL_RELAY_INVERTED);
+      digitalWrite(VALVE_PIN, CONTROL_RELAY_INVERTED);
       if (!sensor_values.low_water) system_state = STATUS_IDLE;
       break;
 
     case STATUS_NO_TIME:
-      digitalWrite(PUMP_PIN, LOW);
-      digitalWrite(VALVE_PIN, LOW);
+      digitalWrite(PUMP_PIN, CONTROL_RELAY_INVERTED);
+      digitalWrite(VALVE_PIN, CONTROL_RELAY_INVERTED);
       if (!component_errors.rtc_unset) {
         system_state = STATUS_IDLE;
         return;
@@ -1292,15 +1314,15 @@ void handle_pump_stuff() {
       break;
 
     case STATUS_LOW_BATTERY:
-      digitalWrite(PUMP_PIN, LOW);
-      digitalWrite(VALVE_PIN, LOW);
+      digitalWrite(PUMP_PIN, CONTROL_RELAY_INVERTED);
+      digitalWrite(VALVE_PIN, CONTROL_RELAY_INVERTED);
       if (battery_voltage >= settings.battery_voltage_reset) system_state = STATUS_IDLE;
       break;
 
     default:
     case STATUS_GENERAL_FAIL:
-      digitalWrite(PUMP_PIN, LOW);
-      digitalWrite(VALVE_PIN, LOW);
+      digitalWrite(PUMP_PIN, CONTROL_RELAY_INVERTED);
+      digitalWrite(VALVE_PIN, CONTROL_RELAY_INVERTED);
       if (((sensor_values.tank_top) <= (sensor_values.tank_bottom)) or (settings.tank_capacity == 0)) component_errors.tank_sensors_irrational = false; //if the top sensor is the same or lower than the bottom sensor, its fine
       if (!component_errors.rtc_missing and !component_errors.tank_sensors_irrational) system_state = STATUS_IDLE;
       break;
@@ -1391,6 +1413,21 @@ void handle_serial() {
       Serial.println();
     }
 
+    if (controlCharacter == 'P') {
+      lora_outgoing_queue[lora_outgoing_queue_idx][0] = lora_outgoing_packet_id;
+      lora_outgoing_queue[lora_outgoing_queue_idx][1] = 0x69;
+      lora_outgoing_queue[lora_outgoing_queue_idx][2] = 0xDE;
+      lora_outgoing_queue[lora_outgoing_queue_idx][3] = 0xEA;
+      lora_outgoing_queue[lora_outgoing_queue_idx][4] = 0xDB;
+      lora_outgoing_queue[lora_outgoing_queue_idx][5] = 0xEE;
+      lora_outgoing_queue[lora_outgoing_queue_idx][6] = 0xF1;
+
+      lora_outgoing_queue_idx++;
+      lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis();
+      lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] = 0;
+      lora_outgoing_packet_id++;
+    }
+
     if (controlCharacter == 'R') { //reset all settings
       //todo: write this
     }
@@ -1447,7 +1484,10 @@ void handle_lora() {
         }
       if (!is_empty) {
         digitalWrite(pcf, ACTIVITY_LED, LOW);
-        Serial.print(F("Recieved LoRa Packet: "));
+        Serial.println(F("Attention! Incoming LoRa Packet:"));
+        Serial.print(F(" * Length: "));
+        Serial.println(lora_incoming_queue_len[p_idx]);
+        Serial.println(F(" * Content:"));
         for (uint8_t b = 0; b < lora_incoming_queue_len[p_idx]; b++) {
           Serial.print(lora_incoming_queue[p_idx][b], HEX);
           Serial.write(' ');
@@ -1472,6 +1512,7 @@ void handle_lora() {
         }
 
         for (uint8_t i = 0; i < 48; i++) lora_incoming_queue[p_idx][i] = 0; //clear after processing
+        Serial.println();
         digitalWrite(pcf, ACTIVITY_LED, HIGH);
       }
     }
@@ -1489,23 +1530,29 @@ void handle_lora() {
       if (!is_empty and millis() - lora_outgoing_queue_last_tx[p_idx] > LORA_RETRANSMIT_TIME and lora_tx_ready) {
         digitalWrite(pcf, ACTIVITY_LED, LOW);
         digitalWrite(pcf, LORA_TX_LED, LOW);
-        Serial.print(F("Sending LoRa Packet: "));
+        Serial.println(F("Sending LoRa Packet: "));
 
+        lora_tx_ready = false;
+        LoRa.idle(); //no recieving while transmitting!
         LoRa.beginPacket();
         LoRa.write(LORA_MAGIC);
         uint8_t lora_bytes = 0;
+        Serial.print(F(" * Length: "));
         switch (lora_outgoing_queue[p_idx][1]) { // check 2nd byte (packet type)
           case PACKET_TYPE_STATUS:
             lora_bytes = 2;
             break;
         }
+        Serial.println(lora_bytes);
+
+        Serial.print(F(" * Content: "));
         for (uint8_t b = 0; b < lora_bytes; b++) {
           LoRa.write(lora_outgoing_queue[p_idx][b]);
           Serial.print(lora_outgoing_queue[p_idx][b], HEX);
           Serial.write(' ');
         }
-        LoRa.endPacket(true); //tx in async mode
-        lora_tx_ready = false;
+        LoRa.endPacket(/*true*/false); //tx in not async mode
+        Serial.println();
 
         lora_outgoing_queue_last_tx[p_idx] = millis();
         lora_outgoing_queue_tx_attempts[p_idx]++;

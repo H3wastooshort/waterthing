@@ -754,7 +754,7 @@ void handle_lora() {
                 last_wt_liters_millis = millis();
               }
 
-            case PACKET_TYPE_BATTERY:{ //todo: im lazy, this should be a for loop
+            case PACKET_TYPE_BATTERY: { //todo: im lazy, this should be a for loop
                 byte temp_float[] = {
                   lora_incoming_queue[p_idx][3],
                   lora_incoming_queue[p_idx][4],
@@ -789,23 +789,29 @@ void handle_lora() {
           break;
         }
       if (!is_empty and millis() - lora_outgoing_queue_last_tx[p_idx] > LORA_RETRANSMIT_TIME and lora_tx_ready) {
-        Serial.print(F("Sending LoRa Packet: "));
+        Serial.println(F("Sending LoRa Packet: "));
 
+        lora_tx_ready = false;
+        LoRa.idle(); //no recieving while transmitting!
         LoRa.beginPacket();
         LoRa.write(LORA_MAGIC);
         uint8_t lora_bytes = 0;
+        Serial.print(F(" * Length: "));
         switch (lora_outgoing_queue[p_idx][1]) { // check 2nd byte (packet type)
-            /*case :
-              lora_bytes = 2;
-              break;*/
+          case PACKET_TYPE_STATUS:
+            lora_bytes = 2;
+            break;
         }
+        Serial.println(lora_bytes);
+
+        Serial.print(F(" * Content: "));
         for (uint8_t b = 0; b < lora_bytes; b++) {
           LoRa.write(lora_outgoing_queue[p_idx][b]);
           Serial.print(lora_outgoing_queue[p_idx][b], HEX);
           Serial.write(' ');
         }
-        LoRa.endPacket(true); //tx in async mode
-        lora_tx_ready = false;
+        LoRa.endPacket(/*true*/false); //tx in not async mode becaus that never seems to work
+        Serial.println();
 
         lora_outgoing_queue_last_tx[p_idx] = millis();
         lora_outgoing_queue_tx_attempts[p_idx]++;
