@@ -743,8 +743,11 @@ void handle_lora() {
   uint32_t last_lora_tx = 0;
 
   //recieve
-  auto possible_packet_size = LoRa.parsePacket(); //the on Recieve() callback seems to just cause an interrupt wich is too long for the ESP so i am doing it this way
-  if (possible_packet_size > 0) handle_lora_packet(possible_packet_size);
+  auto possible_packet_size = LoRa.parsePacket(); //the onRecieve() callback seems to just cause an interrupt wich is too long for the ESP so i am doing it this way
+  if (possible_packet_size > 0) {
+    Serial.println(F("Possible packet incoming."));
+    handle_lora_packet(possible_packet_size);
+  }
   
   for (uint8_t p_idx = 0; p_idx < 4; p_idx++) {
     bool is_empty = true;
@@ -791,7 +794,7 @@ void handle_lora() {
                 last_wt_liters_millis = millis();
               }
 
-            case PACKET_TYPE_BATTERY: { //todo: im lazy, this should be a for loop
+            case PACKET_TYPE_BATTERY: {
                 byte temp_float[] = {
                   lora_incoming_queue[p_idx][3],
                   lora_incoming_queue[p_idx][4],

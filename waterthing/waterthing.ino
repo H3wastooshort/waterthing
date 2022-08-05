@@ -455,7 +455,7 @@ void edit_change_callback() {
       break;
     case PAGE_TIMER:
       if (!menu_editing) { //if leaving edit mode
-        if (menu_entry_cursor > 1) {
+        if (menu_entry_cursor > 0) {
           irrigation_timer.last_watering_day = 0;
           EEPROM.put(0 + sizeof(settings), irrigation_timer); //save timer settings when leaving
         }
@@ -478,7 +478,7 @@ void edit_change_callback() {
     case PAGE_TANK:
     case PAGE_BATTERY:
       if (!menu_editing) { //if leaving edit mode
-        if (menu_entry_cursor > 1) {
+        if (menu_entry_cursor > 0) {
           EEPROM.put(0, settings); //save settings when leaving
         }
       }
