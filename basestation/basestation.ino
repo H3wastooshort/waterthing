@@ -100,12 +100,14 @@ enum lora_packet_types_gw_to_ws { //gateway to water system
   PACKET_TYPE_ACK = 255
 };
 
+//length is only packet data. add 3 for real packet size
+
 std::map<lora_packet_types_ws_to_gw, uint8_t> ws_to_gw_packet_type_to_length {
   //ws->gw
   {PACKET_TYPE_STATUS, 2},
   {PACKET_TYPE_WATER, 8},
   {PACKET_TYPE_BATTERY, 4},
-  {PACKET_TYPE_TEST, 69},
+  {PACKET_TYPE_TEST, 5},
   {PACKET_TYPE_AUTH_CHALLANGE, 16},
   {PACKET_TYPE_CMD_DISABLED, 0},
   {PACKET_TYPE_CMD_AUTH_FAIL, 1},
@@ -821,13 +823,8 @@ void handle_lora() {
         LoRa.idle(); //no recieving while transmitting!
         LoRa.beginPacket();
         LoRa.write(LORA_MAGIC);
-        uint8_t lora_bytes = 0;
+        uint8_t lora_bytes = ws_to_gw_packet_type_to_length[lora_outgoing_queue[p_idx][1]] + 2;
         Serial.print(F(" * Length: "));
-        switch (lora_outgoing_queue[p_idx][1]) { // check 2nd byte (packet type)
-          case PACKET_TYPE_STATUS:
-            lora_bytes = 2;
-            break;
-        }
         Serial.println(lora_bytes);
 
         Serial.print(F(" * Content: "));
