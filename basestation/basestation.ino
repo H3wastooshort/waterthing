@@ -101,24 +101,26 @@ enum lora_packet_types_gw_to_ws { //gateway to water system
 };
 
 //length is only packet data. add 3 for real packet size
+uint8_t ws_to_gw_packet_type_to_length(uint8_t pt) {
+  switch (pt) {
+    case PACKET_TYPE_STATUS: return 1; break;
+    case PACKET_TYPE_WATER: return 8; break;
+    case PACKET_TYPE_BATTERY: return 4; break;
+    case PACKET_TYPE_TEST: return 5; break;
+    case PACKET_TYPE_AUTH_CHALLANGE: return 16; break;
+    case PACKET_TYPE_CMD_DISABLED: return 0; break;
+    case PACKET_TYPE_CMD_AUTH_FAIL: return 1; break;
+    case PACKET_TYPE_CMD_OK: return 1; break;
+    default: return 47; break;
+  }
+}
 
-std::map<lora_packet_types_ws_to_gw, uint8_t> ws_to_gw_packet_type_to_length {
-  //ws->gw
-  {PACKET_TYPE_STATUS, 2},
-  {PACKET_TYPE_WATER, 8},
-  {PACKET_TYPE_BATTERY, 4},
-  {PACKET_TYPE_TEST, 5},
-  {PACKET_TYPE_AUTH_CHALLANGE, 16},
-  {PACKET_TYPE_CMD_DISABLED, 0},
-  {PACKET_TYPE_CMD_AUTH_FAIL, 1},
-  {PACKET_TYPE_CMD_OK, 1}
-};
-
-std::map<lora_packet_types_gw_to_ws, uint8_t> gw_to_ws_packet_type_to_length {
-  //gw->ws
-  {PACKET_TYPE_ACK, 0},
-  {PACKET_TYPE_REQUST_CHALLANGE, 0}
-};
+uint8_t gw_to_ws_packet_type_to_length(uint8_t pt) {
+  switch (pt) {
+    case PACKET_TYPE_ACK: return 1; break;
+    case PACKET_TYPE_REQUST_CHALLANGE: return 0; break;
+  }
+}
 //shared stuff end
 
 //recieved stuff
@@ -172,18 +174,21 @@ std::map<byte, String> status_to_text {
 };
 
 
-void handle_lora_packet(int packet_size) {
-  for (uint8_t b = 0; b < 48; b++) lora_incoming_queue[lora_incoming_queue_idx][b] = 0; //firstly clear
+void handle_lora_packet(int packet_size) { //TODO: maybe move magic checking here  
+  if (packet_size <= 255) { //3840 is an erronious recieve
+    for (uint8_t b = 0; b < 48; b++) lora_incoming_queue[lora_incoming_queue_idx][b] = 0; //firstly clear
 
-  for (uint8_t b = 0; (b < packet_size) and LoRa.available(); b++) {
-    lora_incoming_queue[lora_incoming_queue_idx][b] = LoRa.read();
+    for (uint8_t b = 0; (b < packet_size) and LoRa.available(); b++) {
+      lora_incoming_queue[lora_incoming_queue_idx][b] = LoRa.read();
+    }
+
+    last_lora_rssi = LoRa.packetRssi();
+    last_lora_snr = LoRa.packetSnr();
+    lora_incoming_queue_len[lora_incoming_queue_idx] = packet_size;
+    lora_incoming_queue_idx++;
+    if (lora_incoming_queue_idx++ >= 4) lora_incoming_queue_idx = 0;
   }
-
-  last_lora_rssi = LoRa.packetRssi();
-  last_lora_snr = LoRa.packetSnr();
-  lora_incoming_queue_len[lora_incoming_queue_idx] = packet_size;
-  lora_incoming_queue_idx++;
-  if (lora_incoming_queue_idx++ >= 4) lora_incoming_queue_idx = 0;
+  while (LoRa.available()) LoRa.read(); //clear packet if for some reason the is anything left
 }
 
 void handle_lora_tx_done() {
@@ -518,7 +523,7 @@ void setup() {
     LoRa.setCodingRate4(8); //sf,bw,cr make a data rate of 366 bits per sec or 45,75 bytes per sec
     LoRa.enableCrc();
     LoRa.onTxDone(handle_lora_tx_done);
-    LoRa.onReceive(handle_lora_packet);
+    //LoRa.onReceive(handle_lora_packet);
     LoRa.receive();
     oled.drawString(0, 12, F("OK"));
     oled.display();
@@ -738,6 +743,9 @@ void handle_lora() {
   uint32_t last_lora_tx = 0;
 
   //recieve
+  auto possible_packet_size = LoRa.parsePacket(); //the on Recieve() callback seems to just cause an interrupt wich is too long for the ESP so i am doing it this way
+  if (possible_packet_size > 0) handle_lora_packet(possible_packet_size);
+  
   for (uint8_t p_idx = 0; p_idx < 4; p_idx++) {
     bool is_empty = true;
     for (uint8_t i = 0; i < 48; i++) if (lora_incoming_queue[p_idx][i] != 0) {

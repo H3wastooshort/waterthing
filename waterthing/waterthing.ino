@@ -177,29 +177,10 @@ enum lora_packet_types_gw_to_ws { //gateway to water system
 };
 
 //length is only packet data. add 3 for real packet size
-
-/*std::map<lora_packet_types_ws_to_gw, uint8_t> ws_to_gw_packet_type_to_length {
-  //ws->gw
-  {PACKET_TYPE_STATUS, 2},
-  {PACKET_TYPE_WATER, 8},
-  {PACKET_TYPE_BATTERY, 4},
-  {PACKET_TYPE_TEST, 5},
-  {PACKET_TYPE_AUTH_CHALLANGE, 16},
-  {PACKET_TYPE_CMD_DISABLED, 0},
-  {PACKET_TYPE_CMD_AUTH_FAIL, 1},
-  {PACKET_TYPE_CMD_OK, 1}
-  };
-
-  std::map<lora_packet_types_gw_to_ws, uint8_t> gw_to_ws_packet_type_to_length {
-  //gw->ws
-  {PACKET_TYPE_ACK, 0},
-  {PACKET_TYPE_REQUST_CHALLANGE, 0}
-  };*/
-
 //im dont want to deal with MAP on arduino
-uint8_t ws_to_gw_packet_type_to_length(lora_packet_types_ws_to_gw pt) {
+uint8_t ws_to_gw_packet_type_to_length(uint8_t pt) {
   switch (pt) {
-    case PACKET_TYPE_STATUS: return 2; break;
+    case PACKET_TYPE_STATUS: return 1; break;
     case PACKET_TYPE_WATER: return 8; break;
     case PACKET_TYPE_BATTERY: return 4; break;
     case PACKET_TYPE_TEST: return 5; break;
@@ -211,13 +192,12 @@ uint8_t ws_to_gw_packet_type_to_length(lora_packet_types_ws_to_gw pt) {
   }
 }
 
-uint8_t gw_to_ws_packet_type_to_length(lora_packet_types_gw_to_ws pt) {
+uint8_t gw_to_ws_packet_type_to_length(uint8_t pt) {
   switch (pt) {
-    case PACKET_TYPE_ACK: return 0; break;
+    case PACKET_TYPE_ACK: return 1; break;
     case PACKET_TYPE_REQUST_CHALLANGE: return 0; break;
   }
 }
-
 //shared stuff end
 
 //global menu variables
@@ -612,7 +592,7 @@ ISR (PCINT1_vect) { //port B (analog pins)
   if (tank_fillings_remaining > 60000) tank_fillings_remaining = 0;
 }
 
-void handle_lora_packet(uint16_t packet_size) { //TODO: maybe move magic checking here
+void handle_lora_packet(int packet_size) { //TODO: maybe move magic checking here
   if (packet_size <= 255) { //3840 is an erronious recieve
     digitalWrite(pcf, LORA_RX_LED, LOW);
     for (uint8_t b = 0; b < 48; b++) lora_incoming_queue[lora_incoming_queue_idx][b] = 0; //firstly clear
@@ -858,8 +838,8 @@ void setup() {
 }
 
 void print_page_basics() {
-  static system_state_e last_sys_state = 255;
-  static pages_enum last_page = 255;
+  static uint8_t last_sys_state = 255;
+  static uint8_t last_page = 255;
   static uint8_t last_min = 255;
   static uint8_t last_cursor = 255;
   static bool last_rain = false;
@@ -1123,12 +1103,12 @@ void update_display() {
         if (menu_page == PAGE_LORA and menu_entry_cursor == 2 and menu_editing) {
           lcd.setCursor(0, 0);
           for (uint8_t b = 0; b < 8; b++) {
-            if (settings.lora_security_key[b] < 0xF0) lcd.print(0);
+            if (settings.lora_security_key[b] > 0x0F) lcd.print(0);
             lcd.print(settings.lora_security_key[b], HEX);
           }
           lcd.setCursor(0, 1);
           for (uint8_t b = 8; b < 16; b++) {
-            if (settings.lora_security_key[b] < 0xF0) lcd.print(0);
+            if (settings.lora_security_key[b] > 0x0F) lcd.print(0);
             lcd.print(settings.lora_security_key[b], HEX);
           }
         }
@@ -1496,6 +1476,7 @@ void handle_serial() {
     if (controlCharacter == 'K') { //generate new lora key
       Serial.print(F("LoRa Sec Key: "));
       for (uint8_t b = 0; b < 16; b++) {
+        if (settings.lora_security_key[b] > 0x0F) Serial.write('0');
         Serial.print(settings.lora_security_key[b], HEX);
         Serial.write(' ');
       }
@@ -1605,11 +1586,11 @@ void handle_lora() {
           if (lora_last_incoming_message_IDs_idx >= 16) lora_last_incoming_message_IDs_idx = 0;
           lora_last_incoming_message_IDs_idx++;
         }
+        for (uint8_t i = 0; i < 48; i++) lora_incoming_queue[p_idx][i] = 0; //clear after processing
+        Serial.println();
+        digitalWrite(pcf, ACTIVITY_LED, HIGH);
       }
 
-      for (uint8_t i = 0; i < 48; i++) lora_incoming_queue[p_idx][i] = 0; //clear after processing
-      Serial.println();
-      digitalWrite(pcf, ACTIVITY_LED, HIGH);
     }
     digitalWrite(pcf, LORA_RX_LED, HIGH);
   }
@@ -1631,13 +1612,14 @@ void handle_lora() {
         LoRa.idle(); //no recieving while transmitting!
         LoRa.beginPacket();
 
-        uint8_t lora_bytes = ws_to_gw_packet_type_to_length(lora_outgoing_queue[p_idx][1]) +3 ; // check 2nd byte (packet type), get data length and add 3 for magic + packet id+ packett type
+        uint8_t lora_bytes = ws_to_gw_packet_type_to_length(lora_outgoing_queue[p_idx][1]) + 3 ; // check 2nd byte (packet type), get data length and add 3 for magic + packet id+ packett type
         Serial.print(F(" * Length: "));
         Serial.println(lora_bytes);
 
         Serial.print(F(" * Content: "));
         for (uint8_t b = 0; b < lora_bytes; b++) {
           LoRa.write(lora_outgoing_queue[p_idx][b]);
+          if (lora_outgoing_queue[p_idx][b] > 0x0F) Serial.write('0');
           Serial.print(lora_outgoing_queue[p_idx][b], HEX);
           Serial.write(' ');
         }
