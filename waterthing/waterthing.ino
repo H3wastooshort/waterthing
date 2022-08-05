@@ -1631,9 +1631,8 @@ void handle_lora() {
         LoRa.idle(); //no recieving while transmitting!
         LoRa.beginPacket();
 
-        
-        Serial.print(F(" * Length: "));
         uint8_t lora_bytes = ws_to_gw_packet_type_to_length(lora_outgoing_queue[p_idx][1]) +3 ; // check 2nd byte (packet type), get data length and add 3 for magic + packet id+ packett type
+        Serial.print(F(" * Length: "));
         Serial.println(lora_bytes);
 
         Serial.print(F(" * Content: "));

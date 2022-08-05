@@ -68,7 +68,7 @@ struct settings_s {
 
 //lora
 uint8_t lora_outgoing_packet_id = 0; //increments every packet
-byte lora_outgoing_queue[4][48] = {0}; //holds up to 4 messages that are to be sent with max 48 bits. first byte is message id, 2nd is message type, rest is data. if all 0, no message in slot. set to 0 after up to 0 retransmits
+byte lora_outgoing_queue[4][48] = {0}; //holds up to 4 messages that are to be sent with max 48 bits. first byte is magic, 2nd message id, 3nd is message type, rest is data. if all 0, no message in slot. set to 0 after up to 0 retransmits
 uint8_t lora_outgoing_queue_idx = 0; //idx where to write
 uint32_t lora_outgoing_queue_last_tx[4] = {0};
 uint8_t lora_outgoing_queue_tx_attempts[4] = {0};
@@ -723,9 +723,10 @@ void update_display() {
 }
 
 void send_ack(byte packet_id) {
-  lora_outgoing_queue[lora_outgoing_queue_idx][0] = lora_outgoing_packet_id;
-  lora_outgoing_queue[lora_outgoing_queue_idx][1] = PACKET_TYPE_ACK;
-  lora_outgoing_queue[lora_outgoing_queue_idx][2] = packet_id;
+  lora_outgoing_queue[lora_outgoing_queue_idx][0] = LORA_MAGIC;
+  lora_outgoing_queue[lora_outgoing_queue_idx][1] = lora_outgoing_packet_id;
+  lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_ACK;
+  lora_outgoing_queue[lora_outgoing_queue_idx][3] = packet_id;
 
   lora_outgoing_queue_idx++;
   lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis();
@@ -822,8 +823,8 @@ void handle_lora() {
         lora_tx_ready = false;
         LoRa.idle(); //no recieving while transmitting!
         LoRa.beginPacket();
-        LoRa.write(LORA_MAGIC);
-        uint8_t lora_bytes = ws_to_gw_packet_type_to_length[lora_outgoing_queue[p_idx][1]] + 2;
+
+        uint8_t lora_bytes = ws_to_gw_packet_type_to_length(lora_outgoing_queue[p_idx][1]) + 3 ; // check 2nd byte (packet type), get data length and add 3 for magic + packet id+ packett type
         Serial.print(F(" * Length: "));
         Serial.println(lora_bytes);
 
