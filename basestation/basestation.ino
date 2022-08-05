@@ -80,47 +80,6 @@ uint16_t lora_incoming_queue_len[4] = {0}; //lengths of recieved packages
 byte lora_last_incoming_message_IDs[16] = {0};
 uint8_t lora_last_incoming_message_IDs_idx = 0;
 
-enum lora_packet_types_ws_to_gw { //water system to gateway
-  PACKET_TYPE_STATUS = 0,
-  PACKET_TYPE_WATER = 1,
-  PACKET_TYPE_BATTERY = 2,
-  PACKET_TYPE_AUTH_C_REQ = 250,
-  PACKET_TYPE_CMD_DISABLED = 253,
-  PACKET_TYPE_CMD_AUTH_FAIL = 254,
-  PACKET_TYPE_CMD_OK = 255,
-};
-
-enum lora_packet_types_gw_to_ws { //gateway to water system
-  PACKET_TYPE_ACK = 255
-};
-
-//recieved stuff
-byte last_wt_status = 0xFF; //left bytes main status, right 4 bytes extra status
-uint64_t last_wt_status_millis = 0xFFFFFFFFFFFFFFFF;
-uint16_t last_liters_left = 0xFFFF; //0xFFFF means not known, 0x0000 means done
-uint16_t last_liters_called = 0xFFFF; //0xFFFF means not known, 0x0000 means done
-uint64_t last_wt_liters_millis = 0xFFFFFFFFFFFFFFFF;
-int16_t last_lora_rssi = -999;
-int16_t last_lora_snr = -999;
-uint64_t last_recieved_packet_time = 0; //time in unix timestamp
-float last_wt_battery_voltage = -1;
-uint64_t last_wt_battery_voltage_millis = 0xFFFFFFFFFFFFFFFF;
-
-//authed lora cmds
-enum auth_state_e {
-  AUTH_STEP_IDLE = 0,
-  AUTH_STEP_TX_CHALLANGE_REQUEST = 1,
-  AUTH_STEP_WAIT_CHALLANGE = 2,
-  AUTH_STEP_RX_CHALLANGE = 3,
-  AUTH_STEP_TX_ANSWER = 4,
-  AUTH_STEP_WAIT_CMD_SUCCESS = 5,
-} auth_state;
-byte last_wt_challange[16] = {0};
-
-//web
-char web_login_cookies[255][32];
-uint8_t web_login_cookies_idx = 0;
-
 //shared stuff start
 enum lora_packet_types_ws_to_gw { //water system to gateway
   PACKET_TYPE_STATUS = 0,
@@ -151,15 +110,41 @@ std::map<lora_packet_types_ws_to_gw, uint8_t> ws_to_gw_packet_type_to_length {
   {PACKET_TYPE_CMD_DISABLED, 0},
   {PACKET_TYPE_CMD_AUTH_FAIL, 1},
   {PACKET_TYPE_CMD_OK, 1}
-}
+};
 
 std::map<lora_packet_types_gw_to_ws, uint8_t> gw_to_ws_packet_type_to_length {
   //gw->ws
-  {PACKET_TYPE_AUTH_C_REQ, 0},
+  {PACKET_TYPE_ACK, 0},
   {PACKET_TYPE_REQUST_CHALLANGE, 0}
-}
+};
 //shared stuff end
 
+//recieved stuff
+byte last_wt_status = 0xFF; //left bytes main status, right 4 bytes extra status
+uint64_t last_wt_status_millis = 0xFFFFFFFFFFFFFFFF;
+uint16_t last_liters_left = 0xFFFF; //0xFFFF means not known, 0x0000 means done
+uint16_t last_liters_called = 0xFFFF; //0xFFFF means not known, 0x0000 means done
+uint64_t last_wt_liters_millis = 0xFFFFFFFFFFFFFFFF;
+int16_t last_lora_rssi = -999;
+int16_t last_lora_snr = -999;
+uint64_t last_recieved_packet_time = 0; //time in unix timestamp
+float last_wt_battery_voltage = -1;
+uint64_t last_wt_battery_voltage_millis = 0xFFFFFFFFFFFFFFFF;
+
+//authed lora cmds
+enum auth_state_e {
+  AUTH_STEP_IDLE = 0,
+  AUTH_STEP_TX_CHALLANGE_REQUEST = 1,
+  AUTH_STEP_WAIT_CHALLANGE = 2,
+  AUTH_STEP_RX_CHALLANGE = 3,
+  AUTH_STEP_TX_ANSWER = 4,
+  AUTH_STEP_WAIT_CMD_SUCCESS = 5,
+} auth_state;
+byte last_wt_challange[16] = {0};
+
+//web
+char web_login_cookies[255][32];
+uint8_t web_login_cookies_idx = 0;
 
 std::map<byte, String> status_to_text {
   // SSSSEEEE
@@ -742,7 +727,7 @@ void send_ack(byte packet_id) {
 
   lora_outgoing_queue_idx++;
   lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis();
-  lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] = 0;
+  lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] =  LORA_RETRANSMIT_TRIES - 1; //there is no response to ACKs so this ensures ther is only one ACK sent
   lora_outgoing_packet_id++;
 }
 

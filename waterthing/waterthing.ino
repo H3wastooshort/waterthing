@@ -19,7 +19,9 @@
 #include <pcf8574.h> //https://github.com/MSZ98/pcf8574
 #include <SPI.h>
 #include <LoRa.h> //https://github.com/sandeepmistry/arduino-LoRa
+#include <ArduinoSTL.h> //https://github.com/mike-matera/ArduinoSTL because Arduino IDE is lacking this for some reason
 #include <map>
+#include <avr/wdt.h>
 
 #define LOW_WATER_PIN A1
 #define TANK_BOTTOM_PIN A2
@@ -144,7 +146,7 @@ uint64_t cycle_finish_millis = 0xFFFFFFFF;
 
 //lora variables
 uint8_t lora_outgoing_packet_id = 0; //increments every packet
-byte lora_outgoing_queue[4][48] = {0}; //holds up to 4 messages that are to be sent with max 48 bits. first byte is message id, 2nd is message type, rest is data. if all 0, no message in slot. set to 0 after up to 0 retransmits
+byte lora_outgoing_queue[4][48] = {0}; //holds up to 4 messages that are to be sent with max 48 bits. first byte is magic, 2nd message id, 3nd is message type, rest is data. if all 0, no message in slot. set to 0 after up to 0 retransmits
 uint8_t lora_outgoing_queue_idx = 0; //idx where to write
 uint32_t lora_outgoing_queue_last_tx[4] = {0};
 uint8_t lora_outgoing_queue_tx_attempts[4] = {0};
@@ -186,13 +188,13 @@ std::map<lora_packet_types_ws_to_gw, uint8_t> ws_to_gw_packet_type_to_length {
   {PACKET_TYPE_CMD_DISABLED, 0},
   {PACKET_TYPE_CMD_AUTH_FAIL, 1},
   {PACKET_TYPE_CMD_OK, 1}
-}
+};
 
 std::map<lora_packet_types_gw_to_ws, uint8_t> gw_to_ws_packet_type_to_length {
   //gw->ws
-  {PACKET_TYPE_AUTH_C_REQ, 0},
+  {PACKET_TYPE_ACK, 0},
   {PACKET_TYPE_REQUST_CHALLANGE, 0}
-}
+};
 //shared stuff end
 
 //global menu variables
@@ -610,6 +612,8 @@ void handle_lora_tx_done() {
 }
 
 void setup() {
+  wdt_enable(WDTO_8S);
+
   //pump stuff
   pinMode(LOW_WATER_PIN, INPUT_PULLUP);
   pinMode(TANK_BOTTOM_PIN, INPUT_PULLUP);
@@ -634,6 +638,8 @@ void setup() {
 
   Serial.begin(9600);
   Serial.println(F("H3 Bewässerungssystem\nhttps://blog.hacker3000.cf/waterthing.php"));
+
+  wdt_reset();
 
   Serial.println(F("LCD setup..."));
   Wire.setClock(400000); //faster drawing
@@ -666,6 +672,8 @@ void setup() {
   lcd.print(F("-> hacker3000.cf"));
   delay(1000);
 
+  wdt_reset();
+
   //check for LED pcf
   Serial.println(F("Checking for LED PCF..."));
   lcd.clear();
@@ -689,6 +697,8 @@ void setup() {
     delay(900);
   }
   delay(100);
+
+  wdt_reset();
 
   //EEPROM
   Serial.println(F("Reading EEPROM..."));
@@ -718,6 +728,8 @@ void setup() {
   }
   delay(100);
 
+  wdt_reset();
+
   //rtc setup
   Serial.println(F("Setting up RTC..."));
   lcd.clear();
@@ -745,6 +757,8 @@ void setup() {
     }
   }
   delay(100);
+
+  wdt_reset();
 
   Serial.println(F("Setting up LoRa..."));
   lcd.clear();
@@ -775,6 +789,8 @@ void setup() {
   }
   delay(100);
 
+  wdt_reset();
+
   //buttons etc
   for (uint8_t q_pos = 0; q_pos < 32; q_pos++) { //make sure they are 0
     button_queue[q_pos] = 0;
@@ -798,6 +814,7 @@ void setup() {
   Serial.println(F("System Started."));
   Serial.println();
   set_status_led(0, 0, 0);
+  wdt_reset();
 }
 
 void print_page_basics() {
@@ -1429,13 +1446,14 @@ void handle_serial() {
     }
 
     if (controlCharacter == 'P') {
-      lora_outgoing_queue[lora_outgoing_queue_idx][0] = lora_outgoing_packet_id;
-      lora_outgoing_queue[lora_outgoing_queue_idx][1] = PACKET_TYPE_TEST;
-      lora_outgoing_queue[lora_outgoing_queue_idx][2] = 0xDE;
-      lora_outgoing_queue[lora_outgoing_queue_idx][3] = 0xEA;
-      lora_outgoing_queue[lora_outgoing_queue_idx][4] = 0xDB;
-      lora_outgoing_queue[lora_outgoing_queue_idx][5] = 0xEE;
-      lora_outgoing_queue[lora_outgoing_queue_idx][6] = 0xF1;
+      lora_outgoing_queue[lora_outgoing_queue_idx][0] = LORA_MAGIC;
+      lora_outgoing_queue[lora_outgoing_queue_idx][1] = lora_outgoing_packet_id;
+      lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_TEST;
+      lora_outgoing_queue[lora_outgoing_queue_idx][3] = 0xDE;
+      lora_outgoing_queue[lora_outgoing_queue_idx][4] = 0xEA;
+      lora_outgoing_queue[lora_outgoing_queue_idx][5] = 0xDB;
+      lora_outgoing_queue[lora_outgoing_queue_idx][6] = 0xEE;
+      lora_outgoing_queue[lora_outgoing_queue_idx][7] = 0xF1;
 
       lora_outgoing_queue_idx++;
       lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis();
@@ -1451,7 +1469,7 @@ void handle_serial() {
 }
 
 void do_stored_buttons() {
-  for (uint8_t q_pos = 0; q_pos <= min(31, button_queue_add_pos); q_pos++) { //make sure they are 0
+  for (uint8_t q_pos = 0; q_pos <= std::min(31, button_queue_add_pos); q_pos++) { //make sure they are 0
     switch (button_queue[q_pos]) {
       case 1:
         down_callback();
@@ -1473,9 +1491,10 @@ void do_stored_buttons() {
 }
 
 void send_ack(byte packet_id) {
-  lora_outgoing_queue[lora_outgoing_queue_idx][0] = lora_outgoing_packet_id;
-  lora_outgoing_queue[lora_outgoing_queue_idx][1] = PACKET_TYPE_ACK;
-  lora_outgoing_queue[lora_outgoing_queue_idx][2] = packet_id;
+  lora_outgoing_queue[lora_outgoing_queue_idx][0] = LORA_MAGIC;
+  lora_outgoing_queue[lora_outgoing_queue_idx][1] = lora_outgoing_packet_id;
+  lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_ACK;
+  lora_outgoing_queue[lora_outgoing_queue_idx][3] = packet_id;
 
   lora_outgoing_queue_idx++;
   lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis();
@@ -1513,105 +1532,116 @@ void handle_lora() {
           for (uint8_t i = 0; i < 16; i++) if (lora_incoming_queue[p_idx][0] = lora_last_incoming_message_IDs[i]) already_recieved = true;
 
           if (!already_recieved) {
-            Serial.print(F("Magic Correct.\nPacket type: "));
+            Serial.print(F(" * Magic Correct.\r\n * Packet type: "));
             switch (lora_incoming_queue[p_idx][2]) {
+              case PACKET_TYPE_ACK: {
+                  Serial.println(F("ACK"));
+                  for (uint8_t p = 0; p < 4; p++) {
+                    if (lora_incoming_queue[p_idx][3] == lora_outgoing_queue[p][0]) {
+                      for (uint8_t b = 0; b < 48; b++) lora_outgoing_queue[lora_incoming_queue_idx][b] = 0; //clear packet
+                      Serial.print(F(" * Cleared Packet ID: "));
+                      Serial.println(lora_incoming_queue[p_idx][3]);
+                    }
+                  }
+                }
               default: break;
             }
-            lora_last_incoming_message_IDs[lora_last_incoming_message_IDs_idx] = lora_incoming_queue[p_idx][0];
-            if (lora_last_incoming_message_IDs_idx >= 16) lora_last_incoming_message_IDs_idx = 0;
-            lora_last_incoming_message_IDs_idx++;
           }
-          send_ack(lora_incoming_queue[p_idx][1]); //respond so retransmits wont occur
+          lora_last_incoming_message_IDs[lora_last_incoming_message_IDs_idx] = lora_incoming_queue[p_idx][0];
+          if (lora_last_incoming_message_IDs_idx >= 16) lora_last_incoming_message_IDs_idx = 0;
+          lora_last_incoming_message_IDs_idx++;
         }
-
-        for (uint8_t i = 0; i < 48; i++) lora_incoming_queue[p_idx][i] = 0; //clear after processing
-        Serial.println();
-        digitalWrite(pcf, ACTIVITY_LED, HIGH);
       }
+
+      for (uint8_t i = 0; i < 48; i++) lora_incoming_queue[p_idx][i] = 0; //clear after processing
+      Serial.println();
+      digitalWrite(pcf, ACTIVITY_LED, HIGH);
     }
-    digitalWrite(pcf, LORA_RX_LED, HIGH);
   }
+  digitalWrite(pcf, LORA_RX_LED, HIGH);
+}
 
-  //queue handle
-  if (lora_tx_ready) {
-    for (uint8_t p_idx = 0; p_idx < 4; p_idx++) {
-      bool is_empty = true;
-      for (uint8_t i = 0; i < 48; i++) if (lora_outgoing_queue[p_idx][i] != 0) {
-          is_empty = false;  //check for data in packet
-          break;
-        }
-      if (!is_empty and millis() - lora_outgoing_queue_last_tx[p_idx] > LORA_RETRANSMIT_TIME and lora_tx_ready) {
-        digitalWrite(pcf, ACTIVITY_LED, LOW);
-        digitalWrite(pcf, LORA_TX_LED, LOW);
-        Serial.println(F("Sending LoRa Packet: "));
+//queue handle
+if (lora_tx_ready) {
+  for (uint8_t p_idx = 0; p_idx < 4; p_idx++) {
+    bool is_empty = true;
+    for (uint8_t i = 0; i < 48; i++) if (lora_outgoing_queue[p_idx][i] != 0) {
+        is_empty = false;  //check for data in packet
+        break;
+      }
+    if (!is_empty and millis() - lora_outgoing_queue_last_tx[p_idx] > LORA_RETRANSMIT_TIME and lora_tx_ready) {
+      digitalWrite(pcf, ACTIVITY_LED, LOW);
+      digitalWrite(pcf, LORA_TX_LED, LOW);
+      Serial.println(F("Sending LoRa Packet: "));
 
-        lora_tx_ready = false;
-        LoRa.idle(); //no recieving while transmitting!
-        LoRa.beginPacket();
-        LoRa.write(LORA_MAGIC);
-        uint8_t lora_bytes = 0;
-        Serial.print(F(" * Length: "));
-        lora_bytes = ws_to_gw_packet_type_to_length[lora_outgoing_queue[p_idx][1]]; // check 2nd byte (packet type)
-        Serial.println(lora_bytes);
+      lora_tx_ready = false;
+      LoRa.idle(); //no recieving while transmitting!
+      LoRa.beginPacket();
 
-        Serial.print(F(" * Content: "));
-        for (uint8_t b = 0; b < lora_bytes; b++) {
-          LoRa.write(lora_outgoing_queue[p_idx][b]);
-          Serial.print(lora_outgoing_queue[p_idx][b], HEX);
-          Serial.write(' ');
-        }
-        LoRa.endPacket(/*true*/false); //tx in not async mode becaus that never seems to work
-        Serial.println();
+      uint8_t lora_bytes = 0;
+      Serial.print(F(" * Length: "));
+      lora_bytes = ws_to_gw_packet_type_to_length[lora_outgoing_queue[p_idx][1]]; // check 2nd byte (packet type)
+      Serial.println(lora_bytes);
 
+      Serial.print(F(" * Content: "));
+      for (uint8_t b = 0; b < lora_bytes; b++) {
+        LoRa.write(lora_outgoing_queue[p_idx][b]);
+        Serial.print(lora_outgoing_queue[p_idx][b], HEX);
+        Serial.write(' ');
+      }
+      LoRa.endPacket(/*true*/false); //tx in not async mode becaus that never seems to work
+      Serial.println();
+
+      lora_outgoing_queue_last_tx[p_idx] = millis();
+      lora_outgoing_queue_tx_attempts[p_idx]++;
+      if (lora_outgoing_queue_tx_attempts[p_idx] >= LORA_RETRANSMIT_TRIES) {
+        for (uint8_t i = 0; i < 48; i++) lora_outgoing_queue[p_idx][i] = 0; //clear packet if unsuccessful
         lora_outgoing_queue_last_tx[p_idx] = millis();
-        lora_outgoing_queue_tx_attempts[p_idx]++;
-        if (lora_outgoing_queue_tx_attempts[p_idx] >= LORA_RETRANSMIT_TRIES) {
-          for (uint8_t i = 0; i < 48; i++) lora_outgoing_queue[p_idx][i] = 0; //clear packet if unsuccessful
-          lora_outgoing_queue_last_tx[p_idx] = millis();
-        }
-        digitalWrite(pcf, ACTIVITY_LED, HIGH);
       }
+      digitalWrite(pcf, ACTIVITY_LED, HIGH);
     }
   }
+}
 
-  //tx making
-  if (settings.lora_enable >= 1) {
-    for (uint8_t s = 2; s < 8; s++) if (last_system_states[s] != last_system_states[s - 1]) return; //if states 2-8 not stable, wait
-    if (last_system_states[0] != last_system_states[7] and millis() - last_lora_tx > LORA_TX_INTERVAL) { //if there was a change or timer
-      //if new state, make lora packet
-      lora_outgoing_queue[lora_outgoing_queue_idx][0] = lora_outgoing_packet_id;
-      lora_outgoing_queue[lora_outgoing_queue_idx][1] = PACKET_TYPE_STATUS;
+//tx making
+if (settings.lora_enable >= 1) {
+  for (uint8_t s = 2; s < 8; s++) if (last_system_states[s] != last_system_states[s - 1]) return; //if states 2-8 not stable, wait
+  if (last_system_states[0] != last_system_states[7] and millis() - last_lora_tx > LORA_TX_INTERVAL) { //if there was a change or timer
+    //if new state, make lora packet
+    lora_outgoing_queue[lora_outgoing_queue_idx][0] = LORA_MAGIC;
+    lora_outgoing_queue[lora_outgoing_queue_idx][1] = lora_outgoing_packet_id;
+    lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_STATUS;
 
-      lora_outgoing_queue[lora_outgoing_queue_idx][2] = uint8_t(max(0xF, system_state)); //fill 4 right bits with system state 0000SSSS
-      switch (system_state) {  //add extra status SSSSEEEE
-        case STATUS_IDLE:
-          lora_outgoing_queue[lora_outgoing_queue_idx][2] << 4; //shift bits over SSSS0000
-          if (settings.tank_capacity > 0 ? irrigation_timer.fillings_to_irrigate == 0 : irrigation_timer.liters_to_pump == 0) lora_outgoing_queue[lora_outgoing_queue_idx][2] |= 0x01;
-          else if (irrigation_timer.last_watering_day == current_time.Day) lora_outgoing_queue[lora_outgoing_queue_idx][2] |= 0x02;
-          else if (sensor_values.rain_detected) lora_outgoing_queue[lora_outgoing_queue_idx][2] |= 0x03;
-          else lora_outgoing_queue[lora_outgoing_queue_idx][2] |= 0x00;
-          break;
+    lora_outgoing_queue[lora_outgoing_queue_idx][3] = uint8_t(max(0xF, system_state)); //fill 4 right bits with system state 0000SSSS
+    switch (system_state) {  //add extra status SSSSEEEE
+      case STATUS_IDLE:
+        lora_outgoing_queue[lora_outgoing_queue_idx][3] << 4; //shift bits over SSSS0000
+        if (settings.tank_capacity > 0 ? irrigation_timer.fillings_to_irrigate == 0 : irrigation_timer.liters_to_pump == 0) lora_outgoing_queue[lora_outgoing_queue_idx][3] |= 0x01;
+        else if (irrigation_timer.last_watering_day == current_time.Day) lora_outgoing_queue[lora_outgoing_queue_idx][3] |= 0x02;
+        else if (sensor_values.rain_detected) lora_outgoing_queue[lora_outgoing_queue_idx][3] |= 0x03;
+        else lora_outgoing_queue[lora_outgoing_queue_idx][3] |= 0x00;
+        break;
 
-        case STATUS_GENERAL_FAIL:
-          //shift each error in
-          lora_outgoing_queue[lora_outgoing_queue_idx][2] << 1;
-          lora_outgoing_queue[lora_outgoing_queue_idx][2] |= uint8_t(component_errors.tank_sensors_irrational);
-          lora_outgoing_queue[lora_outgoing_queue_idx][2] << 1;
-          lora_outgoing_queue[lora_outgoing_queue_idx][2] |= uint8_t(component_errors.rtc_missing);
-          lora_outgoing_queue[lora_outgoing_queue_idx][2] << 1;
-          lora_outgoing_queue[lora_outgoing_queue_idx][2] |= uint8_t(component_errors.rtc_unset);
-          lora_outgoing_queue[lora_outgoing_queue_idx][2] << 1;
-          lora_outgoing_queue[lora_outgoing_queue_idx][2] |= uint8_t(0); //lora missing does not make sanse so i will reserve this for the future
-          break;
-      }
-
-      lora_outgoing_queue_idx++;
-      last_lora_tx = millis();
-      lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis();
-      lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx]++;
-      lora_outgoing_packet_id++;
+      case STATUS_GENERAL_FAIL:
+        //shift each error in
+        lora_outgoing_queue[lora_outgoing_queue_idx][3] << 1;
+        lora_outgoing_queue[lora_outgoing_queue_idx][3] |= uint8_t(component_errors.tank_sensors_irrational);
+        lora_outgoing_queue[lora_outgoing_queue_idx][3] << 1;
+        lora_outgoing_queue[lora_outgoing_queue_idx][3] |= uint8_t(component_errors.rtc_missing);
+        lora_outgoing_queue[lora_outgoing_queue_idx][3] << 1;
+        lora_outgoing_queue[lora_outgoing_queue_idx][3] |= uint8_t(component_errors.rtc_unset);
+        lora_outgoing_queue[lora_outgoing_queue_idx][3] << 1;
+        lora_outgoing_queue[lora_outgoing_queue_idx][3] |= uint8_t(0); //lora missing does not make sanse so i will reserve this for the future
+        break;
     }
+
+    lora_outgoing_queue_idx++;
+    last_lora_tx = millis();
+    lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis();
+    lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx]++;
+    lora_outgoing_packet_id++;
   }
+}
 }
 
 void loop() {
@@ -1623,5 +1653,6 @@ void loop() {
   do_stored_buttons();
   handle_lora();
 
+  wdt_reset();
   delay(10);
 }
