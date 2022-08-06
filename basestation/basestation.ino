@@ -494,6 +494,11 @@ void setup() {
   oled.drawString(0, 50, "to reset to factory.");
   oled.display();
   delay(1000);
+  oled.setColor(BLACK);
+  oled.fillRect(0,32,128,32);
+  oled.setColor(WHITE);
+  oled.display();
+  
   if (EEPROM.begin(EEPROM_SIZE) and digitalRead(0)) { //hold GPIO0 low to reset conf at boot
     EEPROM.get(0, settings);
     oled.drawString(0, 12, F("OK"));
@@ -522,7 +527,7 @@ void setup() {
     LoRa.setSignalBandwidth(250E3);
     LoRa.setCodingRate4(8); //sf,bw,cr make a data rate of 366 bits per sec or 45,75 bytes per sec
     LoRa.enableCrc();
-    LoRa.onTxDone(handle_lora_tx_done);
+    //LoRa.onTxDone(handle_lora_tx_done); //uncomment when async fixed
     //LoRa.onReceive(handle_lora_packet);
     LoRa.receive();
     oled.drawString(0, 12, F("OK"));
@@ -544,6 +549,10 @@ void setup() {
   oled.drawString(0, 50, "to start config AP.");
   oled.display();
   delay(1000);
+  oled.setColor(BLACK);
+  oled.fillRect(0,32,128,32);
+  oled.setColor(WHITE);
+  oled.display();
 
   WiFi.mode(WIFI_STA);
   WiFi.hostname(host_name);
@@ -846,6 +855,10 @@ void handle_lora() {
           Serial.write(' ');
         }
         LoRa.endPacket(/*true*/false); //tx in not async mode becaus that never seems to work
+        //only in not async
+        LoRa.receive();
+        lora_tx_ready = true;
+        //
         Serial.println();
 
         lora_outgoing_queue_last_tx[p_idx] = millis();

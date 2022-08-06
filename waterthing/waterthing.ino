@@ -49,7 +49,6 @@
 #define LCD_BACKLIGHT_TIMEOUT 10000
 
 #define BATTERY_VOLTAGE_PIN A0
-#define BATTERY_VOLTAGE_ADC_DIVIDER 68.267 //1024 divided by this multiplier equals the battery voltage
 
 #define EEPROM_MAGIC_NUMBER 42
 
@@ -80,6 +79,7 @@ enum gfx_IDs { //enum for naming display gfx ids
 //structs are used to save to EEPROM more easily
 struct settings_s {
   uint16_t tank_capacity = 10; //in L
+  double battery_voltage_adc_divider = 68.267; //1024 divided by this multiplier equals the battery voltage
   float battery_voltage_cutoff = 10.4; //if this voltage is reached while the system is idle, a low battery waring is displayed. 0 means disable
   float battery_voltage_reset = 11.4; //if this voltage is reached while the system is in low batters state, the system is set back to idle
   int16_t max_mins_per_refill = -1; //error is thrown if the pump takes longer than that to fill the tank (5L/min pump wont take more than 5 minutes to fill a 20L tank)
@@ -229,7 +229,7 @@ enum pages_enum {
 };
 
 #define N_OF_PAGES 10
-const char* page_names[N_OF_PAGES] = {"Status", "Manuell", "Regen", "Timer", "LoRa", "Tank", "Uhr1", "Uhr2", "Akku", "Sensor"};
+const char* page_names[N_OF_PAGES] = {"Status", "Manuell", "Regen", "Timer", "LoRa", "Tank", "Uhrzeit", "Datum", "Akku", "Sensor"};
 const uint8_t page_max_cursor[N_OF_PAGES] = {0, 1, 3, 3, 3, 2, 3, 3, 2, 3};
 
 
@@ -290,7 +290,6 @@ void change_menu_entry(bool dir) { //true is up
         default:
           break;
       }
-      RTC.write(current_time);
       break;
 
     case PAGE_TIMER:
@@ -396,12 +395,12 @@ void change_menu_entry(bool dir) { //true is up
       switch (menu_entry_cursor) {
         case 1:
           settings.battery_voltage_cutoff += dir ? 0.1 : -0.1;
-          if (settings.battery_voltage_cutoff >= 48) settings.battery_voltage_cutoff = ceil(1023 / BATTERY_VOLTAGE_ADC_DIVIDER);
+          if (settings.battery_voltage_cutoff >= 48) settings.battery_voltage_cutoff = ceil(1023 / settings.battery_voltage_adc_divider);
           if (settings.battery_voltage_cutoff < 0) settings.battery_voltage_cutoff = 0;
           break;
         case 2:
           settings.battery_voltage_reset += dir ? 0.1 : -0.1;
-          if (settings.battery_voltage_reset >= 48) settings.battery_voltage_reset = ceil(1023 / BATTERY_VOLTAGE_ADC_DIVIDER);
+          if (settings.battery_voltage_reset >= 48) settings.battery_voltage_reset = ceil(1023 / settings.battery_voltage_adc_divider);
           if (settings.battery_voltage_reset < 0) settings.battery_voltage_reset = 0;
           break;
           break;
@@ -446,6 +445,7 @@ void edit_change_callback() {
           menu_editing = false;
           EEPROM.put(0, settings);
           break;
+        
         case 2:
         case 3:
           if (!menu_editing) EEPROM.put(0, settings);
@@ -1397,7 +1397,7 @@ void read_sensors_and_clock() {
       component_errors.rtc_unset = false;
     }
   }
-  battery_voltage = (float)analogRead(BATTERY_VOLTAGE_PIN) / BATTERY_VOLTAGE_ADC_DIVIDER;
+  battery_voltage = (float)analogRead(BATTERY_VOLTAGE_PIN) / settings.battery_voltage_adc_divider;
 
   sensor_values.low_water = settings.low_water_on_level == digitalRead(LOW_WATER_PIN);
   sensor_values.tank_bottom = settings.tank_bottom_on_level == digitalRead(TANK_BOTTOM_PIN);
@@ -1501,6 +1501,11 @@ void handle_serial() {
 
     if (controlCharacter == 'R') { //reset all settings
       //todo: write this
+    }
+
+    if (controlCharacter == 'B') { //reboot
+      wdt_enable(WDTO_15MS);
+      while (true) ;;
     }
   }
   digitalWrite(pcf, ACTIVITY_LED, HIGH);
