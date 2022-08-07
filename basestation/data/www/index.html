@@ -21,11 +21,33 @@
 
 <noscript><p>JS required. Sorry.</p></noscript>
 <div class="box">
-<h2>Status</h2>
-<div id="status_time"></div><br>
-<div id="status_main"></div><br>
-<div id="status_extra"></div>
+<h2>Wasserdings Status</h2>
+<p><span id="status_time"></span></p>
+<p id="status_main"></p>
+<p><span id="status_extra"></span></p>
 </div>
+
+<div class="box">
+<h2>Wassersings Info</h2>
+<p>Batterie Spannung: <span id="battery_voltage"></span></p>
+<p>Liter noch zu Gießen: <span id="liters_left"></span></p>
+<p>Liter Angefordert: <span id="liters_called"></span></p>
+</div>
+
+<div class="box">
+<h2>LoRa Info</h2>
+<p>Letzte RSSI: <span id="last_rssi"></span>dBm</p>
+<p>Letztes SnR: <span id="last_snr"></span>dBm</p>
+<p>Letzte Frequenzabweichung: <span id="last_freq_error"></span>Hz</p>
+<p>Letztes Paket Zeit: <span id="last_packet_time"></span></p>
+</div>
+
+<div class="box">
+<h2>Gateway Info</h2>
+<p>WiFi SSID: <span id="wifi_ssid"></span></p>
+<p>WiFI RSSI: <span id="wifi_rssi"></span></p>
+</div>
+
 
 <script>
 const status_main = document.getElementById('status_main');
@@ -49,6 +71,17 @@ function update_status() {
 	.then(response => response.json())
 	.then(data => {
 		status_main.innerText = ms_to_text[data.status.state];
+		
+		battery_voltage.innerText = data.battery.voltage;
+		liters_left.innerText = data.irrigation.left;
+		liters_called.innerText = data.irrigation.called;
+		
+		last_rssi.innerText = data.lora_rx.last_rssi;
+		last_snr.innerText = data.lora_rx.last_snr;
+		last_freq_error.innerText = data.lora_rx.last_freq_error;
+		
+		wifi_ssid.innerText = data.gateway.wifi.ssid;
+		wifi_rssi.innerText = data.gateway.wifi.rssi;
 	});
 }
 

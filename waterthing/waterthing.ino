@@ -127,7 +127,6 @@ enum system_state_e {
 //global system variables
 enum system_state_e system_state = STATUS_IDLE;
 tmElements_t current_time;
-float battery_voltage = 13.8;
 byte mcusr_copy;
 
 struct sensor_s {
@@ -138,12 +137,14 @@ struct sensor_s {
   uint32_t water_flow_clicks = 0;
   uint32_t rain_start_millis = 0;
   uint32_t rain_end_millis = 0;
+  float battery_voltage = 0;
 } sensor_values;
 
 uint16_t tank_fillings_remaining = 0; //if over 0, run pumping stuff til 0. is in tank fillings normally, in liters in direct mode
 uint64_t cycle_finish_millis = 0xFFFFFFFF;
 
 //lora variables
+// it would have been a better idea to have an outgoing and incoming array with structs in it instead of multiple for each attribute
 uint8_t lora_outgoing_packet_id = 1; //increments every packet
 byte lora_outgoing_queue[4][48] = {0}; //holds up to 4 messages that are to be sent with max 48 bits. first byte is magic, 2nd message id, 3nd is message type, rest is data. if all 0, no message in slot. set to 0 after up to 0 retransmits
 uint8_t lora_outgoing_queue_idx = 0; //idx where to write
@@ -965,7 +966,7 @@ void update_display() {
           case STATUS_LOW_BATTERY:
             lcd.print(F("Akku Leer!"));
             lcd.setCursor(11, 1);
-            dtostrf(battery_voltage, 4, 1, char_5_temp);
+            dtostrf(sensor_values.battery_voltage , 4, 1, char_5_temp);
             lcd.print(char_5_temp);
             lcd.write('V');
             break;
@@ -1106,12 +1107,12 @@ void update_display() {
         if (menu_page == PAGE_LORA and menu_entry_cursor == 2 and menu_editing) {
           lcd.setCursor(0, 0);
           for (uint8_t b = 0; b < 8; b++) {
-            if (settings.lora_security_key[b] > 0x0F) lcd.print(0);
+            if (settings.lora_security_key[b] < 0x10) lcd.print(0);
             lcd.print(settings.lora_security_key[b], HEX);
           }
           lcd.setCursor(0, 1);
           for (uint8_t b = 8; b < 16; b++) {
-            if (settings.lora_security_key[b] > 0x0F) lcd.print(0);
+            if (settings.lora_security_key[b] < 0x10) lcd.print(0);
             lcd.print(settings.lora_security_key[b], HEX);
           }
         }
@@ -1294,7 +1295,7 @@ void handle_pump_stuff() {
       digitalWrite(VALVE_PIN, CONTROL_RELAY_INVERTED);
       //the further sth is down in this case, the higher it's priority
 
-      if (battery_voltage <= settings.battery_voltage_cutoff and tank_fillings_remaining == 0) system_state = STATUS_LOW_BATTERY; //low battery is lowest priority. this is so a currently running irrigation is completed even if the pump motor drops the voltage
+      if (sensor_values.battery_voltage <= settings.battery_voltage_cutoff and tank_fillings_remaining == 0) system_state = STATUS_LOW_BATTERY; //low battery is lowest priority. this is so a currently running irrigation is completed even if the pump motor drops the voltage
 
       if (tank_fillings_remaining > 0 and !sensor_values.low_water) {
         sensor_values.water_flow_clicks = 0;
@@ -1371,7 +1372,7 @@ void handle_pump_stuff() {
     case STATUS_LOW_BATTERY:
       digitalWrite(PUMP_PIN, CONTROL_RELAY_INVERTED);
       digitalWrite(VALVE_PIN, CONTROL_RELAY_INVERTED);
-      if (battery_voltage >= settings.battery_voltage_reset) system_state = STATUS_IDLE;
+      if (sensor_values.battery_voltage >= settings.battery_voltage_reset) system_state = STATUS_IDLE;
       break;
 
     default:
@@ -1400,7 +1401,7 @@ void read_sensors_and_clock() {
       component_errors.rtc_unset = false;
     }
   }
-  battery_voltage = (float)analogRead(BATTERY_VOLTAGE_PIN) / settings.battery_voltage_adc_divider;
+  sensor_values.battery_voltage = (float)analogRead(BATTERY_VOLTAGE_PIN) / settings.battery_voltage_adc_divider;
 
   sensor_values.low_water = settings.low_water_on_level == digitalRead(LOW_WATER_PIN);
   sensor_values.tank_bottom = settings.tank_bottom_on_level == digitalRead(TANK_BOTTOM_PIN);
@@ -1444,7 +1445,7 @@ void handle_serial() {
       Serial.print(F(" * Top Tank Swimmer: "));
       Serial.println((sensor_values.tank_top) ? F("Under Water") : F("Dry"));
       Serial.print(F(" * Battery Voltage: "));
-      Serial.print(battery_voltage);
+      Serial.print(sensor_values.battery_voltage );
       Serial.print(F("V\r\n * Water flow clicks: "));
       Serial.println(sensor_values.water_flow_clicks);
       Serial.print(F(" * Rain: "));
@@ -1479,7 +1480,7 @@ void handle_serial() {
     if (controlCharacter == 'K') { //generate new lora key
       Serial.print(F("LoRa Sec Key: "));
       for (uint8_t b = 0; b < 16; b++) {
-        if (settings.lora_security_key[b] > 0x0F) Serial.write('0');
+        if (settings.lora_security_key[b] < 0x10) Serial.write('0');
         Serial.print(settings.lora_security_key[b], HEX);
         Serial.write(' ');
       }
@@ -1510,6 +1511,43 @@ void handle_serial() {
     if (controlCharacter == 'B') { //reboot
       wdt_enable(WDTO_15MS);
       while (true) ;;
+    }
+
+    if (controlCharacter == 'C') { //resistor divider cal, enter as C13.20 for 13.20V or C05.00 for 5V
+      Serial.println("Calibrating Vbat ADC divider:");
+      uint32_t smoothed_adc_val = 0;
+      for (uint8_t s = 0; s < 64; s++) {
+        smoothed_adc_val += analogRead(BATTERY_VOLTAGE_PIN);
+      }
+
+      smoothed_adc_val /= 64;
+      Serial.print(F(" * ADC Value: "));
+      Serial.println(smoothed_adc_val);
+
+      String volt_buf;
+      for (uint8_t c = 0; c < 5; c++) { //read part after C into mem
+        while (!Serial.available()) ;;
+        char read_char = Serial.read();
+        
+        if (read_char == '\n' or read_char == '\r') { //if end of line
+          while (Serial.available()) Serial.read(); //clear serial buf
+          break;
+        }
+        else volt_buf += read_char;
+      }
+      float correct_volt = volt_buf.toFloat(); //convert it to float
+
+
+      Serial.print(F(" * Voltage entered: "));
+      Serial.println(correct_volt);
+
+      settings.battery_voltage_adc_divider = smoothed_adc_val / correct_volt;
+      EEPROM.put(0, settings);
+
+
+      Serial.print(F(" * New ADC divider: "));
+      Serial.println(settings.battery_voltage_adc_divider);
+
     }
   }
   digitalWrite(pcf, ACTIVITY_LED, HIGH);
@@ -1551,7 +1589,7 @@ void send_ack(byte packet_id) {
 }
 
 void handle_lora() {
-  if (component_errors.lora_missing) return; // if there is no lora, dont even bother
+  if (component_errors.lora_missing or settings.lora_enable == 0) return; // if there is no lora, dont even bother
 
   //recieve
   if (settings.lora_enable >= 2) {
@@ -1632,7 +1670,7 @@ void handle_lora() {
         Serial.print(F(" * Content: "));
         for (uint8_t b = 0; b < lora_bytes; b++) {
           LoRa.write(lora_outgoing_queue[p_idx][b]);
-          if (lora_outgoing_queue[p_idx][b] > 0x0F) Serial.write('0');
+          if (lora_outgoing_queue[p_idx][b] < 0x10) Serial.write('0');
           Serial.print(lora_outgoing_queue[p_idx][b], HEX);
           Serial.write(' ');
         }

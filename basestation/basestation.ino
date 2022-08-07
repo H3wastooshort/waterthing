@@ -124,14 +124,16 @@ uint8_t gw_to_ws_packet_type_to_length(uint8_t pt) {
 //shared stuff end
 
 //recieved stuff
+int16_t last_lora_rssi = 0xFFFF;
+int16_t last_lora_snr = 0xFFFF;
+int32_t last_lora_freq_error = 0xFFFFFFFF;
+uint64_t last_recieved_packet_time = 0; //time in unix timestamp
+
 byte last_wt_status = 0xFF; //left bytes main status, right 4 bytes extra status
 uint64_t last_wt_status_millis = 0xFFFFFFFFFFFFFFFF;
 uint16_t last_liters_left = 0xFFFF; //0xFFFF means not known, 0x0000 means done
 uint16_t last_liters_called = 0xFFFF; //0xFFFF means not known, 0x0000 means done
 uint64_t last_wt_liters_millis = 0xFFFFFFFFFFFFFFFF;
-int16_t last_lora_rssi = -999;
-int16_t last_lora_snr = -999;
-uint64_t last_recieved_packet_time = 0; //time in unix timestamp
 float last_wt_battery_voltage = -1;
 uint64_t last_wt_battery_voltage_millis = 0xFFFFFFFFFFFFFFFF;
 
@@ -184,6 +186,7 @@ void handle_lora_packet(int packet_size) { //TODO: maybe move magic checking her
 
     last_lora_rssi = LoRa.packetRssi();
     last_lora_snr = LoRa.packetSnr();
+    last_lora_freq_error = LoRa.packetFrequencyError();
     lora_incoming_queue_len[lora_incoming_queue_idx] = packet_size;
     lora_incoming_queue_idx++;
     if (lora_incoming_queue_idx++ >= 4) lora_incoming_queue_idx = 0;
@@ -279,10 +282,11 @@ void rest_status() {
   stuff["battery"]["seconds_since_last_reception"] = round((millis() - last_wt_battery_voltage_millis) / 1000);
   stuff["lora_rx"]["last_rssi"] = last_lora_rssi;
   stuff["lora_rx"]["last_snr"] = last_lora_snr;
+  stuff["lora_rx"]["last_freq_error"] = last_lora_freq_error;
   stuff["lora_rx"]["last_packet_time"] = last_recieved_packet_time;
   stuff["gateway"]["wifi"]["ssid"] = WiFi.SSID();
-  stuff["gateway"]["wifi"]["rssi"] = (float)WiFi.RSSI();
-  char json_stuff[1024];
+  stuff["gateway"]["wifi"]["rssi"] = WiFi.RSSI();
+  char json_stuff[2048];
   serializeJsonPretty(stuff, json_stuff);
   server.send(200, "application/json", json_stuff);
 }
@@ -411,6 +415,7 @@ void rest_debug() {
   enum mail_alert_enum {
   MAIL_ALERT_WATER = 0,
   MAIL_ALERT_BAT,
+  MAIL_ALERT_RADIO_SILENCE,
   MAIL_ALERT_GENERAL
   };
 
@@ -773,6 +778,7 @@ void handle_lora() {
       Serial.println(lora_incoming_queue_len[p_idx]);
       Serial.println(F(" * Content: "));
       for (uint8_t b = 0; b < min(lora_incoming_queue_len[p_idx] - 1, 47); b++) {
+        if (lora_outgoing_queue[p_idx][b] < 0x10) Serial.write('0');
         Serial.print(lora_incoming_queue[p_idx][b], HEX);
         Serial.write(' ');
       }
@@ -863,6 +869,7 @@ void handle_lora() {
         Serial.print(F(" * Content: "));
         for (uint8_t b = 0; b < lora_bytes; b++) {
           LoRa.write(lora_outgoing_queue[p_idx][b]);
+          if (lora_outgoing_queue[p_idx][b] < 0x10) Serial.write('0');
           Serial.print(lora_outgoing_queue[p_idx][b], HEX);
           Serial.write(' ');
         }

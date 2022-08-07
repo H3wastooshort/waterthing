@@ -28,7 +28,7 @@ Packet Type | Name | Anatomy | Description
 ## Ground Sensor -> Water System
 **JUST AN IDEA. PROBABLY WON'T HAPPEN**
 Packet Type | Name | Anatomy | Description
-100 | Ground Data | [Wetness 1 byte] | ground wetness is 0%-100% in 0.5% steps (so 0-200 in the wetness byte)
+100 | Ground Data | [Sensor ID 1 byte] [Wetness 1 byte] | ground wetness is 0%-100% in 0.5% steps (so 0-200 in the wetness byte)
 
 ## broadcast
  * Broadcast packets are removed from queue after they get acknowledged by the gateway or after 5 retransmits (spaced 5 seconds apart)
