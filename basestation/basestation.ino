@@ -67,7 +67,7 @@ struct settings_s {
 } settings;
 
 //lora
-uint8_t lora_outgoing_packet_id = 0; //increments every packet
+uint8_t lora_outgoing_packet_id = 1; //increments every packet
 byte lora_outgoing_queue[4][48] = {0}; //holds up to 4 messages that are to be sent with max 48 bits. first byte is magic, 2nd message id, 3nd is message type, rest is data. if all 0, no message in slot. set to 0 after up to 0 retransmits
 uint8_t lora_outgoing_queue_idx = 0; //idx where to write
 uint32_t lora_outgoing_queue_last_tx[4] = {0};
@@ -174,7 +174,7 @@ std::map<byte, String> status_to_text {
 };
 
 
-void handle_lora_packet(int packet_size) { //TODO: maybe move magic checking here  
+void handle_lora_packet(int packet_size) { //TODO: maybe move magic checking here
   if (packet_size <= 255) { //3840 is an erronious recieve
     for (uint8_t b = 0; b < 48; b++) lora_incoming_queue[lora_incoming_queue_idx][b] = 0; //firstly clear
 
@@ -267,7 +267,7 @@ bool check_auth() {
 }
 
 void rest_status() {
-  DynamicJsonDocument stuff(512);
+  DynamicJsonDocument stuff(1024);
   stuff["status"]["state"] = last_wt_status >> 4;
   stuff["status"]["extra"] = last_wt_status & 0b00001111;
   stuff["status"]["as_text"] = status_to_text[last_wt_status];
@@ -280,7 +280,9 @@ void rest_status() {
   stuff["lora_rx"]["last_rssi"] = last_lora_rssi;
   stuff["lora_rx"]["last_snr"] = last_lora_snr;
   stuff["lora_rx"]["last_packet_time"] = last_recieved_packet_time;
-  char json_stuff[512];
+  stuff["gateway"]["wifi"]["ssid"] = WiFi.SSID();
+  stuff["gateway"]["wifi"]["rssi"] = (float)WiFi.RSSI();
+  char json_stuff[1024];
   serializeJsonPretty(stuff, json_stuff);
   server.send(200, "application/json", json_stuff);
 }
@@ -495,10 +497,10 @@ void setup() {
   oled.display();
   delay(1000);
   oled.setColor(BLACK);
-  oled.fillRect(0,32,128,32);
+  oled.fillRect(0, 32, 128, 32);
   oled.setColor(WHITE);
   oled.display();
-  
+
   if (EEPROM.begin(EEPROM_SIZE) and digitalRead(0)) { //hold GPIO0 low to reset conf at boot
     EEPROM.get(0, settings);
     oled.drawString(0, 12, F("OK"));
@@ -550,7 +552,7 @@ void setup() {
   oled.display();
   delay(1000);
   oled.setColor(BLACK);
-  oled.fillRect(0,32,128,32);
+  oled.fillRect(0, 32, 128, 32);
   oled.setColor(WHITE);
   oled.display();
 
@@ -743,9 +745,10 @@ void send_ack(byte packet_id) {
   lora_outgoing_queue[lora_outgoing_queue_idx][3] = packet_id;
 
   lora_outgoing_queue_idx++;
-  lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis();
+  lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis() + LORA_RETRANSMIT_TIME - 1500; //ack only sent 1500ms after
   lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] =  LORA_RETRANSMIT_TRIES - 1; //there is no response to ACKs so this ensures ther is only one ACK sent
   lora_outgoing_packet_id++;
+  if (lora_outgoing_packet_id < 1) lora_outgoing_packet_id == 1; //never let it go to 0, that causes bugs
 }
 
 void handle_lora() {
@@ -757,7 +760,7 @@ void handle_lora() {
     Serial.println(F("Possible packet incoming."));
     handle_lora_packet(possible_packet_size);
   }
-  
+
   for (uint8_t p_idx = 0; p_idx < 4; p_idx++) {
     bool is_empty = true;
     for (uint8_t i = 0; i < 48; i++) if (lora_incoming_queue[p_idx][i] != 0) {
@@ -765,11 +768,15 @@ void handle_lora() {
         break;
       }
     if (!is_empty) {
-      Serial.print(F("Recieved LoRa Packet: "));
-      for (uint8_t b = 0; b < max(lora_incoming_queue_len[p_idx] - 1, 47); b++) {
+      Serial.println(F("Incoming LoRa Packet:"));
+      Serial.print(F(" * Length: "));
+      Serial.println(lora_incoming_queue_len[p_idx]);
+      Serial.println(F(" * Content: "));
+      for (uint8_t b = 0; b < min(lora_incoming_queue_len[p_idx] - 1, 47); b++) {
         Serial.print(lora_incoming_queue[p_idx][b], HEX);
         Serial.write(' ');
       }
+      Serial.println();
 
       /*
          0 -> magic
@@ -790,6 +797,7 @@ void handle_lora() {
                 last_wt_status = lora_incoming_queue[p_idx][3];
                 last_wt_status_millis = millis();
               }
+              break;
 
             case PACKET_TYPE_WATER: {
                 last_liters_left = 0;
@@ -802,6 +810,7 @@ void handle_lora() {
 
                 last_wt_liters_millis = millis();
               }
+              break;
 
             case PACKET_TYPE_BATTERY: {
                 byte temp_float[] = {
@@ -813,6 +822,7 @@ void handle_lora() {
                 memcpy(&last_wt_battery_voltage, &temp_float, sizeof(last_wt_battery_voltage));
                 last_wt_battery_voltage_millis = millis();
               }
+              break;
 
             default:
               break;
@@ -822,10 +832,12 @@ void handle_lora() {
           lora_last_incoming_message_IDs_idx++;
           last_recieved_packet_time = ntp.getEpochTime();
         }
+        else Serial.println(F("Packet already recieved."));
         send_ack(lora_incoming_queue[p_idx][1]); //respond so retransmits wont occur
       }
 
       for (uint8_t i = 0; i < 48; i++) lora_incoming_queue[p_idx][i] = 0;
+      Serial.println();
     }
   }
 
@@ -844,7 +856,7 @@ void handle_lora() {
         LoRa.idle(); //no recieving while transmitting!
         LoRa.beginPacket();
 
-        uint8_t lora_bytes = ws_to_gw_packet_type_to_length(lora_outgoing_queue[p_idx][1]) + 3 ; // check 2nd byte (packet type), get data length and add 3 for magic + packet id+ packett type
+        uint8_t lora_bytes = gw_to_ws_packet_type_to_length(lora_outgoing_queue[p_idx][2]) + 3 ; // check 2nd byte (packet type), get data length and add 3 for magic + packet id+ packett type
         Serial.print(F(" * Length: "));
         Serial.println(lora_bytes);
 
@@ -865,7 +877,7 @@ void handle_lora() {
         lora_outgoing_queue_tx_attempts[p_idx]++;
         if (lora_outgoing_queue_tx_attempts[p_idx] >= LORA_RETRANSMIT_TRIES) {
           for (uint8_t i = 0; i < 48; i++) lora_outgoing_queue[p_idx][i] = 0; //clear packet if unsuccessful
-          lora_outgoing_queue_last_tx[p_idx] = millis();
+          lora_outgoing_queue_last_tx[p_idx] = 0;
         }
       }
     }

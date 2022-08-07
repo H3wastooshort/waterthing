@@ -128,6 +128,7 @@ enum system_state_e {
 enum system_state_e system_state = STATUS_IDLE;
 tmElements_t current_time;
 float battery_voltage = 13.8;
+byte mcusr_copy;
 
 struct sensor_s {
   bool low_water = false;
@@ -143,7 +144,7 @@ uint16_t tank_fillings_remaining = 0; //if over 0, run pumping stuff til 0. is i
 uint64_t cycle_finish_millis = 0xFFFFFFFF;
 
 //lora variables
-uint8_t lora_outgoing_packet_id = 0; //increments every packet
+uint8_t lora_outgoing_packet_id = 1; //increments every packet
 byte lora_outgoing_queue[4][48] = {0}; //holds up to 4 messages that are to be sent with max 48 bits. first byte is magic, 2nd message id, 3nd is message type, rest is data. if all 0, no message in slot. set to 0 after up to 0 retransmits
 uint8_t lora_outgoing_queue_idx = 0; //idx where to write
 uint32_t lora_outgoing_queue_last_tx[4] = {0};
@@ -445,7 +446,7 @@ void edit_change_callback() {
           menu_editing = false;
           EEPROM.put(0, settings);
           break;
-        
+
         case 2:
         case 3:
           if (!menu_editing) EEPROM.put(0, settings);
@@ -645,16 +646,18 @@ void setup() {
   wdt_reset();
 
   Serial.print(F("Reset Cause: "));
-  if (MCUSR & (1 << WDRF)) {
+  mcusr_copy = MCUSR;
+  MCUSR = 0;
+  if (mcusr_copy & (1 << WDRF)) {
     Serial.print(F("WATCHDOG! Firmware may be unstable!"));
   }
-  else if (MCUSR & (1 << BORF)) {
+  else if (mcusr_copy & (1 << BORF)) {
     Serial.print(F("BROWNOUT! Check your Arduino's Power Suppy!"));
   }
-  else if (MCUSR & (1 << EXTRF)) {
+  else if (mcusr_copy & (1 << EXTRF)) {
     Serial.print(F("External. For example the Reset Button."));
   }
-  else if (MCUSR & (1 << PORF)) {
+  else if (mcusr_copy & (1 << PORF)) {
     Serial.print(F("Power on."));
   }
   Serial.println();
@@ -1448,16 +1451,16 @@ void handle_serial() {
       Serial.println((sensor_values.rain_detected) ? F("Detected") : F("Somewhere else"));
 
       Serial.print(F(" * Reset Cause: "));
-      if (MCUSR & (1 << WDRF)) {
+      if (mcusr_copy & (1 << WDRF)) {
         Serial.print(F("WATCHDOG! Firmware may be unstable!"));
       }
-      else if (MCUSR & (1 << BORF)) {
+      else if (mcusr_copy & (1 << BORF)) {
         Serial.print(F("BROWNOUT! Check your Arduino's Power Suppy!"));
       }
-      else if (MCUSR & (1 << EXTRF)) {
+      else if (mcusr_copy & (1 << EXTRF)) {
         Serial.print(F("External. For example the Reset Button."));
       }
-      else if (MCUSR & (1 << PORF)) {
+      else if (mcusr_copy & (1 << PORF)) {
         Serial.print(F("Power on."));
       }
       Serial.println();
@@ -1497,6 +1500,7 @@ void handle_serial() {
       lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis();
       lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] = 0;
       lora_outgoing_packet_id++;
+      if (lora_outgoing_packet_id < 1) lora_outgoing_packet_id == 1; //never let it go to 0, that causes bugs
     }
 
     if (controlCharacter == 'R') { //reset all settings
@@ -1540,9 +1544,10 @@ void send_ack(byte packet_id) {
   lora_outgoing_queue[lora_outgoing_queue_idx][3] = packet_id;
 
   lora_outgoing_queue_idx++;
-  lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis();
+  lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis() + LORA_RETRANSMIT_TIME - 1500; //ack only sent 1500ms after
   lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] = 0;
   lora_outgoing_packet_id++;
+  if (lora_outgoing_packet_id < 1) lora_outgoing_packet_id == 1; //never let it go to 0, that causes bugs
 }
 
 void handle_lora() {
@@ -1558,14 +1563,15 @@ void handle_lora() {
         }
       if (!is_empty) {
         digitalWrite(pcf, ACTIVITY_LED, LOW);
-        Serial.println(F("Attention! Incoming LoRa Packet:"));
+        Serial.println(F("Incoming LoRa Packet:"));
         Serial.print(F(" * Length: "));
         Serial.println(lora_incoming_queue_len[p_idx]);
         Serial.println(F(" * Content:"));
-        for (uint8_t b = 0; b < lora_incoming_queue_len[p_idx]; b++) {
+        for (uint8_t b = 0; b < min(lora_incoming_queue_len[p_idx] - 1, 47); b++) {
           Serial.print(lora_incoming_queue[p_idx][b], HEX);
           Serial.write(' ');
         }
+        Serial.println();
 
         if (lora_incoming_queue[p_idx][0] == 42) { //if magic correct
           bool already_recieved = false;
@@ -1584,6 +1590,8 @@ void handle_lora() {
                     }
                   }
                 }
+                break;
+
               default: break;
             }
           }
@@ -1617,7 +1625,7 @@ void handle_lora() {
         LoRa.idle(); //no recieving while transmitting!
         LoRa.beginPacket();
 
-        uint8_t lora_bytes = ws_to_gw_packet_type_to_length(lora_outgoing_queue[p_idx][1]) + 3 ; // check 2nd byte (packet type), get data length and add 3 for magic + packet id+ packett type
+        uint8_t lora_bytes = ws_to_gw_packet_type_to_length(lora_outgoing_queue[p_idx][2]) + 3 ; // check 2nd byte (packet type), get data length and add 3 for magic + packet id+ packett type
         Serial.print(F(" * Length: "));
         Serial.println(lora_bytes);
 
@@ -1635,7 +1643,7 @@ void handle_lora() {
         lora_outgoing_queue_tx_attempts[p_idx]++;
         if (lora_outgoing_queue_tx_attempts[p_idx] >= LORA_RETRANSMIT_TRIES) {
           for (uint8_t i = 0; i < 48; i++) lora_outgoing_queue[p_idx][i] = 0; //clear packet if unsuccessful
-          lora_outgoing_queue_last_tx[p_idx] = millis();
+          lora_outgoing_queue_last_tx[p_idx] = 0;
         }
         digitalWrite(pcf, ACTIVITY_LED, HIGH);
       }
@@ -1692,6 +1700,7 @@ void handle_lora() {
       lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis();
       lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] = 0;
       lora_outgoing_packet_id++;
+      if (lora_outgoing_packet_id < 1) lora_outgoing_packet_id == 1; //never let it go to 0, that causes bugs
     }
   }
 }
