@@ -831,7 +831,7 @@ void handle_lora() {
             default:
               break;
           }
-          lora_last_incoming_message_IDs[lora_last_incoming_message_IDs_idx] = lora_incoming_queue[p_idx][0];
+          lora_last_incoming_message_IDs[lora_last_incoming_message_IDs_idx] = lora_incoming_queue[p_idx][1];
           if (lora_last_incoming_message_IDs_idx >= 16) lora_last_incoming_message_IDs_idx = 0;
           lora_last_incoming_message_IDs_idx++;
           last_recieved_packet_time = ntp.getEpochTime();
