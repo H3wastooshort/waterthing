@@ -747,11 +747,12 @@ void send_ack(byte packet_id) {
   lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_ACK;
   lora_outgoing_queue[lora_outgoing_queue_idx][3] = packet_id;
 
-  lora_outgoing_queue_idx++;
   lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis() + LORA_RETRANSMIT_TIME - 1500; //ack only sent 1500ms after
   lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] =  LORA_RETRANSMIT_TRIES - 1; //there is no response to ACKs so this ensures ther is only one ACK sent
   lora_outgoing_packet_id++;
   if (lora_outgoing_packet_id < 1) lora_outgoing_packet_id == 1; //never let it go to 0, that causes bugs
+  lora_outgoing_queue_idx++;
+  if (lora_outgoing_queue_idx >= 4) lora_outgoing_queue_idx = 0;
 }
 
 void handle_lora() {
@@ -770,13 +771,13 @@ void handle_lora() {
         is_empty = false;  //check for data in packet
         break;
       }
-    if (!is_empty) {
+    if (/*!is_empty*/lora_incoming_queue[p_idx][0] == 42) {
       Serial.println(F("Incoming LoRa Packet:"));
       Serial.print(F(" * Length: "));
       Serial.println(lora_incoming_queue_len[p_idx]);
-      Serial.println(F(" * Content: "));
+      Serial.print(F(" * Content: "));
       for (uint8_t b = 0; b < min(lora_incoming_queue_len[p_idx] - 1, 47); b++) {
-        if (lora_outgoing_queue[p_idx][b] < 0x10) Serial.write('0');
+        if (lora_incoming_queue[p_idx][b] < 0x10) Serial.write('0');
         Serial.print(lora_incoming_queue[p_idx][b], HEX);
         Serial.write(' ');
       }
@@ -790,11 +791,12 @@ void handle_lora() {
       */
 
       if (lora_incoming_queue[p_idx][0] == 42) { //if magic correct
+        Serial.println(F("Magic Correct."));
         bool already_recieved = false;
-        for (uint8_t i = 0; i < 16; i++) if (lora_incoming_queue[p_idx][1] = lora_last_incoming_message_IDs[i]) already_recieved = true;
+        //for (uint8_t i = 0; i < 16; i++) if (lora_incoming_queue[p_idx][1] = lora_last_incoming_message_IDs[i]) already_recieved = true; //WHY DOES THIS NO WORKEY
 
         if (!already_recieved) {
-          Serial.print(F("Magic Correct.\nPacket type: "));
+          Serial.print(F("Packet type: "));
           switch (lora_incoming_queue[p_idx][2]) {
             case PACKET_TYPE_STATUS: {
                 Serial.println(F("Status"));
@@ -883,6 +885,7 @@ void handle_lora() {
         if (lora_outgoing_queue_tx_attempts[p_idx] >= LORA_RETRANSMIT_TRIES) {
           for (uint8_t i = 0; i < 48; i++) lora_outgoing_queue[p_idx][i] = 0; //clear packet if unsuccessful
           lora_outgoing_queue_last_tx[p_idx] = 0;
+          lora_outgoing_queue_tx_attempts[p_idx]=0;
         }
       }
     }

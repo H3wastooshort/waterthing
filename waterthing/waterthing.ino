@@ -1282,7 +1282,7 @@ void handle_pump_stuff() {
     component_errors.tank_sensors_irrational = true;
     system_state = STATUS_GENERAL_FAIL;
   }
-  if ((irrigation_timer.start_hour <= current_time.Hour and irrigation_timer.start_minute <= current_time.Minute) and (irrigation_timer.last_watering_day != current_time.Day) and (!sensor_values.rain_detected and settings.block_water_after_rain)) { //
+  if ((irrigation_timer.start_hour <= current_time.Hour and irrigation_timer.start_minute <= current_time.Minute) and (irrigation_timer.last_watering_day != current_time.Day) and !(sensor_values.rain_detected and settings.block_water_after_rain)) { //
     tank_fillings_remaining +=  (settings.tank_capacity > 0) ? irrigation_timer.fillings_to_irrigate : irrigation_timer.liters_to_pump;
     irrigation_timer.last_watering_day = current_time.Day;
     EEPROM.put(0 + sizeof(settings), irrigation_timer);
@@ -1495,11 +1495,12 @@ void handle_serial() {
       lora_outgoing_queue[lora_outgoing_queue_idx][6] = 0xEE;
       lora_outgoing_queue[lora_outgoing_queue_idx][7] = 0xF1;
 
-      lora_outgoing_queue_idx++;
       lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis();
       lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] = 0;
       lora_outgoing_packet_id++;
       if (lora_outgoing_packet_id < 1) lora_outgoing_packet_id == 1; //never let it go to 0, that causes bugs
+      lora_outgoing_queue_idx++;
+      if (lora_outgoing_queue_idx >= 4) lora_outgoing_queue_idx = 0;
     }
 
     if (controlCharacter == 'R') { //reset all settings
@@ -1579,11 +1580,12 @@ void send_ack(byte packet_id) {
   lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_ACK;
   lora_outgoing_queue[lora_outgoing_queue_idx][3] = packet_id;
 
-  lora_outgoing_queue_idx++;
   lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis() + LORA_RETRANSMIT_TIME - 1500; //ack only sent 1500ms after
   lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] = 0;
   lora_outgoing_packet_id++;
   if (lora_outgoing_packet_id < 1) lora_outgoing_packet_id == 1; //never let it go to 0, that causes bugs
+  lora_outgoing_queue_idx++;
+  if (lora_outgoing_queue_idx >= 4) lora_outgoing_queue_idx = 0;
 }
 
 void handle_lora() {
@@ -1652,7 +1654,7 @@ void handle_lora() {
           is_empty = false;  //check for data in packet
           break;
         }
-        
+
       if (!is_empty and millis() - lora_outgoing_queue_last_tx[p_idx] > LORA_RETRANSMIT_TIME and lora_tx_ready) {
         digitalWrite(pcf, ACTIVITY_LED, LOW);
         digitalWrite(pcf, LORA_TX_LED, LOW);
@@ -1681,6 +1683,7 @@ void handle_lora() {
         if (lora_outgoing_queue_tx_attempts[p_idx] >= LORA_RETRANSMIT_TRIES) {
           for (uint8_t i = 0; i < 48; i++) lora_outgoing_queue[p_idx][i] = 0; //clear packet if unsuccessful
           lora_outgoing_queue_last_tx[p_idx] = 0;
+          lora_outgoing_queue_tx_attempts[p_idx] = 0;
         }
         digitalWrite(pcf, ACTIVITY_LED, HIGH);
       }
@@ -1689,7 +1692,7 @@ void handle_lora() {
 
   //tx making
   if (settings.lora_enable >= 1) {
-    static byte last_system_states[8] = {255}; //just in case my stuff bounces between states a few times
+    static byte last_system_states[8] = {255, 255, 255, 255, 255, 255, 255, 255}; //just in case my stuff bounces between states a few times
     static uint8_t lss_idx = 0;
     static uint32_t last_lora_tx = 0;
 
@@ -1723,9 +1726,13 @@ void handle_lora() {
     lss_idx++;
     if (lss_idx >= 8) lss_idx = 0;
     bool state_stable = true;
-    for (uint8_t s = 2; s < 8; s++) if (last_system_states[s] != last_system_states[s - 1]) state_stable = false; //if states 2-8 not stable, wait
+    for (uint8_t s = 2; s < 8; s++) if (last_system_states[s] != last_system_states[s - 1]) {
+        state_stable = false;  //if states 2-8 not stable, wait
+        return;
+      }
 
     if ((last_system_states[0] != last_system_states[7] or millis() - last_lora_tx > LORA_TX_INTERVAL) and state_stable) { //if there was a change or timer
+      Serial.println(F("Made new status to be sent"));
       //if new state, make lora packet
       lora_outgoing_queue[lora_outgoing_queue_idx][0] = LORA_MAGIC;
       lora_outgoing_queue[lora_outgoing_queue_idx][1] = lora_outgoing_packet_id;
@@ -1764,12 +1771,13 @@ void handle_lora() {
 
       }
 
-      lora_outgoing_queue_idx++;
       last_lora_tx = millis();
       lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis();
       lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] = 0;
       lora_outgoing_packet_id++;
       if (lora_outgoing_packet_id < 1) lora_outgoing_packet_id == 1; //never let it go to 0, that causes bugs
+      lora_outgoing_queue_idx++;
+      if (lora_outgoing_queue_idx >= 4) lora_outgoing_queue_idx = 0;
     }
   }
 }
