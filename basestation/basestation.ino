@@ -84,7 +84,6 @@ uint8_t lora_last_incoming_message_IDs_idx = 0;
 enum lora_packet_types_ws_to_gw { //water system to gateway
   PACKET_TYPE_STATUS = 0,
   PACKET_TYPE_WATER = 1,
-  PACKET_TYPE_BATTERY = 2,
   PACKET_TYPE_TEST = 69,
   PACKET_TYPE_AUTH_CHALLANGE = 250,
   PACKET_TYPE_CMD_DISABLED = 253,
@@ -103,9 +102,8 @@ enum lora_packet_types_gw_to_ws { //gateway to water system
 //length is only packet data. add 3 for real packet size
 uint8_t ws_to_gw_packet_type_to_length(uint8_t pt) {
   switch (pt) {
-    case PACKET_TYPE_STATUS: return 1; break;
-    case PACKET_TYPE_WATER: return 8; break;
-    case PACKET_TYPE_BATTERY: return 4; break;
+    case PACKET_TYPE_STATUS: return 3; break;
+    case PACKET_TYPE_WATER: return 5; break;
     case PACKET_TYPE_TEST: return 5; break;
     case PACKET_TYPE_AUTH_CHALLANGE: return 16; break;
     case PACKET_TYPE_CMD_DISABLED: return 0; break;
@@ -793,7 +791,7 @@ void handle_lora() {
 
       if (lora_incoming_queue[p_idx][0] == 42) { //if magic correct
         bool already_recieved = false;
-        for (uint8_t i = 0; i < 16; i++) if (lora_incoming_queue[p_idx][0] = lora_last_incoming_message_IDs[i]) already_recieved = true;
+        for (uint8_t i = 0; i < 16; i++) if (lora_incoming_queue[p_idx][1] = lora_last_incoming_message_IDs[i]) already_recieved = true;
 
         if (!already_recieved) {
           Serial.print(F("Magic Correct.\nPacket type: "));
@@ -802,33 +800,33 @@ void handle_lora() {
                 Serial.println(F("Status"));
                 last_wt_status = lora_incoming_queue[p_idx][3];
                 last_wt_status_millis = millis();
+
+                uint16_t bat_v =  0;
+                bat_v <<= lora_incoming_queue[p_idx][4];
+                bat_v <<= lora_incoming_queue[p_idx][5];
+                last_wt_battery_voltage = (double)bat_v / 100;
+                last_wt_battery_voltage_millis = millis();
               }
               break;
 
             case PACKET_TYPE_WATER: {
+                Serial.println(F("Water"));
+
+                last_wt_status = lora_incoming_queue[p_idx][3];
+                last_wt_status_millis = millis();
+
                 last_liters_left = 0;
-                last_liters_left <<= lora_incoming_queue[p_idx][3];
                 last_liters_left <<= lora_incoming_queue[p_idx][4];
+                last_liters_left <<= lora_incoming_queue[p_idx][5];
 
                 last_liters_called = 0;
-                last_liters_called <<= lora_incoming_queue[p_idx][5];
                 last_liters_called <<= lora_incoming_queue[p_idx][6];
+                last_liters_called <<= lora_incoming_queue[p_idx][7];
 
                 last_wt_liters_millis = millis();
               }
               break;
 
-            case PACKET_TYPE_BATTERY: {
-                byte temp_float[] = {
-                  lora_incoming_queue[p_idx][3],
-                  lora_incoming_queue[p_idx][4],
-                  lora_incoming_queue[p_idx][5],
-                  lora_incoming_queue[p_idx][6]
-                };
-                memcpy(&last_wt_battery_voltage, &temp_float, sizeof(last_wt_battery_voltage));
-                last_wt_battery_voltage_millis = millis();
-              }
-              break;
 
             default:
               break;

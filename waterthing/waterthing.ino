@@ -162,7 +162,6 @@ uint8_t lora_last_incoming_message_IDs_idx = 0;
 enum lora_packet_types_ws_to_gw { //water system to gateway
   PACKET_TYPE_STATUS = 0,
   PACKET_TYPE_WATER = 1,
-  PACKET_TYPE_BATTERY = 2,
   PACKET_TYPE_TEST = 69,
   PACKET_TYPE_AUTH_CHALLANGE = 250,
   PACKET_TYPE_CMD_DISABLED = 253,
@@ -182,9 +181,8 @@ enum lora_packet_types_gw_to_ws { //gateway to water system
 //im dont want to deal with MAP on arduino
 uint8_t ws_to_gw_packet_type_to_length(uint8_t pt) {
   switch (pt) {
-    case PACKET_TYPE_STATUS: return 1; break;
-    case PACKET_TYPE_WATER: return 8; break;
-    case PACKET_TYPE_BATTERY: return 4; break;
+    case PACKET_TYPE_STATUS: return 3; break;
+    case PACKET_TYPE_WATER: return 5; break;
     case PACKET_TYPE_TEST: return 5; break;
     case PACKET_TYPE_AUTH_CHALLANGE: return 16; break;
     case PACKET_TYPE_CMD_DISABLED: return 0; break;
@@ -1528,7 +1526,7 @@ void handle_serial() {
       for (uint8_t c = 0; c < 5; c++) { //read part after C into mem
         while (!Serial.available()) ;;
         char read_char = Serial.read();
-        
+
         if (read_char == '\n' or read_char == '\r') { //if end of line
           while (Serial.available()) Serial.read(); //clear serial buf
           break;
@@ -1654,6 +1652,7 @@ void handle_lora() {
           is_empty = false;  //check for data in packet
           break;
         }
+        
       if (!is_empty and millis() - lora_outgoing_queue_last_tx[p_idx] > LORA_RETRANSMIT_TIME and lora_tx_ready) {
         digitalWrite(pcf, ACTIVITY_LED, LOW);
         digitalWrite(pcf, LORA_TX_LED, LOW);
@@ -1730,8 +1729,40 @@ void handle_lora() {
       //if new state, make lora packet
       lora_outgoing_queue[lora_outgoing_queue_idx][0] = LORA_MAGIC;
       lora_outgoing_queue[lora_outgoing_queue_idx][1] = lora_outgoing_packet_id;
-      lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_STATUS;
       lora_outgoing_queue[lora_outgoing_queue_idx][3] = current_status_byte;
+
+      if (system_state != STATUS_PUMPING and system_state != STATUS_EMPTYING) { //if not watering
+        lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_STATUS;
+
+        union {
+          uint16_t bat_v;
+          byte bat_b[2];
+        };
+        bat_v = float(sensor_values.battery_voltage * 100);
+
+        lora_outgoing_queue[lora_outgoing_queue_idx][4] = bat_b[0]; //lower half of uint16
+        lora_outgoing_queue[lora_outgoing_queue_idx][5] = bat_b[1]; //upper half of uint16
+      }
+      else { //if watering
+        lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_WATER;
+
+        union {
+          uint16_t liters_left_int;
+          byte liters_left_byte[2];
+        };
+        liters_left_int = settings.tank_capacity > 0 ? (tank_fillings_remaining * settings.tank_capacity) : tank_fillings_remaining;
+        lora_outgoing_queue[lora_outgoing_queue_idx][4] = liters_left_byte[0]; //lower half of uint16
+        lora_outgoing_queue[lora_outgoing_queue_idx][5] = liters_left_byte[1]; //upper half of uint16
+
+        union {
+          uint16_t liters_called_int;
+          byte liters_called_byte[2];
+        };
+        liters_called_int = settings.tank_capacity > 0 ? (irrigation_timer.fillings_to_irrigate * settings.tank_capacity) : irrigation_timer.liters_to_pump;
+        lora_outgoing_queue[lora_outgoing_queue_idx][6] = liters_called_byte[0]; //lower half of uint16
+        lora_outgoing_queue[lora_outgoing_queue_idx][7] = liters_called_byte[1]; //upper half of uint16
+
+      }
 
       lora_outgoing_queue_idx++;
       last_lora_tx = millis();

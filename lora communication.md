@@ -17,9 +17,8 @@ Packet Type | Name | Anatomy | Description
 
 ## Water System -> Gateway
 Packet Type | Name | Anatomy | Description
-0 | System Status | [4+4 bit status] | Used to broadcast system state like STATUS_IDLE. Left 4 bits are system state, right 4 ones are more info (for ex in idle: alread watered, turned off, etc)
-1 | Watering State | [2 byte unsigned int: liters left] [2 byte unsigned int: liters called] | broadcasts watering state if currently watering
-2 | Battery State | [4 byte float] | broadcasts battery state regularly
+0 | System Status | [4+4 bit status] [2 byte fixed point battery voltage]| Used to broadcast system state like STATUS_IDLE. Left 4 bits are system state, right 4 ones are more info (for ex in idle: alread watered, turned off, etc). fixed point battery voltage is a uint16_t divided by 100. max value would be 65.535V
+1 | Watering State | [4+4 bit status] [2 byte unsigned int: liters left] [2 byte unsigned int: liters called] | broadcasts watering state if currently watering
 250 | Auth challange | [Auth challange 16 bytes] |
 253 | Commands disabled | No Data |
 254 | Command Not Authenticated | [1 byte Packet ID] |
