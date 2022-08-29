@@ -193,6 +193,7 @@ void handle_lora_packet(int packet_size) { //TODO: maybe move magic checking her
 }
 
 void handle_lora_tx_done() {
+  LoRa.receive();
   lora_tx_ready = true;
 }
 
@@ -875,8 +876,7 @@ void handle_lora() {
         }
         LoRa.endPacket(/*true*/false); //tx in not async mode becaus that never seems to work
         //only in not async
-        LoRa.receive();
-        lora_tx_ready = true;
+        handle_lora_tx_done();
         //
         Serial.println();
 

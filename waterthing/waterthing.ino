@@ -797,8 +797,8 @@ void setup() {
     LoRa.setSignalBandwidth(250E3);
     LoRa.setCodingRate4(8); //sf,bw,cr make a data rate of 366 bits per sec or 45,75 bytes per sec
     LoRa.enableCrc();
-    LoRa.onTxDone(handle_lora_tx_done);
-    LoRa.onReceive(handle_lora_packet);
+    //LoRa.onTxDone(handle_lora_tx_done);
+    //LoRa.onReceive(handle_lora_packet);
     LoRa.receive();
     lcd.print(F("OK"));
     component_errors.lora_missing = false;
@@ -1464,6 +1464,11 @@ void handle_serial() {
       }
       Serial.println();
 
+      Serial.print(F(" * Uptime: "));
+      Serial.print(round(millis() / 1000));
+      Serial.print('s');
+      Serial.println();
+
       Serial.println();
     }
 
@@ -1592,6 +1597,12 @@ void handle_lora() {
   if (component_errors.lora_missing or settings.lora_enable == 0) return; // if there is no lora, dont even bother
 
   //recieve
+  auto possible_packet_size = LoRa.parsePacket(); //the onRecieve() callback seems to just FUCKING CRASH sometimes
+  if (possible_packet_size > 0) {
+    Serial.println(F("Possible packet incoming."));
+    handle_lora_packet(possible_packet_size);
+  }
+
   if (settings.lora_enable >= 2) {
     for (uint8_t p_idx = 0; p_idx < 4; p_idx++) {
       bool is_empty = true;
@@ -1648,6 +1659,7 @@ void handle_lora() {
 
   //queue handle
   if (lora_tx_ready) {
+    wdt_reset();
     for (uint8_t p_idx = 0; p_idx < 4; p_idx++) {
       bool is_empty = true;
       for (uint8_t i = 0; i < 48; i++) if (lora_outgoing_queue[p_idx][i] != 0) {
@@ -1675,8 +1687,11 @@ void handle_lora() {
           Serial.print(lora_outgoing_queue[p_idx][b], HEX);
           Serial.write(' ');
         }
+        wdt_reset();
         LoRa.endPacket(/*true*/false); //tx in not async mode becaus that never seems to work
+        handle_lora_tx_done();
         Serial.println();
+        Serial.print(F("Sent"));
 
         lora_outgoing_queue_last_tx[p_idx] = millis();
         lora_outgoing_queue_tx_attempts[p_idx]++;
@@ -1685,6 +1700,8 @@ void handle_lora() {
           lora_outgoing_queue_last_tx[p_idx] = 0;
           lora_outgoing_queue_tx_attempts[p_idx] = 0;
         }
+        Serial.println(F(" and Done."));
+        Serial.println();
         digitalWrite(pcf, ACTIVITY_LED, HIGH);
       }
     }
@@ -1783,13 +1800,21 @@ void handle_lora() {
 }
 
 void loop() {
+  //Serial.println('S');
   read_sensors_and_clock();
+  //Serial.println('P');
   handle_pump_stuff();
+  //Serial.println('D');
   update_display();
 
+  //Serial.println('U');
   handle_serial();
+  //Serial.println('B');
   do_stored_buttons();
+  //Serial.println('L');
   handle_lora();
+  //Serial.println('-');
+  //Serial.println();
 
   wdt_reset();
   delay(10);
