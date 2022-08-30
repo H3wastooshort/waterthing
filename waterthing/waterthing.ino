@@ -1615,7 +1615,7 @@ void handle_lora() {
         Serial.println(F("Incoming LoRa Packet:"));
         Serial.print(F(" * Length: "));
         Serial.println(lora_incoming_queue_len[p_idx]);
-        Serial.println(F(" * Content:"));
+        Serial.print(F(" * Content: "));
         for (uint8_t b = 0; b < min(lora_incoming_queue_len[p_idx] - 1, 47); b++) {
           Serial.print(lora_incoming_queue[p_idx][b], HEX);
           Serial.write(' ');
@@ -1632,10 +1632,12 @@ void handle_lora() {
               case PACKET_TYPE_ACK: {
                   Serial.println(F("ACK"));
                   for (uint8_t p = 0; p < 4; p++) {
-                    if (lora_incoming_queue[p_idx][3] == lora_outgoing_queue[p][0]) {
-                      for (uint8_t b = 0; b < 48; b++) lora_outgoing_queue[lora_incoming_queue_idx][b] = 0; //clear packet
+                    if (lora_incoming_queue[p_idx][3] == lora_outgoing_queue[p][1]) {
+                      for (uint8_t b = 0; b < 48; b++) lora_outgoing_queue[p_idx][b] = 0; //clear packet
+                      lora_outgoing_queue_last_tx[p_idx] = 0;
+                      lora_outgoing_queue_tx_attempts[p_idx] = LORA_RETRANSMIT_TRIES;
                       Serial.print(F(" * Cleared Packet ID: "));
-                      Serial.println(lora_incoming_queue[p_idx][3]);
+                      Serial.println(lora_outgoing_queue[p][1]);
                     }
                   }
                 }
@@ -1745,10 +1747,11 @@ void handle_lora() {
     bool state_stable = true;
     for (uint8_t s = 2; s < 8; s++) if (last_system_states[s] != last_system_states[s - 1]) {
         state_stable = false;  //if states 2-8 not stable, wait
+        Serial.println(F("State not Stable"));
         return;
       }
 
-    if ((last_system_states[0] != last_system_states[7] or millis() - last_lora_tx > LORA_TX_INTERVAL) and state_stable) { //if there was a change or timer
+    if ((last_system_states[0] != last_system_states[7] or millis() - last_lora_tx > LORA_TX_INTERVAL) and state_stable) { //if there was a change or the timer ran out and the state is stable
       Serial.println(F("Made new status to be sent"));
       //if new state, make lora packet
       lora_outgoing_queue[lora_outgoing_queue_idx][0] = LORA_MAGIC;
@@ -1756,6 +1759,7 @@ void handle_lora() {
       lora_outgoing_queue[lora_outgoing_queue_idx][3] = current_status_byte;
 
       if (system_state != STATUS_PUMPING and system_state != STATUS_EMPTYING) { //if not watering
+        //[status byte][battery voltage upper][battery voltage lower]
         lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_STATUS;
 
         union {
@@ -1768,7 +1772,10 @@ void handle_lora() {
         lora_outgoing_queue[lora_outgoing_queue_idx][5] = bat_b[1]; //upper half of uint16
       }
       else { //if watering
+        //[status byte][left upper][left lower][called upper][called lower]
         lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_WATER;
+
+        lora_outgoing_queue[lora_outgoing_queue_idx][3] = current_status_byte;
 
         union {
           uint16_t liters_left_int;

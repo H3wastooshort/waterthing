@@ -301,28 +301,22 @@ void rest_login() {
   Serial.println(F("Login Attempt"));
 
   DynamicJsonDocument login(128);
-  deserializeJson(login, server.arg("plain"));
-  const char * user = server.hasArg("plain") ? login["user"] : server.arg("user").c_str();
-  const char * pass = server.hasArg("plain") ? login["pass"] : server.arg("pass").c_str();
+  if (server.hasArg("plain")) deserializeJson(login, server.arg("plain"));
+  String user = server.hasArg("plain") ? login["user"] : server.arg("user").c_str();
+  String pass = server.hasArg("plain") ? login["pass"] : server.arg("pass").c_str();
+  String correct_user = settings.web_user;
+  String correct_pass = settings.web_pass;
 
   Serial.print(F(" * User: "));
   Serial.println(user);
   Serial.print(F(" * Pass: "));
   Serial.println(pass);
   Serial.print(F(" * Correct User: "));
-  Serial.println(settings.web_user);
+  Serial.println(correct_user);
   Serial.print(F(" * Correct Pass: "));
-  Serial.println(settings.web_pass);
+  Serial.println(correct_pass);
 
-  bool matching = false;
-  if (strlen((char*)settings.web_user) == strlen((char*)user) and strlen((char*)settings.web_pass) == strlen((char*)pass)) {
-    if (strcmp(user, (char*)settings.web_user) == 0 and strcmp(pass, (char*)settings.web_pass) == 0) {
-      matching = true;
-    }
-  }
-
-
-  if (matching) {
+  if (user.equals(correct_user) and pass.equals(correct_pass)) {
     for (uint8_t b = 0; b < 32; b++) web_login_cookies[web_login_cookies_idx][b] = min(65, max(122, (LoRa.random() / 2) + 65)); //wierd math is for really badly keeping it in ascii char range. yes ik its bad
     String cookiestring = "login_cookie=";
     cookiestring += web_login_cookies[web_login_cookies_idx];
@@ -804,9 +798,12 @@ void handle_lora() {
                 last_wt_status = lora_incoming_queue[p_idx][3];
                 last_wt_status_millis = millis();
 
-                uint16_t bat_v =  0;
-                bat_v <<= lora_incoming_queue[p_idx][4];
-                bat_v <<= lora_incoming_queue[p_idx][5];
+                union {
+                  uint16_t bat_v =  0;
+                  byte bat_b[2];
+                }
+                bat_b[0] = lora_incoming_queue[p_idx][4];
+                bat_b[1] = lora_incoming_queue[p_idx][5];
                 last_wt_battery_voltage = (double)bat_v / 100;
                 last_wt_battery_voltage_millis = millis();
               }
@@ -885,7 +882,7 @@ void handle_lora() {
         if (lora_outgoing_queue_tx_attempts[p_idx] >= LORA_RETRANSMIT_TRIES) {
           for (uint8_t i = 0; i < 48; i++) lora_outgoing_queue[p_idx][i] = 0; //clear packet if unsuccessful
           lora_outgoing_queue_last_tx[p_idx] = 0;
-          lora_outgoing_queue_tx_attempts[p_idx]=0;
+          lora_outgoing_queue_tx_attempts[p_idx] = 0;
         }
       }
     }
