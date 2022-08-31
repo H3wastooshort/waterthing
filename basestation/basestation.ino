@@ -189,7 +189,7 @@ void handle_lora_packet(int packet_size) { //TODO: maybe move magic checking her
     lora_incoming_queue_idx++;
     if (lora_incoming_queue_idx++ >= 4) lora_incoming_queue_idx = 0;
   }
-  while (LoRa.available()) LoRa.read(); //clear packet if for some reason the is anything left
+  LoRa.flush(); //clear packet if for some reason the is anything left
 }
 
 void handle_lora_tx_done() {
@@ -243,19 +243,19 @@ bool check_auth() {
   uint16_t lc_start = cookie_header.indexOf("login_cookie=");
   uint16_t lc_end = cookie_header.substring(lc_start).indexOf("; ");
 
-  char login_cookie[32]; cookie_header.substring(lc_start, lc_end).toCharArray(login_cookie, 32);
-  uint8_t lc_len = strlen((char*)login_cookie);
+  String login_cookie = cookie_header.substring(lc_start, lc_end);
 
   Serial.println(F("Authed Access Attempt"));
   Serial.print(F(" * Cookie: "));
   Serial.println(login_cookie);
-  Serial.print(F(" * Cookie Len: "));
-  Serial.println(lc_len);
+  Serial.print(F(" * Cookie Length: "));
+  Serial.println(login_cookie.length());
 
   bool authed = false;
-  for (uint16_t c; c <= 255; c++) { //check if login cookie valid
-    if (32 == strlen((char*)login_cookie)) {
-      if (strcmp((char*)web_login_cookies[c], (char*)login_cookie) == 0) {
+  if (login_cookie.length() == 32) {
+    for (uint16_t c; c <= 255; c++) { //check if login cookie valid
+      String correct_l_cookie = web_login_cookies[c];
+      if (login_cookie.equals(correct_l_cookie)) {
         authed = true;
         break;
       }
@@ -317,7 +317,7 @@ void rest_login() {
   Serial.println(correct_pass);
 
   if (user.equals(correct_user) and pass.equals(correct_pass)) {
-    for (uint8_t b = 0; b < 32; b++) web_login_cookies[web_login_cookies_idx][b] = min(65, max(122, (LoRa.random() / 2) + 65)); //wierd math is for really badly keeping it in ascii char range. yes ik its bad
+    for (uint8_t b = 0; b < 32; b++) web_login_cookies[web_login_cookies_idx][b] = min(65, max(122, (LoRa.random() / 2) + 65)); //bad math is for really badly keeping it in ascii char range. yes ik its bad
     String cookiestring = "login_cookie=";
     cookiestring += web_login_cookies[web_login_cookies_idx];
     cookiestring += "; Path=/admin/; SameSite=Strict; Max-Age=86400"; //cookie kept for a day
@@ -375,16 +375,7 @@ void rest_debug() {
     return;
   }
   uint16_t status_code = 200;
-  DynamicJsonDocument stuff(1024);
-
-  //lora queues
-  stuff["lora_tx"]["next_packet_id"] = lora_outgoing_packet_id;
-  for (uint8_t i = 0; i < 4; i++) for (uint8_t b = 0; b < 48; b++) stuff["lora_tx"]["send_queue"]["entries"][i][b] = lora_outgoing_queue[i][b];
-  for (uint8_t i = 0; i < 4; i++) stuff["lora_tx"]["send_queue"]["entry_attempts"][i] = lora_outgoing_queue_tx_attempts[i];
-
-  for (uint8_t i = 0; i < 16; i++) stuff["lora_rx"]["last_packet_IDs"][i] = lora_last_incoming_message_IDs[i];
-  for (uint8_t i = 0; i < 4; i++) for (uint8_t b = 0; b < 48; b++) stuff["lora_rx"]["recive_queue"]["entries"][i][b] = lora_incoming_queue[i][b];
-  for (uint8_t i = 0; i < 4; i++) stuff["lora_rx"]["recive_queue"]["entry_len"][i] = lora_incoming_queue_len[i];
+  DynamicJsonDocument stuff(4096);
 
   //settings
   stuff["settings"]["conf_ssid"] = settings.conf_ssid;
@@ -399,7 +390,16 @@ void rest_debug() {
   stuff["settings"]["web_pass"] = settings.web_pass;
   stuff["settings"]["display_brightness"] = settings.display_brightness;
 
-  char buf[1024];
+  //lora queues
+  stuff["lora_tx"]["next_packet_id"] = lora_outgoing_packet_id;
+  for (uint8_t i = 0; i < 4; i++) for (uint8_t b = 0; b < 48; b++) stuff["lora_tx"]["send_queue"]["entries"][i][b] = lora_outgoing_queue[i][b];
+  for (uint8_t i = 0; i < 4; i++) stuff["lora_tx"]["send_queue"]["entry_attempts"][i] = lora_outgoing_queue_tx_attempts[i];
+
+  for (uint8_t i = 0; i < 16; i++) stuff["lora_rx"]["last_packet_IDs"][i] = lora_last_incoming_message_IDs[i];
+  for (uint8_t i = 0; i < 4; i++) for (uint8_t b = 0; b < 48; b++) stuff["lora_rx"]["recive_queue"]["entries"][i][b] = lora_incoming_queue[i][b];
+  for (uint8_t i = 0; i < 4; i++) stuff["lora_rx"]["recive_queue"]["entry_len"][i] = lora_incoming_queue_len[i];
+
+  char buf[8192];
   serializeJson(stuff, buf);
   server.send(status_code, "application/json", buf);
 }
@@ -473,6 +473,8 @@ void setup() {
   digitalWrite(OLED_RST_PIN, HIGH);
   delay(50);
   Serial.begin(115200);
+
+  sprintf(host_name, "WaterthingGW-%04X", (uint16_t)ESP.getEfuseMac()); //last part of MAC
 
   //oled
   Serial.println(F("OLED Setup..."));
@@ -742,7 +744,7 @@ void send_ack(byte packet_id) {
   lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_ACK;
   lora_outgoing_queue[lora_outgoing_queue_idx][3] = packet_id;
 
-  lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis() + LORA_RETRANSMIT_TIME - 1500; //ack only sent 1500ms after
+  lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis() + LORA_RETRANSMIT_TIME - 1000; //ack only sent 1000ms after
   lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] =  LORA_RETRANSMIT_TRIES - 1; //there is no response to ACKs so this ensures ther is only one ACK sent
   lora_outgoing_packet_id++;
   if (lora_outgoing_packet_id < 1) lora_outgoing_packet_id == 1; //never let it go to 0, that causes bugs
@@ -801,7 +803,7 @@ void handle_lora() {
                 union {
                   uint16_t bat_v =  0;
                   byte bat_b[2];
-                }
+                };
                 bat_b[0] = lora_incoming_queue[p_idx][4];
                 bat_b[1] = lora_incoming_queue[p_idx][5];
                 last_wt_battery_voltage = (double)bat_v / 100;

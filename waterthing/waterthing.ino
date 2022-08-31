@@ -57,7 +57,8 @@
 #define LORA_RETRANSMIT_TIME 5000 //time between retransmit attempts in ms
 #define LORA_RETRANSMIT_TRIES 5
 #define LORA_MAGIC 42
-#define LORA_TX_INTERVAL 300000 //time between beacon broadcasts in ms
+//#define LORA_TX_INTERVAL 300000 //time between beacon broadcasts in ms
+#define LORA_TX_INTERVAL 60000
 
 //library stuff
 LiquidCrystal_I2C lcd(0x27, 16, 2);
@@ -605,7 +606,7 @@ void handle_lora_packet(int packet_size) { //TODO: maybe move magic checking her
     lora_incoming_queue_idx++;
     if (lora_incoming_queue_idx++ >= 4) lora_incoming_queue_idx = 0;
   }
-  while (LoRa.available()) LoRa.read(); //clear packet if for some reason the is anything left
+  LoRa.flush(); //clear packet if for some reason the is anything left
 }
 
 void handle_lora_tx_done() {
@@ -1449,6 +1450,9 @@ void handle_serial() {
       Serial.print(F(" * Rain: "));
       Serial.println((sensor_values.rain_detected) ? F("Detected") : F("Somewhere else"));
 
+
+      Serial.println(F("System: "));
+
       Serial.print(F(" * Reset Cause: "));
       if (mcusr_copy & (1 << WDRF)) {
         Serial.print(F("WATCHDOG! Firmware may be unstable!"));
@@ -1468,6 +1472,16 @@ void handle_serial() {
       Serial.print(round(millis() / 1000));
       Serial.print('s');
       Serial.println();
+
+
+      Serial.print(F(" * New ADC divider: "));
+      Serial.println(settings.battery_voltage_adc_divider);
+
+      Serial.print(F(" * Lora Missing: "));
+      Serial.println(component_errors.lora_missing ? F("YES") : F("No"));
+
+      Serial.print(F(" * LoRa Enable: "));
+      Serial.println(settings.lora_enable);
 
       Serial.println();
     }
@@ -1500,7 +1514,7 @@ void handle_serial() {
       lora_outgoing_queue[lora_outgoing_queue_idx][6] = 0xEE;
       lora_outgoing_queue[lora_outgoing_queue_idx][7] = 0xF1;
 
-      lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis();
+      lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = 0;
       lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] = 0;
       lora_outgoing_packet_id++;
       if (lora_outgoing_packet_id < 1) lora_outgoing_packet_id == 1; //never let it go to 0, that causes bugs
@@ -1547,11 +1561,6 @@ void handle_serial() {
 
       settings.battery_voltage_adc_divider = smoothed_adc_val / correct_volt;
       EEPROM.put(0, settings);
-
-
-      Serial.print(F(" * New ADC divider: "));
-      Serial.println(settings.battery_voltage_adc_divider);
-
     }
   }
   digitalWrite(pcf, ACTIVITY_LED, HIGH);
@@ -1585,7 +1594,7 @@ void send_ack(byte packet_id) {
   lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_ACK;
   lora_outgoing_queue[lora_outgoing_queue_idx][3] = packet_id;
 
-  lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis() + LORA_RETRANSMIT_TIME - 1500; //ack only sent 1500ms after
+  lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis() + LORA_RETRANSMIT_TIME - 1000; //ack only sent 1000ms after
   lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] = 0;
   lora_outgoing_packet_id++;
   if (lora_outgoing_packet_id < 1) lora_outgoing_packet_id == 1; //never let it go to 0, that causes bugs
@@ -1796,7 +1805,7 @@ void handle_lora() {
       }
 
       last_lora_tx = millis();
-      lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis();
+      lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = 0;
       lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] = 0;
       lora_outgoing_packet_id++;
       if (lora_outgoing_packet_id < 1) lora_outgoing_packet_id == 1; //never let it go to 0, that causes bugs
