@@ -594,11 +594,11 @@ ISR (PCINT1_vect) { //port B (analog pins)
 }
 
 void handle_lora_packet(int packet_size) { //TODO: maybe move magic checking here
-  if (packet_size <= 255) { //3840 is an erronious recieve
+  if (packet_size < 48) { //3840 is an erronious recieve for example.
     digitalWrite(pcf, LORA_RX_LED, LOW);
     for (uint8_t b = 0; b < 48; b++) lora_incoming_queue[lora_incoming_queue_idx][b] = 0; //firstly clear
 
-    for (uint8_t b = 0; (b < packet_size) and LoRa.available(); b++) {
+    for (uint8_t b = 0; (b < max(packet_size, 48)) and LoRa.available(); b++) {
       lora_incoming_queue[lora_incoming_queue_idx][b] = LoRa.read();
     }
 
@@ -1312,7 +1312,7 @@ void handle_pump_stuff() {
       digitalWrite(PUMP_PIN, CONTROL_RELAY_INVERTED);
       digitalWrite(VALVE_PIN, !CONTROL_RELAY_INVERTED);
       if (tank_fillings_remaining > 0) {
-        sensor_values.water_flow_clicks = 0;  //return if for some reason there is more irrigation commanded
+        sensor_values.water_flow_clicks = 0; //return if for some reason there is more irrigation commanded
         system_state = STATUS_PUMPING;
       }
       if (millis() - cycle_finish_millis > (uint64_t(settings.afterdrain_time) * 60L * 1000L)) system_state = STATUS_IDLE;
@@ -1616,7 +1616,7 @@ void handle_lora() {
     for (uint8_t p_idx = 0; p_idx < 4; p_idx++) {
       bool is_empty = true;
       for (uint8_t i = 0; i < 48; i++) if (lora_incoming_queue[p_idx][i] != 0) {
-          is_empty = false;  //check for data in packet
+          is_empty = false; //check for data in packet
           break;
         }
       if (!is_empty) {
@@ -1660,6 +1660,7 @@ void handle_lora() {
           lora_last_incoming_message_IDs_idx++;
         }
         for (uint8_t i = 0; i < 48; i++) lora_incoming_queue[p_idx][i] = 0; //clear after processing
+
         Serial.println();
         digitalWrite(pcf, ACTIVITY_LED, HIGH);
       }
@@ -1674,7 +1675,7 @@ void handle_lora() {
     for (uint8_t p_idx = 0; p_idx < 4; p_idx++) {
       bool is_empty = true;
       for (uint8_t i = 0; i < 48; i++) if (lora_outgoing_queue[p_idx][i] != 0) {
-          is_empty = false;  //check for data in packet
+          is_empty = false; //check for data in packet
           break;
         }
 
@@ -1755,7 +1756,7 @@ void handle_lora() {
     if (lss_idx >= 8) lss_idx = 0;
     bool state_stable = true;
     for (uint8_t s = 2; s < 8; s++) if (last_system_states[s] != last_system_states[s - 1]) {
-        state_stable = false;  //if states 2-8 not stable, wait
+        state_stable = false; //if states 2-8 not stable, wait
         Serial.println(F("State not Stable"));
         return;
       }
