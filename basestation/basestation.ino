@@ -556,6 +556,7 @@ void setup() {
   }
   else {
     EEPROM.put(0, settings);
+    EEPROM.commit();
     oled.drawString(0, 12, F("Initialized"));
     oled.display();
     delay(900);
@@ -755,7 +756,7 @@ void setup() {
     server.send(300, "text/html", "<a href=\"/index.html\">click here</a>");
   });
   server.serveStatic("/", SPIFFS, "/www/");
-  for (uint16_t c; c <= 255; c++) for (uint8_t b = 0; b < 32; b++) web_login_cookies[c][b] = LoRa.random(); //reset login cookies
+  for (uint16_t c; c <= 255; c++) for (uint8_t b = 0; b < 32; b++) web_login_cookies[c][b] = min(65, max(122, (LoRa.random() / 2) + 65)); //bad math is for really badly keeping it in ascii char range. yes ik its bad //reset login cookies
   server.begin();
   oled.drawString(0, 12, F("OK"));
   oled.display();

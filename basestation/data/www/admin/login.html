@@ -33,6 +33,7 @@ submit_btn.onclick = function () {
 	let login = {'user': user_field.value, 'pass': pass_field.value};
 	fetch("/admin/login_rest", {
 		'method':'POST',
+		'credentials':'same-origin',
 		'body': JSON.stringify(login)
 	})
 	.then(r => {r.json()})
