@@ -59,7 +59,7 @@ Packet Type | Name | Anatomy | Description
  0. User saves 16 byte password from Water Systems Serial Console into the Gateway and requests an action.
  1. Gateway attempts up to 5 times to request an auth challange
  2. Water System respondes with a 16 byte random value as a challange.
- 3. Gateway appends the 16 byte password to the 16 byte random challange and puts the result into sha-256
+ 3. Gateway appends the 16 byte random challange to the 16 byte password and puts the result into sha-256 ([chal][pass] -> sha256)
  4. Gateway transmits the command id and parameters followed by the 32 bytes of the sha-256 hash
  5. arduino performs the same sha256 on challange value + security key and checks if they are identical
  6. command is accepted or rejected depending on hashes matching or not

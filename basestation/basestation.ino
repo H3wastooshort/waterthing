@@ -137,14 +137,17 @@ uint64_t last_wt_battery_voltage_millis = 0xFFFFFFFFFFFFFFFF;
 
 //authed lora cmds
 enum auth_state_e {
-  AUTH_STEP_IDLE = 0,
+  AUTH_STEP_IDLE = 0, //wait for entry in lora_auth_cmd_queue
   AUTH_STEP_TX_CHALLANGE_REQUEST = 1,
   AUTH_STEP_WAIT_CHALLANGE = 2,
-  AUTH_STEP_RX_CHALLANGE = 3,
-  AUTH_STEP_TX_ANSWER = 4,
-  AUTH_STEP_WAIT_CMD_SUCCESS = 5,
+  AUTH_STEP_TX_ANSWER = 3,
+  AUTH_STEP_WAIT_CMD_SUCCESS = 4,
 } auth_state;
-byte last_wt_challange[16] = {0};
+byte last_wt_challange[16] = {0}; //if all 0, not valid/non recieved
+byte lora_auth_cmd_queue[4][16] = {0}; //the data part of all authed commands to be sent.
+uint8_t lora_auth_cmd_queue_idx = 0;
+uint8_t lora_auth_packet_processing = 255;
+byte last_auth_cmd_response = 0xFF;
 
 //web
 char web_login_cookies[255][32];
@@ -342,7 +345,54 @@ void rest_control() {
   uint16_t status_code = 200;
   DynamicJsonDocument resp(512);
 
+  DynamicJsonDocument req(256);
+  deserializeJson(req, server.arg("plain"));
+
+  if (req["call_for_water"].is<uint16_t>()) {
+    for (uint8_t b = 0; b < 16; b++) lora_auth_cmd_queue[lora_auth_cmd_queue_idx][b] = 0;
+    union {
+      uint16_t water_call = 0;
+      byte water_call_b[2];
+    };
+    water_call = req["call_for_water"];
+
+    lora_auth_cmd_queue[lora_auth_cmd_queue_idx][0] = 1;
+    lora_auth_cmd_queue[lora_auth_cmd_queue_idx][1] = water_call_b[0];
+    lora_auth_cmd_queue[lora_auth_cmd_queue_idx][2] = water_call_b[1];
+
+    lora_auth_cmd_queue_idx++;
+    if (lora_auth_cmd_queue_idx >= 16) lora_auth_cmd_queue_idx = 0;
+  }
+
+  if (req["cancel_water"].is<bool>()) {
+    for (uint8_t b = 0; b < 16; b++) lora_auth_cmd_queue[lora_auth_cmd_queue_idx][b] = 0;
+
+    lora_auth_cmd_queue[lora_auth_cmd_queue_idx][0] = 2;
+
+    lora_auth_cmd_queue_idx++;
+    if (lora_auth_cmd_queue_idx >= 16) lora_auth_cmd_queue_idx = 0;
+  }
+
   char buf[512];
+  serializeJson(resp, buf);
+  server.send(status_code, "application/json", buf);
+}
+
+void rest_control_status() {
+  uint16_t status_code = 200;
+  DynamicJsonDocument resp(128);
+
+  uint8_t left_q = 0;
+  for (uint8_t p = 0; p < 4; p + 16) {
+    bool is_empty = true;
+    for (uint8_t b = 0; b < 16; b++) if (lora_auth_cmd_queue[p][b] != 0) is_empty = false;
+    if (!is_empty) left_q++;
+  }
+
+  resp["auth_state"] = auth_state;
+  resp["left_in_queue"] = left_q;
+
+  char buf[256];
   serializeJson(resp, buf);
   server.send(status_code, "application/json", buf);
 }
@@ -365,8 +415,6 @@ void rest_admin_set() {
     server.send(403, "application/json", "{\"error\":403}");
     return;
   }
-
-
 }
 
 void rest_debug() {
@@ -697,6 +745,7 @@ void setup() {
   SPIFFS.begin();
   server.on("/rest", HTTP_GET, rest_status);
   server.on("/admin/login_rest", HTTP_POST, rest_login);
+  server.on("/admin/control_rest", HTTP_GET, rest_control_status);
   server.on("/admin/control_rest", HTTP_POST, rest_control);
   server.on("/admin/settings_rest", HTTP_POST, rest_admin_set);
   server.on("/admin/settings_rest", HTTP_GET, rest_admin_get);
@@ -845,6 +894,69 @@ void handle_lora() {
       for (uint8_t i = 0; i < 48; i++) lora_incoming_queue[p_idx][i] = 0;
       Serial.println();
     }
+  }
+
+  //handle auth state thing
+  switch (auth_state) {
+    case AUTH_STEP_IDLE: {
+        for (uint8_t p = 0; p < 4; p + 16) {
+          bool is_empty = true;
+          for (uint8_t b = 0; b < 16; b++) if (lora_auth_cmd_queue[p][b] != 0) is_empty = false;
+          if (!is_empty) {
+            lora_auth_packet_processing = p;
+            break;
+          }
+
+          if (lora_auth_packet_processing != 255) {
+            auth_state = AUTH_STEP_TX_CHALLANGE_REQUEST;
+          }
+        }
+        break;
+      }
+    case AUTH_STEP_TX_CHALLANGE_REQUEST: {
+        //wait for tx done (if async works).
+        if (true) auth_state = AUTH_STEP_WAIT_CHALLANGE;
+        break;
+      }
+    case AUTH_STEP_WAIT_CHALLANGE: {
+        if (last_wt_challange != 0) {
+          //generate response and put in queue
+
+          byte val_to_hash[32];
+          for (uint8_t b = 0; b < 16; b++) val_to_hash[b + 16] = last_wt_challange[b]; //left half is challange
+          for (uint8_t b = 0; b < 16; b++) val_to_hash[b] = settings.lora_security_key[b]; //right half is key          }
+
+          //val_to_hash = sha256(val_to_hash);
+
+
+          lora_outgoing_queue[lora_outgoing_queue_idx][0] = LORA_MAGIC;
+          lora_outgoing_queue[lora_outgoing_queue_idx][1] = lora_outgoing_packet_id;
+          for (uint8_t b = 0; b < 16; b++) lora_outgoing_queue[lora_outgoing_queue_idx][2 + b] = lora_auth_cmd_queue[lora_auth_packet_processing][b]; //append all of authed packet queue entry. the tx code will know what the true length is
+
+          lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = 0;
+          lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] = 0;
+          lora_outgoing_packet_id++;
+          if (lora_outgoing_packet_id < 1) lora_outgoing_packet_id == 1; //never let it go to 0, that causes bugs
+          lora_outgoing_queue_idx++;
+          if (lora_outgoing_queue_idx >= 4) lora_outgoing_queue_idx = 0;
+
+          for (uint8_t b = 0; b < 16; b++) lora_auth_cmd_queue[lora_auth_packet_processing][b] = 0; //clear authed packet
+
+          lora_auth_packet_processing = 255; //no more packet in process
+          for (uint8_t b = 0; b < 16; b++) last_wt_challange[b] = 0; //invalid because used
+          auth_state = AUTH_STEP_TX_ANSWER;
+        };
+        break;
+      }
+    case AUTH_STEP_TX_ANSWER: {
+        //wait for tx done (if async works).
+        if (true) auth_state = AUTH_STEP_WAIT_CMD_SUCCESS;
+        break;
+      }
+    case AUTH_STEP_WAIT_CMD_SUCCESS: {
+        //state is changed to next by receive/decode code
+        break;
+      }
   }
 
   //queue handle

@@ -20,7 +20,7 @@
 <hr>
 
 <noscript><p>JS required. Sorry.</p></noscript>
-<div class="box">
+<div class="box" id="login_box">
 <h2>Login</h2>
 <label for="user">Nutzer: </label><input id="user_field" name="user"></input><br>
 <label for="pass">Passwort: </label><input id="pass_field" name="pass"></input><br>
@@ -37,7 +37,19 @@ submit_btn.onclick = function () {
 	})
 	.then(r => {r.json()})
 	.then(jr => {
-		alert(jr);
+		if (typeof jr == 'undefined') {
+			login_box.style.borderColor = '#F00';
+			login_msg.innerHTML = 'Response ERROR.';
+		}
+		if (typeof jr["success"] == 'string') {
+			login_box.style.borderColor = '#0F0';
+			login_msg.innerHTML = 'Login OK<br>' + jr.success;
+		}
+		else {
+			login_box.style.borderColor = '#F00';
+			login_msg.innerHTML = 'Login ERROR<br>';
+			if (typeof jr["success"] == 'string') login_msg.innerHTML += jr.error;
+		}
 	});
 }
 </script>
