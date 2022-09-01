@@ -604,7 +604,7 @@ void handle_lora_packet(int packet_size) { //TODO: maybe move magic checking her
 
     lora_incoming_queue_len[lora_incoming_queue_idx] = packet_size;
     lora_incoming_queue_idx++;
-    if (lora_incoming_queue_idx++ >= 4) lora_incoming_queue_idx = 0;
+    if (lora_incoming_queue_idx >= 4) lora_incoming_queue_idx = 0;
   }
   LoRa.flush(); //clear packet if for some reason the is anything left
 }
