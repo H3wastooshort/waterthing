@@ -31,14 +31,15 @@
 
 //pcf
 #define LED_PCF_ADDR 0x3F
-#define RED_LED_PIN 0
-#define GREEN_LED_PIN 1
-#define BLUE_LED_PIN 2
-#define TB_SENSOR_LED 3 //tank bottom sensor indicator
-#define TT_SENSOR_LED 4 //tank top sensor indicator
-#define ACTIVITY_LED 5 //lights up on operations that take a bit longer (like drawing siplay and commonicating with lora module)
-#define LORA_TX_LED 6
-#define LORA_RX_LED 7
+#define RED_LED_PIN 5
+#define GREEN_LED_PIN 6
+#define BLUE_LED_PIN 7
+#define TB_SENSOR_LED 2 //tank bottom sensor indicator
+#define TT_SENSOR_LED 1 //tank top sensor indicator
+//#define ACTIVITY_LED 0 //lights up on operations that take a bit longer (like drawing siplay and commonicating with lora module)
+#define PUMP_LED 0
+#define LORA_TX_LED 3
+#define LORA_RX_LED 4
 
 #define DEBOUNCE_DELAY 150
 #define BTN_PIN 5 //PCINT
@@ -903,7 +904,7 @@ skip_page_basics:
 
 void update_display() {
   if (millis() - last_display_update > 1000) {
-    digitalWrite(pcf, ACTIVITY_LED, LOW);
+    //digitalWrite(pcf, ACTIVITY_LED, LOW);
     uint16_t uint16_temp;
     char char_5_temp[5];
     uint8_t disp_pad = 8;
@@ -1247,7 +1248,7 @@ void update_display() {
 
     //Serial.print(F("Display drawing time [ms]: "));
     //Serial.println(last_display_update - display_draw_start_time);
-    digitalWrite(pcf, ACTIVITY_LED, HIGH);
+    //digitalWrite(pcf, ACTIVITY_LED, HIGH);
   }
 
   //status led
@@ -1276,6 +1277,10 @@ void update_display() {
       set_status_led(1, 0, 0);
       break;
   }
+
+  digitalWrite(pcf, PUMP_LED, digitalRead(PUMP_PIN));
+  digitalWrite(pcf, TT_SENSOR_LED, !sensor_values.tank_top);
+  digitalWrite(pcf, TB_SENSOR_LED, !sensor_values.tank_bottom);
 }
 
 void handle_pump_stuff() {
@@ -1406,9 +1411,6 @@ void read_sensors_and_clock() {
   sensor_values.tank_bottom = settings.tank_bottom_on_level == digitalRead(TANK_BOTTOM_PIN);
   sensor_values.tank_top = settings.tank_top_on_level == digitalRead(TANK_TOP_PIN);
 
-  digitalWrite(pcf, TT_SENSOR_LED, !sensor_values.tank_top);
-  digitalWrite(pcf, TB_SENSOR_LED, !sensor_values.tank_bottom);
-
   bool rain_condition_now = settings.rain_detected_on_level == digitalRead(RAIN_DETECTOR_PIN);
   static bool last_rain_condition = false;
   if (rain_condition_now != last_rain_condition and millis() - sensor_values.rain_start_millis > 10000 and millis() - sensor_values.rain_end_millis > 10000) { //if changed set millis vars and debounce rain sensor
@@ -1427,7 +1429,7 @@ void read_sensors_and_clock() {
 
 void handle_serial() {
   if (Serial.available()) {
-    digitalWrite(pcf, ACTIVITY_LED, LOW);
+    //digitalWrite(pcf, ACTIVITY_LED, LOW);
     uint8_t controlCharacter = Serial.read();
 
     if (controlCharacter == 'd') up_callback();
@@ -1563,7 +1565,7 @@ void handle_serial() {
       EEPROM.put(0, settings);
     }
   }
-  digitalWrite(pcf, ACTIVITY_LED, HIGH);
+  //digitalWrite(pcf, ACTIVITY_LED, HIGH);
 }
 
 void do_stored_buttons() {
@@ -1620,7 +1622,7 @@ void handle_lora() {
           break;
         }
       if (!is_empty) {
-        digitalWrite(pcf, ACTIVITY_LED, LOW);
+        //digitalWrite(pcf, ACTIVITY_LED, LOW);
         Serial.println(F("Incoming LoRa Packet:"));
         Serial.print(F(" * Length: "));
         Serial.println(lora_incoming_queue_len[p_idx]);
@@ -1662,7 +1664,7 @@ void handle_lora() {
         for (uint8_t i = 0; i < 48; i++) lora_incoming_queue[p_idx][i] = 0; //clear after processing
 
         Serial.println();
-        digitalWrite(pcf, ACTIVITY_LED, HIGH);
+        //digitalWrite(pcf, ACTIVITY_LED, HIGH);
       }
 
     }
@@ -1680,7 +1682,7 @@ void handle_lora() {
         }
 
       if (!is_empty and millis() - lora_outgoing_queue_last_tx[p_idx] > LORA_RETRANSMIT_TIME and lora_tx_ready) {
-        digitalWrite(pcf, ACTIVITY_LED, LOW);
+        //digitalWrite(pcf, ACTIVITY_LED, LOW);
         digitalWrite(pcf, LORA_TX_LED, LOW);
         Serial.println(F("Sending LoRa Packet: "));
 
@@ -1714,7 +1716,7 @@ void handle_lora() {
         }
         Serial.println(F(" and Done."));
         Serial.println();
-        digitalWrite(pcf, ACTIVITY_LED, HIGH);
+        //digitalWrite(pcf, ACTIVITY_LED, HIGH);
       }
     }
   }

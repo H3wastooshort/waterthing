@@ -1,5 +1,6 @@
 #include <EEPROM.h>
 #include <LoRa.h>
+#include <Crypto.h> //https://github.com/intrbiz/arduino-crypto
 #include <Wire.h>
 #include "fonts.h"
 #include <OLEDDisplay.h>
@@ -177,6 +178,10 @@ std::map<byte, String> status_to_text {
 };
 
 
+char randomASCII() { //give random lowercase ascii
+  return min(max(round(LoRa.random() / 10)) + uint8_t('a'), uint8_t('z')), uint8_t('a'));
+}
+
 void handle_lora_packet(int packet_size) { //TODO: maybe move magic checking here
   if (packet_size <= 255) { //3840 is an erronious recieve
     for (uint8_t b = 0; b < 48; b++) lora_incoming_queue[lora_incoming_queue_idx][b] = 0; //firstly clear
@@ -320,7 +325,7 @@ void rest_login() {
   Serial.println(correct_pass);
 
   if (user.equals(correct_user) and pass.equals(correct_pass)) {
-    for (uint8_t b = 0; b < 32; b++) web_login_cookies[web_login_cookies_idx][b] = min(65, max(122, (LoRa.random() / 2) + 65)); //bad math is for really badly keeping it in ascii char range. yes ik its bad
+    for (uint8_t b = 0; b < 32; b++) web_login_cookies[web_login_cookies_idx][b] = randomASCII();
     String cookiestring = "login_cookie=";
     cookiestring += web_login_cookies[web_login_cookies_idx];
     cookiestring += "; Path=/admin/; SameSite=Strict; Max-Age=86400"; //cookie kept for a day
@@ -756,7 +761,7 @@ void setup() {
     server.send(300, "text/html", "<a href=\"/index.html\">click here</a>");
   });
   server.serveStatic("/", SPIFFS, "/www/");
-  for (uint16_t c; c <= 255; c++) for (uint8_t b = 0; b < 32; b++) web_login_cookies[c][b] = min(65, max(122, (LoRa.random() / 2) + 65)); //bad math is for really badly keeping it in ascii char range. yes ik its bad //reset login cookies
+  for (uint16_t c; c <= 255; c++) for (uint8_t b = 0; b < 32; b++) web_login_cookies[c][b] = randomASCII();
   server.begin();
   oled.drawString(0, 12, F("OK"));
   oled.display();
@@ -924,11 +929,15 @@ void handle_lora() {
           //generate response and put in queue
 
           byte val_to_hash[32];
-          for (uint8_t b = 0; b < 16; b++) val_to_hash[b + 16] = last_wt_challange[b]; //left half is challange
-          for (uint8_t b = 0; b < 16; b++) val_to_hash[b] = settings.lora_security_key[b]; //right half is key          }
+          //for (uint8_t b = 0; b < 16; b++) val_to_hash[b + 16] = last_wt_challange[b]; //left half is challange
+          //for (uint8_t b = 0; b < 16; b++) val_to_hash[b] = settings.lora_security_key[b]; //right half is key          }
 
+          SHA256 hasher;
           //val_to_hash = sha256(val_to_hash);
 
+          hasher.doUpdate(last_wt_challange, 16);
+          hasher.doUpdate(settings.lora_security_key, 16);
+          hasher.doFinal(val_to_hash);
 
           lora_outgoing_queue[lora_outgoing_queue_idx][0] = LORA_MAGIC;
           lora_outgoing_queue[lora_outgoing_queue_idx][1] = lora_outgoing_packet_id;
