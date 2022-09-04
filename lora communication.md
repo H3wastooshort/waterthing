@@ -19,6 +19,7 @@ Packet Type | Name | Anatomy | Description
 Packet Type | Name | Anatomy | Description
 0 | System Status | [4+4 bit status] [2 byte fixed point battery voltage]| Used to broadcast system state like STATUS_IDLE. Left 4 bits are system state, right 4 ones are more info (for ex in idle: alread watered, turned off, etc). fixed point battery voltage is a uint16_t divided by 100. max value would be 65.535V
 1 | Watering State | [4+4 bit status] [2 byte unsigned int: liters left] [2 byte unsigned int: liters called] | broadcasts watering state if currently watering
+240 | Reboot Notification | Packet sent once on boot
 250 | Auth challange | [Auth challange 16 bytes] |
 253 | Commands disabled | No Data |
 254 | Command Not Authenticated | [1 byte Packet ID] |

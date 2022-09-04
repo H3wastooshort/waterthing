@@ -165,6 +165,7 @@ enum lora_packet_types_ws_to_gw { //water system to gateway
   PACKET_TYPE_STATUS = 0,
   PACKET_TYPE_WATER = 1,
   PACKET_TYPE_TEST = 69,
+  PACKET_TYPE_REBOOT = 240,
   PACKET_TYPE_AUTH_CHALLANGE = 250,
   PACKET_TYPE_CMD_DISABLED = 253,
   PACKET_TYPE_CMD_AUTH_FAIL = 254,
@@ -190,6 +191,7 @@ uint8_t ws_to_gw_packet_type_to_length(uint8_t pt) {
     case PACKET_TYPE_CMD_DISABLED: return 0; break;
     case PACKET_TYPE_CMD_AUTH_FAIL: return 1; break;
     case PACKET_TYPE_CMD_OK: return 1; break;
+    case PACKET_TYPE_REBOOT: return 0; break;
     default: return 47; break;
   }
 }
@@ -595,15 +597,15 @@ ISR (PCINT1_vect) { //port B (analog pins)
 }
 
 void handle_lora_packet(int packet_size) { //TODO: maybe move magic checking here
-  if (packet_size < 48) { //3840 is an erronious recieve for example.
+  if (packet_size <= 48) { //3840 is an erronious recieve for example.
     digitalWrite(pcf, LORA_RX_LED, LOW);
     for (uint8_t b = 0; b < 48; b++) lora_incoming_queue[lora_incoming_queue_idx][b] = 0; //firstly clear
 
-    for (uint8_t b = 0; (b < max(packet_size, 48)) and LoRa.available(); b++) {
+    for (uint8_t b = 0; (b < min(packet_size, 48)) and LoRa.available(); b++) {
       lora_incoming_queue[lora_incoming_queue_idx][b] = LoRa.read();
     }
 
-    lora_incoming_queue_len[lora_incoming_queue_idx] = packet_size;
+    lora_incoming_queue_len[lora_incoming_queue_idx] = min(packet_size, 48);
     lora_incoming_queue_idx++;
     if (lora_incoming_queue_idx >= 4) lora_incoming_queue_idx = 0;
   }
@@ -802,6 +804,19 @@ void setup() {
     //LoRa.onTxDone(handle_lora_tx_done);
     //LoRa.onReceive(handle_lora_packet);
     LoRa.receive();
+
+    //boot packet
+    lora_outgoing_queue[lora_outgoing_queue_idx][0] = LORA_MAGIC;
+    lora_outgoing_queue[lora_outgoing_queue_idx][1] = lora_outgoing_packet_id;
+    lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_REBOOT;
+
+    lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis() + LORA_RETRANSMIT_TIME - 1000; //ack only sent 1000ms after
+    lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] =  LORA_RETRANSMIT_TRIES - 1; //there is no response to ACKs so this ensures ther is only one ACK sent
+    lora_outgoing_packet_id++;
+    if (lora_outgoing_packet_id < 1) lora_outgoing_packet_id == 1; //never let it go to 0, that causes bugs
+    lora_outgoing_queue_idx++;
+    if (lora_outgoing_queue_idx >= 4) lora_outgoing_queue_idx = 0;
+    
     lcd.print(F("OK"));
     component_errors.lora_missing = false;
   }
@@ -1627,7 +1642,7 @@ void handle_lora() {
         Serial.print(F(" * Length: "));
         Serial.println(lora_incoming_queue_len[p_idx]);
         Serial.print(F(" * Content: "));
-        for (uint8_t b = 0; b < min(lora_incoming_queue_len[p_idx] - 1, 47); b++) {
+        for (uint8_t b = 0; b < min(lora_incoming_queue_len[p_idx], 48); b++) {
           Serial.print(lora_incoming_queue[p_idx][b], HEX);
           Serial.write(' ');
         }
@@ -1740,7 +1755,7 @@ void handle_lora() {
         break;
 
       case STATUS_GENERAL_FAIL:
-        //shift each error in
+        //shift each error in        
         current_status_byte << 1;
         current_status_byte |= uint8_t(component_errors.tank_sensors_irrational);
         current_status_byte << 1;

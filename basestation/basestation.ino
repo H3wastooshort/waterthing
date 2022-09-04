@@ -86,6 +86,7 @@ enum lora_packet_types_ws_to_gw { //water system to gateway
   PACKET_TYPE_STATUS = 0,
   PACKET_TYPE_WATER = 1,
   PACKET_TYPE_TEST = 69,
+  PACKET_TYPE_REBOOT = 240,
   PACKET_TYPE_AUTH_CHALLANGE = 250,
   PACKET_TYPE_CMD_DISABLED = 253,
   PACKET_TYPE_CMD_AUTH_FAIL = 254,
@@ -110,6 +111,7 @@ uint8_t ws_to_gw_packet_type_to_length(uint8_t pt) {
     case PACKET_TYPE_CMD_DISABLED: return 0; break;
     case PACKET_TYPE_CMD_AUTH_FAIL: return 1; break;
     case PACKET_TYPE_CMD_OK: return 1; break;
+    case PACKET_TYPE_REBOOT: return 0; break;
     default: return 47; break;
   }
 }
@@ -179,23 +181,23 @@ std::map<byte, String> status_to_text {
 
 
 char randomASCII() { //give random lowercase ascii
-  return min(max(round(LoRa.random() / 10)) + uint8_t('a'), uint8_t('z')), uint8_t('a'));
+  return std::min(std::max(double(std::round(LoRa.random() / 10))) + double('a'), double('z')), double('a'));
 }
 
 void handle_lora_packet(int packet_size) { //TODO: maybe move magic checking here
-  if (packet_size <= 255) { //3840 is an erronious recieve
+  if (packet_size <= 48) { //3840 is an erronious recieve
     for (uint8_t b = 0; b < 48; b++) lora_incoming_queue[lora_incoming_queue_idx][b] = 0; //firstly clear
 
-    for (uint8_t b = 0; (b < packet_size) and LoRa.available(); b++) {
+    for (uint8_t b = 0; (b < min(packet_size, 48)) and LoRa.available(); b++) {
       lora_incoming_queue[lora_incoming_queue_idx][b] = LoRa.read();
     }
 
     last_lora_rssi = LoRa.packetRssi();
     last_lora_snr = LoRa.packetSnr();
     last_lora_freq_error = LoRa.packetFrequencyError();
-    lora_incoming_queue_len[lora_incoming_queue_idx] = packet_size;
+    lora_incoming_queue_len[lora_incoming_queue_idx] = min(packet_size, 48);
     lora_incoming_queue_idx++;
-    if (lora_incoming_queue_idx++ >= 4) lora_incoming_queue_idx = 0;
+    if (lora_incoming_queue_idx >= 4) lora_incoming_queue_idx = 0;
   }
   LoRa.flush(); //clear packet if for some reason the is anything left
 }
@@ -210,7 +212,7 @@ void draw_display_boilerplate() {
   oled.clear();
   oled.setColor(WHITE);
   oled.setFont(Lato_Thin_8);
-  oled.drawRect(0, 11, 127, 53);
+  oled.drawRect(0, 11, 127, 42);
 
   //last lora rssi left
   oled.setTextAlignment(TEXT_ALIGN_LEFT);
@@ -225,6 +227,9 @@ void draw_display_boilerplate() {
   char time_buf[5];
   sprintf(time_buf, "%02d:%02d", ntp.getHours(), ntp.getMinutes());
   oled.drawString(127, 0, (String)time_buf);
+
+
+  //todo: add indicators on bottom
 
   //oled.display();
 }
@@ -586,6 +591,7 @@ void setup() {
     //LoRa.onTxDone(handle_lora_tx_done); //uncomment when async fixed
     //LoRa.onReceive(handle_lora_packet);
     LoRa.receive();
+
     oled.drawString(0, 12, F("OK"));
     oled.display();
   }
@@ -828,7 +834,7 @@ void handle_lora() {
       Serial.print(F(" * Length: "));
       Serial.println(lora_incoming_queue_len[p_idx]);
       Serial.print(F(" * Content: "));
-      for (uint8_t b = 0; b < min(lora_incoming_queue_len[p_idx] - 1, 47); b++) {
+      for (uint8_t b = 0; b < min(lora_incoming_queue_len[p_idx], 48); b++) {
         if (lora_incoming_queue[p_idx][b] < 0x10) Serial.write('0');
         Serial.print(lora_incoming_queue[p_idx][b], HEX);
         Serial.write(' ');
