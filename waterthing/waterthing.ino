@@ -58,8 +58,7 @@
 #define LORA_RETRANSMIT_TIME 5000 //time between retransmit attempts in ms
 #define LORA_RETRANSMIT_TRIES 5
 #define LORA_MAGIC 42
-//#define LORA_TX_INTERVAL 300000 //time between beacon broadcasts in ms
-#define LORA_TX_INTERVAL 60000
+#define LORA_TX_INTERVAL 300000 //time between beacon broadcasts in ms
 
 //library stuff
 LiquidCrystal_I2C lcd(0x27, 16, 2);

@@ -19,7 +19,8 @@
 </menu>
 <hr>
 
-<noscript><p>JS required. Sorry.</p></noscript>
+<noscript><p>JS required. Sorry.<br>
+You can look at the <a href="/rest">raw JSON</a> though.</p></noscript>
 <div class="box">
 <h2>Wasserdings Status</h2>
 <p><span id="status_time"></span></p>
@@ -57,11 +58,11 @@ const ms_to_text = {
 	0 : "Bereitschaft",
 	1 : "Pumpen/Füllen",
 	2 : "Leeren",
-	3 : "Leeren Nachlauf",
+	3 : "Nachlauf",
 	4 : "KEIN WASSER!",
 	5 : "Akku Leer!",
 	6 : "Zeit nicht gesetzt!",
-	7 : "Genereller Fehler!",
+	7 : "Fehler!",
 	
 	15 : "Unbekannt"
 };
@@ -72,7 +73,6 @@ function update_status() {
 	.then(data => {
 		status_main.innerText = ms_to_text[data.status.state];
 		status_extra.innerText = "";
-		
 		switch (data.status.state) {
 			case 0:
 				if (data.status.extra & 0b0001) status_extra.innerText = "Ausgeschaltet";
@@ -81,8 +81,17 @@ function update_status() {
 				break;
 			
 			case 1:
-				
+				if (data.status.extra & 0b0100) status_extra.innerText = "Tanksensor Fehler";
+				if (data.status.extra & 0b0100) status_extra.innerText = "RTC Fehlt";
+				if (data.status.extra & 0b0010) status_extra.innerText = "RTC Nicht eingestellt";
 				break;
+		}
+		
+		if (data.status.timestamp > 10) {
+			status_time.innerText = "Empfangen vor";
+			let status_secs = Math.floor((Date.now()/1000) - data.status.timestamp);
+			if (status_secs >= 60) status_time.innerText += " " + Math.floor(status_secs / 60) + " Minuten."
+			else status_time.innerText += " " + status_secs + " Sekunden."
 		}
 		
 		battery_voltage.innerText = data.battery.voltage;

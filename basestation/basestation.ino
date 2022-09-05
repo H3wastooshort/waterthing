@@ -132,12 +132,12 @@ int32_t last_lora_freq_error = 0xFFFFFFFF;
 uint64_t last_recieved_packet_time = 0; //time in unix timestamp
 
 byte last_wt_status = 0xFF; //left bytes main status, right 4 bytes extra status
-uint64_t last_wt_status_millis = 0xFFFFFFFFFFFFFFFF;
+uint64_t last_wt_status_timestamp = 0;
 uint16_t last_liters_left = 0xFFFF; //0xFFFF means not known, 0x0000 means done
 uint16_t last_liters_called = 0xFFFF; //0xFFFF means not known, 0x0000 means done
-uint64_t last_wt_liters_millis = 0xFFFFFFFFFFFFFFFF;
+uint64_t last_wt_liters_timestamp = 0;
 float last_wt_battery_voltage = -1;
-uint64_t last_wt_battery_voltage_millis = 0xFFFFFFFFFFFFFFFF;
+uint64_t last_wt_battery_voltage_timestamp = 0;
 
 //authed lora cmds
 enum auth_state_e {
@@ -287,12 +287,12 @@ void rest_status() {
   stuff["status"]["state"] = last_wt_status >> 4;
   stuff["status"]["extra"] = last_wt_status & 0b00001111;
   stuff["status"]["as_text"] = status_to_text[last_wt_status];
-  stuff["status"]["seconds_since_last_reception"] = round((millis() - last_wt_status_millis) / 1000);
+  stuff["status"]["timestamp"] = last_wt_status_timestamp;
   stuff["irrigation"]["left"] = last_liters_left;
   stuff["irrigation"]["called"] = last_liters_called;
-  stuff["irrigation"]["seconds_since_last_reception"] = round((millis() - last_wt_liters_millis) / 1000);
+  stuff["irrigation"]["timestamp"] = last_wt_liters_timestamp;
   stuff["battery"]["voltage"] = last_wt_battery_voltage;
-  stuff["battery"]["seconds_since_last_reception"] = round((millis() - last_wt_battery_voltage_millis) / 1000);
+  stuff["battery"]["timestamp"] = last_wt_battery_voltage_timestamp;
   stuff["lora_rx"]["last_rssi"] = last_lora_rssi;
   stuff["lora_rx"]["last_snr"] = last_lora_snr;
   stuff["lora_rx"]["last_freq_error"] = last_lora_freq_error;
@@ -789,10 +789,11 @@ void update_display() {
     oled.setFont(Lato_Thin_12);
     oled.setTextAlignment(TEXT_ALIGN_CENTER);
     String status_time = "Last Status ( ";
-    status_time += ((millis() - last_wt_status_millis) / 1000) / 60 > 999 ? ">999" : (String)(int)round(((millis() - last_wt_status_millis) / 1000) / 60);
+    uint32_t seconds_since = ntp.getEpochTime() - last_wt_status_timestamp;
+    status_time += (seconds_since / 60) > 999 ? ">999" : (String)(int)round((seconds_since / 60));
     status_time += "m ago):";
     oled.drawString(63, 12, status_time);
-    oled.setFont(Lato_Thin_24);
+    oled.setFont(Lato_Thin_20);
     oled.drawString(63, 24, status_to_text[last_wt_status]);
     oled.display();
 
@@ -860,7 +861,6 @@ void handle_lora() {
             case PACKET_TYPE_STATUS: {
                 Serial.println(F("Status"));
                 last_wt_status = lora_incoming_queue[p_idx][3];
-                last_wt_status_millis = millis();
 
                 union {
                   uint16_t bat_v =  0;
@@ -869,7 +869,7 @@ void handle_lora() {
                 bat_b[0] = lora_incoming_queue[p_idx][4];
                 bat_b[1] = lora_incoming_queue[p_idx][5];
                 last_wt_battery_voltage = (double)bat_v / 100;
-                last_wt_battery_voltage_millis = millis();
+                last_wt_status_timestamp = last_wt_battery_voltage_timestamp = ntp.getEpochTime();
               }
               break;
 
@@ -877,7 +877,6 @@ void handle_lora() {
                 Serial.println(F("Water"));
 
                 last_wt_status = lora_incoming_queue[p_idx][3];
-                last_wt_status_millis = millis();
 
                 last_liters_left = 0;
                 last_liters_left |= lora_incoming_queue[p_idx][4];
@@ -889,7 +888,7 @@ void handle_lora() {
                 last_liters_left <<= 8;
                 last_liters_called |= lora_incoming_queue[p_idx][7];
 
-                last_wt_liters_millis = millis();
+                last_wt_status_timestamp = last_wt_liters_timestamp = ntp.getEpochTime();
               }
               break;
 
