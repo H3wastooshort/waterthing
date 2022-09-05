@@ -71,6 +71,19 @@ function update_status() {
 	.then(response => response.json())
 	.then(data => {
 		status_main.innerText = ms_to_text[data.status.state];
+		status_extra.innerText = "";
+		
+		switch (data.status.state) {
+			case 0:
+				if (data.status.extra & 0b0001) status_extra.innerText = "Ausgeschaltet";
+				else if (data.status.extra & 0b0010) status_extra.innerText = "Fertig für Heute";
+				else if (data.status.extra & 0b0100) status_extra.innerText = "Regen erkannt";
+				break;
+			
+			case 1:
+				
+				break;
+		}
 		
 		battery_voltage.innerText = data.battery.voltage;
 		liters_left.innerText = data.irrigation.left;

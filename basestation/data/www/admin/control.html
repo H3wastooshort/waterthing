@@ -4,6 +4,10 @@
 <title>Waterthing Gateway</title>
 <link rel="stylesheet" href="/waterthing.css">
 <meta charset="utf-8">
+<link rel="preload" src="/admin/lora_activity_none.gif" as="image">
+<link rel="preload" src="/admin/lora_activity_rx.gif" as="image">
+<link rel="preload" src="/admin/lora_activity_tx.gif" as="image">
+<link rel="preload" src="/admin/lora_activity_tx_rx.gif" as="image">
 </head>
 
 <body>
@@ -20,6 +24,7 @@
 <hr>
 
 <div class="auth_status">
+<img style="height:16px;width:32px;" src="/admin/lora_activity_none.gif"><br>
 <ol class="auth_tx_states">
 <li id="auth_state_idle">Bereit</li>
 <li id="auth_state_tx_chal_req">Challange Anfrage Senden</li>

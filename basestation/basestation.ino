@@ -357,15 +357,15 @@ void rest_control() {
   DynamicJsonDocument resp(512);
 
   DynamicJsonDocument req(256);
-  deserializeJson(req, server.arg("plain"));
+  if (server.hasArg("plain")) deserializeJson(req, server.arg("plain"));
 
-  if (req["call_for_water"].is<uint16_t>()) {
+  if (req["call_for_water"].is<uint16_t>() or server.hasArg("call_for_water")) {
     for (uint8_t b = 0; b < 16; b++) lora_auth_cmd_queue[lora_auth_cmd_queue_idx][b] = 0;
     union {
       uint16_t water_call = 0;
       byte water_call_b[2];
     };
-    water_call = req["call_for_water"];
+    water_call = server.hasArg("plain") ? req["call_for_water"] : String(server.arg("plain")).toInt();
 
     lora_auth_cmd_queue[lora_auth_cmd_queue_idx][0] = 1;
     lora_auth_cmd_queue[lora_auth_cmd_queue_idx][1] = water_call_b[0];
@@ -375,7 +375,7 @@ void rest_control() {
     if (lora_auth_cmd_queue_idx >= 16) lora_auth_cmd_queue_idx = 0;
   }
 
-  if (req["cancel_water"].is<bool>()) {
+  if (req["cancel_water"].is<bool>() or server.hasArg("cancel_water")) {
     for (uint8_t b = 0; b < 16; b++) lora_auth_cmd_queue[lora_auth_cmd_queue_idx][b] = 0;
 
     lora_auth_cmd_queue[lora_auth_cmd_queue_idx][0] = 2;

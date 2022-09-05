@@ -816,7 +816,7 @@ void setup() {
     if (lora_outgoing_packet_id < 1) lora_outgoing_packet_id == 1; //never let it go to 0, that causes bugs
     lora_outgoing_queue_idx++;
     if (lora_outgoing_queue_idx >= 4) lora_outgoing_queue_idx = 0;
-    
+
     lcd.print(F("OK"));
     component_errors.lora_missing = false;
   }
@@ -1755,7 +1755,7 @@ void handle_lora() {
         break;
 
       case STATUS_GENERAL_FAIL:
-        //shift each error in        
+        //shift each error in
         current_status_byte <<= 1;
         current_status_byte |= uint8_t(component_errors.tank_sensors_irrational);
         current_status_byte <<= 1;
@@ -1764,6 +1764,10 @@ void handle_lora() {
         current_status_byte |= uint8_t(component_errors.rtc_unset);
         current_status_byte <<= 1;
         current_status_byte |= uint8_t(0); //lora missing does not make sanse so i will reserve this for the future
+        break;
+
+      default:
+        current_status_byte <<= 4; //shift bits over SSSS0000
         break;
     }
     //status_byte end =================================
@@ -1775,9 +1779,11 @@ void handle_lora() {
     for (uint8_t s = 2; s < 8; s++) if (last_system_states[s] != last_system_states[s - 1]) {
         state_stable = false; //if states 2-8 not stable, wait
         Serial.println(F("State not Stable"));
-        return;
+        Serial.println(current_status_byte, HEX);
+        break;
       }
 
+    //FIXME: for some reason sometimes changes dont trigger tx
     if ((last_system_states[0] != last_system_states[7] or millis() - last_lora_tx > LORA_TX_INTERVAL) and state_stable) { //if there was a change or the timer ran out and the state is stable
       Serial.println(F("Made new status to be sent"));
       //if new state, make lora packet
