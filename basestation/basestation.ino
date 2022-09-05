@@ -138,6 +138,7 @@ uint16_t last_liters_called = 0xFFFF; //0xFFFF means not known, 0x0000 means don
 uint64_t last_wt_liters_timestamp = 0;
 float last_wt_battery_voltage = -1;
 uint64_t last_wt_battery_voltage_timestamp = 0;
+uint64_t last_wt_reboot_timestamp = 0;
 
 //authed lora cmds
 enum auth_state_e {
@@ -293,6 +294,7 @@ void rest_status() {
   stuff["irrigation"]["timestamp"] = last_wt_liters_timestamp;
   stuff["battery"]["voltage"] = last_wt_battery_voltage;
   stuff["battery"]["timestamp"] = last_wt_battery_voltage_timestamp;
+  stuff["other"]["last_reboot"] = last_wt_reboot_timestamp;
   stuff["lora_rx"]["last_rssi"] = last_lora_rssi;
   stuff["lora_rx"]["last_snr"] = last_lora_snr;
   stuff["lora_rx"]["last_freq_error"] = last_lora_freq_error;
@@ -853,7 +855,7 @@ void handle_lora() {
       if (lora_incoming_queue[p_idx][0] == 42) { //if magic correct
         Serial.println(F("Magic Correct."));
         bool already_recieved = false;
-        //for (uint8_t i = 0; i < 16; i++) if (lora_incoming_queue[p_idx][1] = lora_last_incoming_message_IDs[i]) already_recieved = true; //WHY DOES THIS NO WORKEY
+        for (uint8_t i = 0; i < 16; i++) if (lora_incoming_queue[p_idx][1] == lora_last_incoming_message_IDs[i]) already_recieved = true;
 
         if (!already_recieved) {
           Serial.print(F("Packet type: "));
@@ -892,6 +894,10 @@ void handle_lora() {
               }
               break;
 
+            case PACKET_TYPE_REBOOT: {
+                last_wt_reboot_timestamp = ntp.getEpochTime();
+                for (uint8_t i = 0; i < 16; i++) lora_last_incoming_message_IDs[i] = 0; //counter on other side reset, so we reset too
+              }
 
             default:
               break;

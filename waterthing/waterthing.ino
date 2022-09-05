@@ -1622,13 +1622,13 @@ void handle_lora() {
   if (component_errors.lora_missing or settings.lora_enable == 0) return; // if there is no lora, dont even bother
 
   //recieve
-  auto possible_packet_size = LoRa.parsePacket(); //the onRecieve() callback seems to just FUCKING CRASH sometimes
-  if (possible_packet_size > 0) {
-    Serial.println(F("Possible packet incoming."));
-    handle_lora_packet(possible_packet_size);
-  }
-
   if (settings.lora_enable >= 2) {
+    auto possible_packet_size = LoRa.parsePacket(); //the onRecieve() callback seems to just FUCKING CRASH sometimes
+    if (possible_packet_size > 0) {
+      Serial.println(F("Possible packet incoming."));
+      handle_lora_packet(possible_packet_size);
+    }
+
     for (uint8_t p_idx = 0; p_idx < 4; p_idx++) {
       bool is_empty = true;
       for (uint8_t i = 0; i < 48; i++) if (lora_incoming_queue[p_idx][i] != 0) {
@@ -1782,7 +1782,7 @@ void handle_lora() {
         Serial.println(current_status_byte, HEX);
         break;
       }
-    
+
     //FIXME: for some reason sometimes changes dont trigger tx
     static byte last_system_state = 0xFF;
     if (((last_system_state != current_status_byte) or (millis() - last_lora_tx > LORA_TX_INTERVAL)) and state_stable) { //if there was a change or the timer ran out and the state is stable
