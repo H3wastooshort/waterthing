@@ -880,12 +880,14 @@ void handle_lora() {
                 last_wt_status_millis = millis();
 
                 last_liters_left = 0;
-                last_liters_left <<= lora_incoming_queue[p_idx][4];
-                last_liters_left <<= lora_incoming_queue[p_idx][5];
+                last_liters_left |= lora_incoming_queue[p_idx][4];
+                last_liters_left <<= 8;
+                last_liters_left |= lora_incoming_queue[p_idx][5];
 
                 last_liters_called = 0;
-                last_liters_called <<= lora_incoming_queue[p_idx][6];
-                last_liters_called <<= lora_incoming_queue[p_idx][7];
+                last_liters_called |= lora_incoming_queue[p_idx][6];
+                last_liters_left <<= 8;
+                last_liters_called |= lora_incoming_queue[p_idx][7];
 
                 last_wt_liters_millis = millis();
               }

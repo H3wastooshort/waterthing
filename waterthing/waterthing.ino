@@ -1743,11 +1743,11 @@ void handle_lora() {
     static uint32_t last_lora_tx = 0;
 
     //make status byte ==========================
-    byte current_status_byte;
-    current_status_byte = uint8_t(max(0xF, system_state)); //fill 4 right bits with system state 0000SSSS
+    byte current_status_byte = 0;
+    current_status_byte = uint8_t(min(0xF, system_state)); //fill 4 right bits with system state 0000SSSS
     switch (system_state) {  //add extra status SSSSEEEE
       case STATUS_IDLE:
-        current_status_byte << 4; //shift bits over SSSS0000
+        current_status_byte <<= 4; //shift bits over SSSS0000
         if (settings.tank_capacity > 0 ? irrigation_timer.fillings_to_irrigate == 0 : irrigation_timer.liters_to_pump == 0) current_status_byte |= 0x01;
         else if (irrigation_timer.last_watering_day == current_time.Day) current_status_byte |= 0x02;
         else if (sensor_values.rain_detected) current_status_byte |= 0x03;
@@ -1756,13 +1756,13 @@ void handle_lora() {
 
       case STATUS_GENERAL_FAIL:
         //shift each error in        
-        current_status_byte << 1;
+        current_status_byte <<= 1;
         current_status_byte |= uint8_t(component_errors.tank_sensors_irrational);
-        current_status_byte << 1;
+        current_status_byte <<= 1;
         current_status_byte |= uint8_t(component_errors.rtc_missing);
-        current_status_byte << 1;
+        current_status_byte <<= 1;
         current_status_byte |= uint8_t(component_errors.rtc_unset);
-        current_status_byte << 1;
+        current_status_byte <<= 1;
         current_status_byte |= uint8_t(0); //lora missing does not make sanse so i will reserve this for the future
         break;
     }
