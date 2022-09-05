@@ -1,6 +1,5 @@
 #include <EEPROM.h>
 #include <LoRa.h>
-#include <Crypto.h> //https://github.com/intrbiz/arduino-crypto
 #include <Wire.h>
 #include "fonts.h"
 #include <OLEDDisplay.h>
@@ -16,6 +15,8 @@
 #include <ESPmDNS.h>
 #include <ArduinoOTA.h>
 #include <map>
+#include "mbedtls/md.h"
+//#include <Crypto.h> //https://github.com/intrbiz/arduino-crypto
 
 #undef LED_BUILTIN
 #define LED_BUILTIN 25
@@ -181,7 +182,7 @@ std::map<byte, String> status_to_text {
 
 
 char randomASCII() { //give random lowercase ascii
-  return std::min(std::max(double(std::round(LoRa.random() / 10))) + double('a'), double('z')), double('a'));
+  return std::min(std::max(double(std::round(LoRa.random() / 10)) + double('a'), double('z')), double('a'));
 }
 
 void handle_lora_packet(int packet_size) { //TODO: maybe move magic checking here
@@ -336,7 +337,7 @@ void rest_login() {
     cookiestring += "; Path=/admin/; SameSite=Strict; Max-Age=86400"; //cookie kept for a day
 
     server.sendHeader("Set-Cookie", cookiestring);
-    server.send(200, "application/json", "{\"success\":\"Authenticated\"}");
+    server.send(200, "application/json", "{\"success\":\"Authenticated\",\"login_cookie\":\"" + cookiestring + "\"}");
     Serial.println(F(" * SUCCESS"));
   }
   else {
@@ -834,7 +835,7 @@ void handle_lora() {
       Serial.print(F(" * Length: "));
       Serial.println(lora_incoming_queue_len[p_idx]);
       Serial.print(F(" * Content: "));
-      for (uint8_t b = 0; b < min(lora_incoming_queue_len[p_idx], 48); b++) {
+      for (uint8_t b = 0; b < min(lora_incoming_queue_len[p_idx], uint16_t(48)); b++) {
         if (lora_incoming_queue[p_idx][b] < 0x10) Serial.write('0');
         Serial.print(lora_incoming_queue[p_idx][b], HEX);
         Serial.write(' ');
@@ -935,15 +936,16 @@ void handle_lora() {
           //generate response and put in queue
 
           byte val_to_hash[32];
-          //for (uint8_t b = 0; b < 16; b++) val_to_hash[b + 16] = last_wt_challange[b]; //left half is challange
-          //for (uint8_t b = 0; b < 16; b++) val_to_hash[b] = settings.lora_security_key[b]; //right half is key          }
 
-          SHA256 hasher;
-          //val_to_hash = sha256(val_to_hash);
-
-          hasher.doUpdate(last_wt_challange, 16);
-          hasher.doUpdate(settings.lora_security_key, 16);
-          hasher.doFinal(val_to_hash);
+          mbedtls_md_context_t hash_ctx;
+          mbedtls_md_type_t md_type = MBEDTLS_MD_SHA256;
+          mbedtls_md_init(&hash_ctx);
+          mbedtls_md_setup(&hash_ctx, mbedtls_md_info_from_type(md_type), 0);
+          mbedtls_md_starts(&hash_ctx);
+          mbedtls_md_update(&hash_ctx, (const unsigned char *) last_wt_challange, 16);
+          mbedtls_md_update(&hash_ctx, (const unsigned char *) settings.lora_security_key, 16);
+          mbedtls_md_finish(&hash_ctx, val_to_hash);
+          mbedtls_md_free(&hash_ctx);
 
           lora_outgoing_queue[lora_outgoing_queue_idx][0] = LORA_MAGIC;
           lora_outgoing_queue[lora_outgoing_queue_idx][1] = lora_outgoing_packet_id;
