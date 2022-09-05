@@ -1738,8 +1738,6 @@ void handle_lora() {
 
   //tx making
   if (settings.lora_enable >= 1) {
-    static byte last_system_states[8] = {255, 255, 255, 255, 255, 255, 255, 255}; //just in case my stuff bounces between states a few times
-    static uint8_t lss_idx = 0;
     static uint32_t last_lora_tx = 0;
 
     //make status byte ==========================
@@ -1772,19 +1770,24 @@ void handle_lora() {
     }
     //status_byte end =================================
 
-    last_system_states[lss_idx] = current_status_byte;
+
+    static byte last_system_states_arr[8] = {255, 255, 255, 255, 255, 255, 255, 255}; //just in case my stuff bounces between states a few times
+    static uint8_t lss_idx = 0;
+    last_system_states_arr[lss_idx] = current_status_byte;
     lss_idx++;
     if (lss_idx >= 8) lss_idx = 0;
     bool state_stable = true;
-    for (uint8_t s = 2; s < 8; s++) if (last_system_states[s] != last_system_states[s - 1]) {
+    for (uint8_t s = 1; s < 8; s++) if (last_system_states_arr[s] != last_system_states_arr[s - 1]) {
         state_stable = false; //if states 2-8 not stable, wait
         Serial.println(F("State not Stable"));
         Serial.println(current_status_byte, HEX);
         break;
       }
-
+    
     //FIXME: for some reason sometimes changes dont trigger tx
-    if ((last_system_states[0] != last_system_states[7] or millis() - last_lora_tx > LORA_TX_INTERVAL) and state_stable) { //if there was a change or the timer ran out and the state is stable
+    static byte last_system_state = 0xFF;
+    if (((last_system_state != current_status_byte) or (millis() - last_lora_tx > LORA_TX_INTERVAL)) and state_stable) { //if there was a change or the timer ran out and the state is stable
+      last_system_state = current_status_byte;
       Serial.println(F("Made new status to be sent"));
       //if new state, make lora packet
       lora_outgoing_queue[lora_outgoing_queue_idx][0] = LORA_MAGIC;
