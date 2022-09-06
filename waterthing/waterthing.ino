@@ -1618,6 +1618,18 @@ void send_ack(byte packet_id) {
   if (lora_outgoing_queue_idx >= 4) lora_outgoing_queue_idx = 0;
 }
 
+void clear_packet(byte packet_id) {
+  for (uint8_t p = 0; p < 4; p++) {
+    if (packet_id == lora_outgoing_queue[p][1]) {
+      for (uint8_t b = 0; b < 48; b++) lora_outgoing_queue[p][b] = 0; //clear packet
+      lora_outgoing_queue_last_tx[p] = 0;
+      lora_outgoing_queue_tx_attempts[p] = LORA_RETRANSMIT_TRIES;
+      Serial.print(F(" * Cleared Packet ID: "));
+      Serial.println(lora_outgoing_queue[p][1]);
+    }
+  }
+}
+
 void handle_lora() {
   if (component_errors.lora_missing or settings.lora_enable == 0) return; // if there is no lora, dont even bother
 
@@ -1649,22 +1661,14 @@ void handle_lora() {
 
         if (lora_incoming_queue[p_idx][0] == 42) { //if magic correct
           bool already_recieved = false;
-          for (uint8_t i = 0; i < 16; i++) if (lora_incoming_queue[p_idx][0] = lora_last_incoming_message_IDs[i]) already_recieved = true;
+          for (uint8_t i = 0; i < 16; i++) if (lora_incoming_queue[p_idx][0] == lora_last_incoming_message_IDs[i]) already_recieved = true;
 
           if (!already_recieved) {
             Serial.print(F(" * Magic Correct.\r\n * Packet type: "));
             switch (lora_incoming_queue[p_idx][2]) {
               case PACKET_TYPE_ACK: {
                   Serial.println(F("ACK"));
-                  for (uint8_t p = 0; p < 4; p++) {
-                    if (lora_incoming_queue[p_idx][3] == lora_outgoing_queue[p][1]) {
-                      for (uint8_t b = 0; b < 48; b++) lora_outgoing_queue[p_idx][b] = 0; //clear packet
-                      lora_outgoing_queue_last_tx[p_idx] = 0;
-                      lora_outgoing_queue_tx_attempts[p_idx] = LORA_RETRANSMIT_TRIES;
-                      Serial.print(F(" * Cleared Packet ID: "));
-                      Serial.println(lora_outgoing_queue[p][1]);
-                    }
-                  }
+                  clear_packet(lora_incoming_queue[p_idx][3]);
                 }
                 break;
 

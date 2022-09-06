@@ -153,6 +153,8 @@ byte lora_auth_cmd_queue[4][16] = {0}; //the data part of all authed commands to
 uint8_t lora_auth_cmd_queue_idx = 0;
 uint8_t lora_auth_packet_processing = 255;
 byte last_auth_cmd_response = 0xFF;
+byte last_auth_response_packet_id = 0xFF;
+byte last_cmd_response_packet_id = 0xFF;
 
 //web
 char web_login_cookies[255][32];
@@ -815,6 +817,18 @@ void send_ack(byte packet_id) {
   if (lora_outgoing_packet_id < 1) lora_outgoing_packet_id == 1; //never let it go to 0, that causes bugs
   lora_outgoing_queue_idx++;
   if (lora_outgoing_queue_idx >= 4) lora_outgoing_queue_idx = 0;
+}
+
+void clear_packet(byte packet_id) {
+  for (uint8_t p = 0; p < 4; p++) {
+    if (packet_id == lora_outgoing_queue[p][1]) {
+      for (uint8_t b = 0; b < 48; b++) lora_outgoing_queue[p][b] = 0; //clear packet
+      lora_outgoing_queue_last_tx[p] = 0;
+      lora_outgoing_queue_tx_attempts[p] = LORA_RETRANSMIT_TRIES;
+      Serial.print(F(" * Cleared Packet ID: "));
+      Serial.println(lora_outgoing_queue[p][1]);
+    }
+  }
 }
 
 void handle_lora() {
