@@ -1666,7 +1666,7 @@ void handle_lora() {
           bool already_recieved = false;
           for (uint8_t i = 0; i < 16; i++) if (lora_incoming_queue[p_idx][0] == lora_last_incoming_message_IDs[i]) already_recieved = true;
 
-          if (!already_recieved) {
+          if (!already_recieved and lora_incoming_queue[p_idx][2] != PACKET_TYPE_ACK) {
             Serial.print(F(" * Magic Correct.\r\n * Packet type: "));
             switch (lora_incoming_queue[p_idx][2]) {
               case PACKET_TYPE_ACK: {
@@ -1791,8 +1791,8 @@ void handle_lora() {
     bool state_stable = true;
     for (uint8_t s = 1; s < 8; s++) if (last_system_states_arr[s] != last_system_states_arr[s - 1]) {
         state_stable = false; //if states 2-8 not stable, wait
-        Serial.println(F("State not Stable"));
-        Serial.println(current_status_byte, HEX);
+        //Serial.println(F("State not Stable"));
+        //Serial.println(current_status_byte, HEX);
         break;
       }
 
