@@ -1666,20 +1666,17 @@ void handle_lora() {
           bool already_recieved = false;
           for (uint8_t i = 0; i < 16; i++) if (lora_incoming_queue[p_idx][0] == lora_last_incoming_message_IDs[i]) already_recieved = true;
 
-          bool do_ack = true;
           if (!already_recieved) {
             Serial.print(F(" * Magic Correct.\r\n * Packet type: "));
             switch (lora_incoming_queue[p_idx][2]) {
               case PACKET_TYPE_ACK: {
                   Serial.println(F("ACK"));
                   clear_packet(lora_incoming_queue[p_idx][3]);
-                  do_ack = false;
                 }
                 break;
 
               case PACKET_TYPE_REQUST_CHALLANGE: {
                   clear_packet(lora_incoming_queue[p_idx][3]);
-                  do_ack = false;
                 }
 
               default: break;
@@ -1689,7 +1686,6 @@ void handle_lora() {
             if (lora_last_incoming_message_IDs_idx >= 16) lora_last_incoming_message_IDs_idx = 0;
           }
           else Serial.println(F("Packet already recieved."));
-          if (do_ack) send_ack(lora_incoming_queue[p_idx][1]); //respond so retransmits wont occur
         }
 
         for (uint8_t i = 0; i < 48; i++) lora_incoming_queue[p_idx][i] = 0; //clear after processing
