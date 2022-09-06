@@ -199,6 +199,9 @@ uint8_t gw_to_ws_packet_type_to_length(uint8_t pt) {
   switch (pt) {
     case PACKET_TYPE_ACK: return 1; break;
     case PACKET_TYPE_REQUST_CHALLANGE: return 0; break;
+    case PACKET_TYPE_CURRENT_TIME: return 0; break;
+    case PACKET_TYPE_ADD_WATER: return 1 + 2 + 32; break;
+    case PACKET_TYPE_CANCEL_WATER: return 1 + 32; break;
   }
 }
 //shared stuff end
@@ -1663,6 +1666,7 @@ void handle_lora() {
           bool already_recieved = false;
           for (uint8_t i = 0; i < 16; i++) if (lora_incoming_queue[p_idx][0] == lora_last_incoming_message_IDs[i]) already_recieved = true;
 
+          bool do_ack = true;
           if (!already_recieved) {
             Serial.print(F(" * Magic Correct.\r\n * Packet type: "));
             switch (lora_incoming_queue[p_idx][2]) {
@@ -1672,13 +1676,22 @@ void handle_lora() {
                 }
                 break;
 
+            case PACKET_TYPE_REQUST_CHALLANGE: {
+                  clear_packet(lora_incoming_queue[p_idx][3]);
+                  do_ack = false;
+                }
+              }
+
               default: break;
             }
+            lora_last_incoming_message_IDs[lora_last_incoming_message_IDs_idx] = lora_incoming_queue[p_idx][0];
+            lora_last_incoming_message_IDs_idx++;
+            if (lora_last_incoming_message_IDs_idx >= 16) lora_last_incoming_message_IDs_idx = 0;
           }
-          lora_last_incoming_message_IDs[lora_last_incoming_message_IDs_idx] = lora_incoming_queue[p_idx][0];
-          lora_last_incoming_message_IDs_idx++;
-          if (lora_last_incoming_message_IDs_idx >= 16) lora_last_incoming_message_IDs_idx = 0;
+          else Serial.println(F("Packet already recieved."));
+          if (do_ack) send_ack(lora_incoming_queue[p_idx][1]); //respond so retransmits wont occur
         }
+
         for (uint8_t i = 0; i < 48; i++) lora_incoming_queue[p_idx][i] = 0; //clear after processing
 
         Serial.println();
