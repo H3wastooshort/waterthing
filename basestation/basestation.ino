@@ -919,9 +919,9 @@ void handle_lora() {
 
             case PACKET_TYPE_AUTH_CHALLANGE: {
                 Serial.println(F("Challange"));
-                if (auth_state == AUTH_STATE_WAIT_CHALLANGE) {
+                if (auth_state == AUTH_STEP_WAIT_CHALLANGE) {
                   last_auth_challange_packet_id = lora_incoming_queue[p_idx][1];
-                  auth_state = AUTH_STATE_TX_ANSWER;
+                  auth_state = AUTH_STEP_TX_ANSWER;
                   clear_packet(lora_incoming_queue[p_idx][3]);
                   do_ack = false;
                 }
@@ -930,8 +930,8 @@ void handle_lora() {
             case PACKET_TYPE_CMD_OK:
             case PACKET_TYPE_CMD_AUTH_FAIL:
             case PACKET_TYPE_CMD_DISABLED:
-              if (auth_state == AUTH_STATE_WAIT_RESPONSE) {
-                auth_state = AUTH_STATE_IDLE;
+              if (auth_state == AUTH_STEP_WAIT_CMD_SUCCESS) {
+                auth_state = AUTH_STEP_IDLE;
                 last_auth_cmd_response = lora_incoming_queue[p_idx][2];
                 clear_packet(lora_incoming_queue[p_idx][3]);
               }

@@ -1673,14 +1673,14 @@ void handle_lora() {
               case PACKET_TYPE_ACK: {
                   Serial.println(F("ACK"));
                   clear_packet(lora_incoming_queue[p_idx][3]);
+                  do_ack = false;
                 }
                 break;
 
-            case PACKET_TYPE_REQUST_CHALLANGE: {
+              case PACKET_TYPE_REQUST_CHALLANGE: {
                   clear_packet(lora_incoming_queue[p_idx][3]);
                   do_ack = false;
                 }
-              }
 
               default: break;
             }
