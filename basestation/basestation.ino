@@ -121,9 +121,6 @@ uint8_t gw_to_ws_packet_type_to_length(uint8_t pt) {
   switch (pt) {
     case PACKET_TYPE_ACK: return 1; break;
     case PACKET_TYPE_REQUST_CHALLANGE: return 0; break;
-    case PACKET_TYPE_CURRENT_TIME: return 0; break;
-    case PACKET_TYPE_ADD_WATER: return 1 + 2 + 32; break;
-    case PACKET_TYPE_CANCEL_WATER: return 1 + 32; break;
   }
 }
 //shared stuff end
@@ -156,7 +153,6 @@ byte lora_auth_cmd_queue[4][16] = {0}; //the data part of all authed commands to
 uint8_t lora_auth_cmd_queue_idx = 0;
 uint8_t lora_auth_packet_processing = 255;
 byte last_auth_cmd_response = 0xFF;
-byte last_auth_challange_packet_id = 0xFF;
 
 //web
 char web_login_cookies[255][32];
@@ -373,7 +369,7 @@ void rest_control() {
     };
     water_call = server.hasArg("plain") ? req["call_for_water"] : String(server.arg("plain")).toInt();
 
-    lora_auth_cmd_queue[lora_auth_cmd_queue_idx][0] = PACKET_TYPE_WATER;
+    lora_auth_cmd_queue[lora_auth_cmd_queue_idx][0] = 1;
     lora_auth_cmd_queue[lora_auth_cmd_queue_idx][1] = water_call_b[0];
     lora_auth_cmd_queue[lora_auth_cmd_queue_idx][2] = water_call_b[1];
 
@@ -821,18 +817,6 @@ void send_ack(byte packet_id) {
   if (lora_outgoing_queue_idx >= 4) lora_outgoing_queue_idx = 0;
 }
 
-void clear_packet(byte packet_id) {
-  for (uint8_t p = 0; p < 4; p++) {
-    if (packet_id == lora_outgoing_queue[p][1]) {
-      for (uint8_t b = 0; b < 48; b++) lora_outgoing_queue[p][b] = 0; //clear packet
-      lora_outgoing_queue_last_tx[p] = 0;
-      lora_outgoing_queue_tx_attempts[p] = LORA_RETRANSMIT_TRIES;
-      Serial.print(F(" * Cleared Packet ID: "));
-      Serial.println(lora_outgoing_queue[p][1]);
-    }
-  }
-}
-
 void handle_lora() {
   uint32_t last_lora_tx = 0;
 
@@ -873,7 +857,6 @@ void handle_lora() {
         bool already_recieved = false;
         for (uint8_t i = 0; i < 16; i++) if (lora_incoming_queue[p_idx][1] == lora_last_incoming_message_IDs[i]) already_recieved = true;
 
-        bool do_ack = true;
         if (!already_recieved) {
           Serial.print(F("Packet type: "));
           switch (lora_incoming_queue[p_idx][2]) {
@@ -912,30 +895,9 @@ void handle_lora() {
               break;
 
             case PACKET_TYPE_REBOOT: {
-                Serial.println(F("Reboot"));
                 last_wt_reboot_timestamp = ntp.getEpochTime();
                 for (uint8_t i = 0; i < 16; i++) lora_last_incoming_message_IDs[i] = 0; //counter on other side reset, so we reset too
               }
-
-            case PACKET_TYPE_AUTH_CHALLANGE: {
-                Serial.println(F("Challange"));
-                if (auth_state == AUTH_STEP_WAIT_CHALLANGE) {
-                  last_auth_challange_packet_id = lora_incoming_queue[p_idx][1];
-                  auth_state = AUTH_STEP_TX_ANSWER;
-                  clear_packet(lora_incoming_queue[p_idx][3]);
-                  do_ack = false;
-                }
-              }
-
-            case PACKET_TYPE_CMD_OK:
-            case PACKET_TYPE_CMD_AUTH_FAIL:
-            case PACKET_TYPE_CMD_DISABLED:
-              if (auth_state == AUTH_STEP_WAIT_CMD_SUCCESS) {
-                auth_state = AUTH_STEP_IDLE;
-                last_auth_cmd_response = lora_incoming_queue[p_idx][2];
-                clear_packet(lora_incoming_queue[p_idx][3]);
-              }
-              break;
 
             default:
               break;
@@ -946,7 +908,7 @@ void handle_lora() {
           last_recieved_packet_time = ntp.getEpochTime();
         }
         else Serial.println(F("Packet already recieved."));
-        if (do_ack) send_ack(lora_incoming_queue[p_idx][1]); //respond so retransmits wont occur
+        send_ack(lora_incoming_queue[p_idx][1]); //respond so retransmits wont occur
       }
 
       for (uint8_t i = 0; i < 48; i++) lora_incoming_queue[p_idx][i] = 0;

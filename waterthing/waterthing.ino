@@ -199,9 +199,6 @@ uint8_t gw_to_ws_packet_type_to_length(uint8_t pt) {
   switch (pt) {
     case PACKET_TYPE_ACK: return 1; break;
     case PACKET_TYPE_REQUST_CHALLANGE: return 0; break;
-    case PACKET_TYPE_CURRENT_TIME: return 0; break;
-    case PACKET_TYPE_ADD_WATER: return 1 + 2 + 32; break;
-    case PACKET_TYPE_CANCEL_WATER: return 1 + 32; break;
   }
 }
 //shared stuff end
@@ -1621,18 +1618,6 @@ void send_ack(byte packet_id) {
   if (lora_outgoing_queue_idx >= 4) lora_outgoing_queue_idx = 0;
 }
 
-void clear_packet(byte packet_id) {
-  for (uint8_t p = 0; p < 4; p++) {
-    if (packet_id == lora_outgoing_queue[p][1]) {
-      for (uint8_t b = 0; b < 48; b++) lora_outgoing_queue[p][b] = 0; //clear packet
-      lora_outgoing_queue_last_tx[p] = 0;
-      lora_outgoing_queue_tx_attempts[p] = LORA_RETRANSMIT_TRIES;
-      Serial.print(F(" * Cleared Packet ID: "));
-      Serial.println(lora_outgoing_queue[p][1]);
-    }
-  }
-}
-
 void handle_lora() {
   if (component_errors.lora_missing or settings.lora_enable == 0) return; // if there is no lora, dont even bother
 
@@ -1664,30 +1649,32 @@ void handle_lora() {
 
         if (lora_incoming_queue[p_idx][0] == 42) { //if magic correct
           bool already_recieved = false;
-          for (uint8_t i = 0; i < 16; i++) if (lora_incoming_queue[p_idx][0] == lora_last_incoming_message_IDs[i]) already_recieved = true;
+          for (uint8_t i = 0; i < 16; i++) if (lora_incoming_queue[p_idx][0] = lora_last_incoming_message_IDs[i]) already_recieved = true;
 
-          if (!already_recieved and lora_incoming_queue[p_idx][2] != PACKET_TYPE_ACK) {
+          if (!already_recieved) {
             Serial.print(F(" * Magic Correct.\r\n * Packet type: "));
             switch (lora_incoming_queue[p_idx][2]) {
               case PACKET_TYPE_ACK: {
                   Serial.println(F("ACK"));
-                  clear_packet(lora_incoming_queue[p_idx][3]);
+                  for (uint8_t p = 0; p < 4; p++) {
+                    if (lora_incoming_queue[p_idx][3] == lora_outgoing_queue[p][1]) {
+                      for (uint8_t b = 0; b < 48; b++) lora_outgoing_queue[p_idx][b] = 0; //clear packet
+                      lora_outgoing_queue_last_tx[p_idx] = 0;
+                      lora_outgoing_queue_tx_attempts[p_idx] = LORA_RETRANSMIT_TRIES;
+                      Serial.print(F(" * Cleared Packet ID: "));
+                      Serial.println(lora_outgoing_queue[p][1]);
+                    }
+                  }
                 }
                 break;
 
-              case PACKET_TYPE_REQUST_CHALLANGE: {
-                  clear_packet(lora_incoming_queue[p_idx][3]);
-                }
-
               default: break;
             }
-            lora_last_incoming_message_IDs[lora_last_incoming_message_IDs_idx] = lora_incoming_queue[p_idx][0];
-            lora_last_incoming_message_IDs_idx++;
-            if (lora_last_incoming_message_IDs_idx >= 16) lora_last_incoming_message_IDs_idx = 0;
           }
-          else Serial.println(F("Packet already recieved."));
+          lora_last_incoming_message_IDs[lora_last_incoming_message_IDs_idx] = lora_incoming_queue[p_idx][0];
+          lora_last_incoming_message_IDs_idx++;
+          if (lora_last_incoming_message_IDs_idx >= 16) lora_last_incoming_message_IDs_idx = 0;
         }
-
         for (uint8_t i = 0; i < 48; i++) lora_incoming_queue[p_idx][i] = 0; //clear after processing
 
         Serial.println();
@@ -1791,8 +1778,8 @@ void handle_lora() {
     bool state_stable = true;
     for (uint8_t s = 1; s < 8; s++) if (last_system_states_arr[s] != last_system_states_arr[s - 1]) {
         state_stable = false; //if states 2-8 not stable, wait
-        //Serial.println(F("State not Stable"));
-        //Serial.println(current_status_byte, HEX);
+        Serial.println(F("State not Stable"));
+        Serial.println(current_status_byte, HEX);
         break;
       }
 
