@@ -830,7 +830,7 @@ void send_ack(byte packet_id) {
   lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_ACK;
   lora_outgoing_queue[lora_outgoing_queue_idx][3] = packet_id;
 
-  lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis() + LORA_RETRANSMIT_TIME - 1000; //ack only sent 1000ms after
+  lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis() + (LORA_RETRANSMIT_TIME / 2); //ack only sent 1000ms after
   lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] =  LORA_RETRANSMIT_TRIES - 1; //there is no response to ACKs so this ensures ther is only one ACK sent
   lora_outgoing_packet_id++;
   if (lora_outgoing_packet_id < 1) lora_outgoing_packet_id == 1; //never let it go to 0, that causes bugs
