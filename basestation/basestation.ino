@@ -892,14 +892,16 @@ void handle_lora() {
 
         bool do_ack = true;
         if (!already_recieved) {
+          bool dedup_this = true;
           Serial.print(F("Packet type: "));
           switch (lora_incoming_queue[p_idx][2]) {
-              case PACKET_TYPE_WS_ACK: {
-                  Serial.println(F("WS ACK"));
-                  clear_packet(lora_incoming_queue[p_idx][3]);
-                }
-                break;
-            
+            case PACKET_TYPE_WS_ACK: {
+                Serial.println(F("WS ACK"));
+                clear_packet(lora_incoming_queue[p_idx][3]);
+                dedup_this = false;
+              }
+              break;
+
             case PACKET_TYPE_STATUS: {
                 Serial.println(F("Status"));
                 last_wt_status = lora_incoming_queue[p_idx][3];
@@ -965,9 +967,12 @@ void handle_lora() {
             default:
               break;
           }
-          lora_last_incoming_message_IDs[lora_last_incoming_message_IDs_idx] = lora_incoming_queue[p_idx][1];
-          if (lora_last_incoming_message_IDs_idx >= 16) lora_last_incoming_message_IDs_idx = 0;
-          lora_last_incoming_message_IDs_idx++;
+
+          if (dedup_this) {
+            lora_last_incoming_message_IDs[lora_last_incoming_message_IDs_idx] = lora_incoming_queue[p_idx][1];
+            lora_last_incoming_message_IDs_idx++;
+            if (lora_last_incoming_message_IDs_idx >= 16) lora_last_incoming_message_IDs_idx = 0;
+          }
           last_recieved_packet_time = ntp.getEpochTime();
         }
         else Serial.println(F("Packet already recieved."));
