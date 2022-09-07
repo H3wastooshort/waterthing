@@ -899,6 +899,7 @@ void handle_lora() {
                 Serial.println(F("WS ACK"));
                 clear_packet(lora_incoming_queue[p_idx][3]);
                 dedup_this = false;
+                do_ack = false;
               }
               break;
 
