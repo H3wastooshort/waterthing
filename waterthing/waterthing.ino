@@ -192,7 +192,7 @@ uint8_t ws_to_gw_packet_type_to_length(uint8_t pt) {
     case PACKET_TYPE_CMD_AUTH_FAIL: return 1; break;
     case PACKET_TYPE_CMD_OK: return 1; break;
     case PACKET_TYPE_REBOOT: return 0; break;
-    case PACKET_TYPE_WS_ACK: return 0; break;
+    case PACKET_TYPE_WS_ACK: return 1; break;
     default: return 47; break;
   }
 }
@@ -872,6 +872,7 @@ void print_page_basics() {
   switch (system_state) {
     case STATUS_IDLE:
       if (settings.tank_capacity > 0 ? irrigation_timer.fillings_to_irrigate == 0 : irrigation_timer.liters_to_pump == 0) lcd.createChar(GFX_ID_STATUS, gfx_off);
+      else if (irrigation_timer.last_watering_day == current_time.Day) lcd.createChar(GFX_ID_STATUS, gfx_done);
       else if (sensor_values.rain_detected) lcd.createChar(GFX_ID_STATUS, gfx_rain_detected);
       else lcd.createChar(GFX_ID_STATUS, gfx_idle);
       break;
@@ -1616,7 +1617,7 @@ void send_ack(byte packet_id) {
   lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_WS_ACK;
   lora_outgoing_queue[lora_outgoing_queue_idx][3] = packet_id;
 
-  lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis() + (LORA_RETRANSMIT_TIME / 2); //ack only sent 1000ms after
+  lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis() - LORA_RETRANSMIT_TIME + 2500; //ack only sent 1000ms after
   lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] = 0;
   lora_outgoing_packet_id++;
   if (lora_outgoing_packet_id < 1) lora_outgoing_packet_id == 1; //never let it go to 0, that causes bugs
