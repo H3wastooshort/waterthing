@@ -199,6 +199,9 @@ uint8_t gw_to_ws_packet_type_to_length(uint8_t pt) {
   switch (pt) {
     case PACKET_TYPE_ACK: return 1; break;
     case PACKET_TYPE_REQUST_CHALLANGE: return 0; break;
+    case PACKET_TYPE_CURRENT_TIME: return 0; break;
+    case PACKET_TYPE_ADD_WATER: return 35; break;
+    case PACKET_TYPE_CANCEL_WATER: return 33; break;
   }
 }
 //shared stuff end
@@ -1421,7 +1424,7 @@ void read_sensors_and_clock() {
   }
   sensor_values.battery_voltage = (float)analogRead(BATTERY_VOLTAGE_PIN) / settings.battery_voltage_adc_divider;
 
-  sensor_values.low_water = settings.low_water_on_level == digitalRead(LOW_WATER_PIN);
+  sensor_values.low_water = settings.low_water_on_level == digitalRead(LOW_WATER_PIN);  
   sensor_values.tank_bottom = settings.tank_bottom_on_level == digitalRead(TANK_BOTTOM_PIN);
   sensor_values.tank_top = settings.tank_top_on_level == digitalRead(TANK_TOP_PIN);
 
