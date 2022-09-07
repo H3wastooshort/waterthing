@@ -165,6 +165,7 @@ enum lora_packet_types_ws_to_gw { //water system to gateway
   PACKET_TYPE_WATER = 1,
   PACKET_TYPE_TEST = 69,
   PACKET_TYPE_REBOOT = 240,
+  PACKET_TYPE_WS_ACK = 249,
   PACKET_TYPE_AUTH_CHALLANGE = 250,
   PACKET_TYPE_CMD_DISABLED = 253,
   PACKET_TYPE_CMD_AUTH_FAIL = 254,
@@ -191,6 +192,7 @@ uint8_t ws_to_gw_packet_type_to_length(uint8_t pt) {
     case PACKET_TYPE_CMD_AUTH_FAIL: return 1; break;
     case PACKET_TYPE_CMD_OK: return 1; break;
     case PACKET_TYPE_REBOOT: return 0; break;
+    case PACKET_TYPE_WS_ACK: return 0; break;
     default: return 47; break;
   }
 }
@@ -1611,7 +1613,7 @@ void do_stored_buttons() {
 void send_ack(byte packet_id) {
   lora_outgoing_queue[lora_outgoing_queue_idx][0] = LORA_MAGIC;
   lora_outgoing_queue[lora_outgoing_queue_idx][1] = lora_outgoing_packet_id;
-  lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_ACK;
+  lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_WS_ACK;
   lora_outgoing_queue[lora_outgoing_queue_idx][3] = packet_id;
 
   lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis() + LORA_RETRANSMIT_TIME - 1000; //ack only sent 1000ms after
@@ -1686,6 +1688,7 @@ void handle_lora() {
               case PACKET_TYPE_GW_REBOOT: {
                   Serial.println(F("GW Reboot"));
                   for (uint8_t i = 0; i < 16; i++) lora_last_incoming_message_IDs[i] = 0; //counter on other side reset, so we reset too
+                  send_ack(lora_incoming_queue[p_idx][1]);
                 }
                 break;
 

@@ -10,6 +10,7 @@ Packet Type | Name | Anatomy | Description
 0 | Current Time | [1 byte Packet ID of challange] [?] [Auth Response 32 bytes] | 
 1 | Add Water to Irrigate | [1 byte Packet ID of challange] [Liters 2 bytes] [Auth Response 32 bytes] |
 2 | Cancel Irrigation | [1 byte Packet ID of challange] [Auth Response 32 bytes] |
+241 | Reboot Notification | No Data | Packet sent once on boot
 250 | Ask for Auth challange | No Data |
 251 | Ping | |
 252 | Check Auth | [1 byte Packet ID of challange] [Auth Response 32 bytes] | Debug command to see if you have the right key without doing sth
@@ -20,6 +21,7 @@ Packet Type | Name | Anatomy | Description
 0 | System Status | [4+4 bit status] [2 byte fixed point battery voltage]| Used to broadcast system state like STATUS_IDLE. Left 4 bits are system state, right 4 ones are more info (for ex in idle: alread watered, turned off, etc). fixed point battery voltage is a uint16_t divided by 100. max value would be 65.535V
 1 | Watering State | [4+4 bit status] [2 byte unsigned int: liters left] [2 byte unsigned int: liters called] | broadcasts watering state if currently watering
 240 | Reboot Notification | No Data | Packet sent once on boot
+249 | ACK | [1 byte packet ID] |
 250 | Auth challange | [1 byte Packet ID of 250 ask] [Auth challange 16 bytes] |
 253 | Commands disabled | [1 byte Packet ID] |
 254 | Command Not Authenticated | [1 byte Packet ID] |

@@ -88,6 +88,7 @@ enum lora_packet_types_ws_to_gw { //water system to gateway
   PACKET_TYPE_WATER = 1,
   PACKET_TYPE_TEST = 69,
   PACKET_TYPE_REBOOT = 240,
+  PACKET_TYPE_WS_ACK = 249,
   PACKET_TYPE_AUTH_CHALLANGE = 250,
   PACKET_TYPE_CMD_DISABLED = 253,
   PACKET_TYPE_CMD_AUTH_FAIL = 254,
@@ -114,6 +115,7 @@ uint8_t ws_to_gw_packet_type_to_length(uint8_t pt) {
     case PACKET_TYPE_CMD_AUTH_FAIL: return 1; break;
     case PACKET_TYPE_CMD_OK: return 1; break;
     case PACKET_TYPE_REBOOT: return 0; break;
+    case PACKET_TYPE_WS_ACK: return 0; break;
     default: return 47; break;
   }
 }
@@ -892,6 +894,12 @@ void handle_lora() {
         if (!already_recieved) {
           Serial.print(F("Packet type: "));
           switch (lora_incoming_queue[p_idx][2]) {
+              case PACKET_TYPE_WS_ACK: {
+                  Serial.println(F("WS ACK"));
+                  clear_packet(lora_incoming_queue[p_idx][3]);
+                }
+                break;
+            
             case PACKET_TYPE_STATUS: {
                 Serial.println(F("Status"));
                 last_wt_status = lora_incoming_queue[p_idx][3];
