@@ -88,6 +88,7 @@ enum lora_packet_types_ws_to_gw { //water system to gateway
   PACKET_TYPE_WATER = 1,
   PACKET_TYPE_TEST = 69,
   PACKET_TYPE_REBOOT = 240,
+  PACKET_TYPE_WS_ACK = 249,
   PACKET_TYPE_AUTH_CHALLANGE = 250,
   PACKET_TYPE_CMD_DISABLED = 253,
   PACKET_TYPE_CMD_AUTH_FAIL = 254,
@@ -98,6 +99,7 @@ enum lora_packet_types_gw_to_ws { //gateway to water system
   PACKET_TYPE_CURRENT_TIME = 0,
   PACKET_TYPE_ADD_WATER = 1,
   PACKET_TYPE_CANCEL_WATER = 2,
+  PACKET_TYPE_GW_REBOOT = 241,
   PACKET_TYPE_REQUST_CHALLANGE = 250,
   PACKET_TYPE_ACK = 255
 };
@@ -113,6 +115,7 @@ uint8_t ws_to_gw_packet_type_to_length(uint8_t pt) {
     case PACKET_TYPE_CMD_AUTH_FAIL: return 1; break;
     case PACKET_TYPE_CMD_OK: return 1; break;
     case PACKET_TYPE_REBOOT: return 0; break;
+    case PACKET_TYPE_WS_ACK: return 0; break;
     default: return 47; break;
   }
 }
@@ -124,6 +127,7 @@ uint8_t gw_to_ws_packet_type_to_length(uint8_t pt) {
     case PACKET_TYPE_CURRENT_TIME: return 0; break;
     case PACKET_TYPE_ADD_WATER: return 35; break;
     case PACKET_TYPE_CANCEL_WATER: return 33; break;
+    case PACKET_TYPE_GW_REBOOT: return 0; break;
   }
 }
 //shared stuff end
@@ -599,6 +603,19 @@ void setup() {
     //LoRa.onReceive(handle_lora_packet);
     LoRa.receive();
 
+    //boot packet
+    lora_outgoing_queue[lora_outgoing_queue_idx][0] = LORA_MAGIC;
+    lora_outgoing_queue[lora_outgoing_queue_idx][1] = lora_outgoing_packet_id;
+    lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_GW_REBOOT;
+
+    lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis() - LORA_RETRANSMIT_TIME + 10000;
+    lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] =  0;
+    lora_outgoing_packet_id++;
+    if (lora_outgoing_packet_id < 1) lora_outgoing_packet_id == 1; //never let it go to 0, that causes bugs
+    lora_outgoing_queue_idx++;
+    if (lora_outgoing_queue_idx >= 4) lora_outgoing_queue_idx = 0;
+
+
     oled.drawString(0, 12, F("OK"));
     oled.display();
   }
@@ -813,7 +830,7 @@ void send_ack(byte packet_id) {
   lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_ACK;
   lora_outgoing_queue[lora_outgoing_queue_idx][3] = packet_id;
 
-  lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis() + LORA_RETRANSMIT_TIME - 1000; //ack only sent 1000ms after
+  lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis() + (LORA_RETRANSMIT_TIME / 2); //ack only sent 1000ms after
   lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] =  LORA_RETRANSMIT_TRIES - 1; //there is no response to ACKs so this ensures ther is only one ACK sent
   lora_outgoing_packet_id++;
   if (lora_outgoing_packet_id < 1) lora_outgoing_packet_id == 1; //never let it go to 0, that causes bugs
@@ -875,8 +892,17 @@ void handle_lora() {
 
         bool do_ack = true;
         if (!already_recieved) {
+          bool dedup_this = true;
           Serial.print(F("Packet type: "));
           switch (lora_incoming_queue[p_idx][2]) {
+            case PACKET_TYPE_WS_ACK: {
+                Serial.println(F("WS ACK"));
+                clear_packet(lora_incoming_queue[p_idx][3]);
+                dedup_this = false;
+                do_ack = false;
+              }
+              break;
+
             case PACKET_TYPE_STATUS: {
                 Serial.println(F("Status"));
                 last_wt_status = lora_incoming_queue[p_idx][3];
@@ -942,9 +968,12 @@ void handle_lora() {
             default:
               break;
           }
-          lora_last_incoming_message_IDs[lora_last_incoming_message_IDs_idx] = lora_incoming_queue[p_idx][1];
-          if (lora_last_incoming_message_IDs_idx >= 16) lora_last_incoming_message_IDs_idx = 0;
-          lora_last_incoming_message_IDs_idx++;
+
+          if (dedup_this) {
+            lora_last_incoming_message_IDs[lora_last_incoming_message_IDs_idx] = lora_incoming_queue[p_idx][1];
+            lora_last_incoming_message_IDs_idx++;
+            if (lora_last_incoming_message_IDs_idx >= 16) lora_last_incoming_message_IDs_idx = 0;
+          }
           last_recieved_packet_time = ntp.getEpochTime();
         }
         else Serial.println(F("Packet already recieved."));
