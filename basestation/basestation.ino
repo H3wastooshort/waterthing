@@ -608,7 +608,7 @@ void setup() {
     lora_outgoing_queue[lora_outgoing_queue_idx][1] = lora_outgoing_packet_id;
     lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_GW_REBOOT;
 
-    lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = 0;
+    lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis() - LORA_RETRANSMIT_TIME + 10000;
     lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] =  0;
     lora_outgoing_packet_id++;
     if (lora_outgoing_packet_id < 1) lora_outgoing_packet_id == 1; //never let it go to 0, that causes bugs
