@@ -98,6 +98,7 @@ enum lora_packet_types_gw_to_ws { //gateway to water system
   PACKET_TYPE_CURRENT_TIME = 0,
   PACKET_TYPE_ADD_WATER = 1,
   PACKET_TYPE_CANCEL_WATER = 2,
+  PACKET_TYPE_GW_REBOOT = 241,
   PACKET_TYPE_REQUST_CHALLANGE = 250,
   PACKET_TYPE_ACK = 255
 };
@@ -124,6 +125,7 @@ uint8_t gw_to_ws_packet_type_to_length(uint8_t pt) {
     case PACKET_TYPE_CURRENT_TIME: return 0; break;
     case PACKET_TYPE_ADD_WATER: return 35; break;
     case PACKET_TYPE_CANCEL_WATER: return 33; break;
+    case PACKET_TYPE_GW_REBOOT: return 0; break;
   }
 }
 //shared stuff end
@@ -598,6 +600,19 @@ void setup() {
     //LoRa.onTxDone(handle_lora_tx_done); //uncomment when async fixed
     //LoRa.onReceive(handle_lora_packet);
     LoRa.receive();
+
+    //boot packet
+    lora_outgoing_queue[lora_outgoing_queue_idx][0] = LORA_MAGIC;
+    lora_outgoing_queue[lora_outgoing_queue_idx][1] = lora_outgoing_packet_id;
+    lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_GW_REBOOT;
+
+    lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = 0;
+    lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] =  0;
+    lora_outgoing_packet_id++;
+    if (lora_outgoing_packet_id < 1) lora_outgoing_packet_id == 1; //never let it go to 0, that causes bugs
+    lora_outgoing_queue_idx++;
+    if (lora_outgoing_queue_idx >= 4) lora_outgoing_queue_idx = 0;
+
 
     oled.drawString(0, 12, F("OK"));
     oled.display();
