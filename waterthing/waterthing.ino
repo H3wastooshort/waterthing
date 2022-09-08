@@ -1712,7 +1712,7 @@ void handle_lora() {
 
         if (lora_incoming_queue[p_idx][0] == 42) { //if magic correct
           bool already_recieved = false;
-          for (uint8_t i = 0; i < 16; i++) if (lora_incoming_queue[p_idx][0] == lora_last_incoming_message_IDs[i]) already_recieved = true;
+          for (uint8_t i = 0; i < 16; i++) if (lora_incoming_queue[p_idx][1] == lora_last_incoming_message_IDs[i]) already_recieved = true;
 
           bool do_ack = true;
           if (!already_recieved) {
@@ -1745,7 +1745,7 @@ void handle_lora() {
             }
 
             if (dedup_this) {
-              lora_last_incoming_message_IDs[lora_last_incoming_message_IDs_idx] = lora_incoming_queue[p_idx][0];
+              lora_last_incoming_message_IDs[lora_last_incoming_message_IDs_idx] = lora_incoming_queue[p_idx][1];
               lora_last_incoming_message_IDs_idx++;
               if (lora_last_incoming_message_IDs_idx >= 16) lora_last_incoming_message_IDs_idx = 0;
             }
