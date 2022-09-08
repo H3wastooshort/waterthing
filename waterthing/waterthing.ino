@@ -1443,7 +1443,7 @@ void read_sensors_and_clock() {
   }
   if (millis() - last_lw_change > SENSOR_DEBOUNCE) sensor_values.low_water = lw;
 
-  if (settings.tank_capacity == 0) { //ignore in direct mode
+  if (settings.tank_capacity > 0) { //ignore in direct mode
     bool tb = (settings.tank_bottom_on_level == digitalRead(TANK_BOTTOM_PIN));
     static bool last_changed_tb = false;
     static uint32_t last_tb_change = 0;
