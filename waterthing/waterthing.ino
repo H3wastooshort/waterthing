@@ -24,9 +24,10 @@
 #define LOW_WATER_PIN A1
 #define TANK_BOTTOM_PIN A2
 #define TANK_TOP_PIN A3 //reused for water flow sensor when in direct mode. WARNING! change PCINT suff in setup() too!!
+#define RAIN_DETECTOR_PIN 8
+#define SENSOR_DEBOUNCE 1000
 #define PUMP_PIN 6
 #define VALVE_PIN 7
-#define RAIN_DETECTOR_PIN 8
 #define CONTROL_RELAY_INVERTED true
 
 //pcf
@@ -1432,11 +1433,48 @@ void read_sensors_and_clock() {
   }
   sensor_values.battery_voltage = (float)analogRead(BATTERY_VOLTAGE_PIN) / settings.battery_voltage_adc_divider;
 
-  sensor_values.low_water = settings.low_water_on_level == digitalRead(LOW_WATER_PIN);
-  sensor_values.tank_bottom = settings.tank_bottom_on_level == digitalRead(TANK_BOTTOM_PIN);
-  sensor_values.tank_top = settings.tank_top_on_level == digitalRead(TANK_TOP_PIN);
+  //float sw debounce
+  bool lw = (settings.low_water_on_level == digitalRead(LOW_WATER_PIN));
+  static bool last_changed_lw = false;
+  static uint32_t last_lw_change = 0;
+  if (lw != last_changed_lw) {
+    last_lw_change = millis();
+    last_changed_lw = lw;
+  }
+  if (millis() - last_lw_change > SENSOR_DEBOUNCE) sensor_values.low_water = lw;
 
-  bool rain_condition_now = settings.rain_detected_on_level == digitalRead(RAIN_DETECTOR_PIN);
+  if (settings.tank_capacity == 0) { //ignore in direct mode
+    bool tb = (settings.tank_bottom_on_level == digitalRead(TANK_BOTTOM_PIN));
+    static bool last_changed_tb = false;
+    static uint32_t last_tb_change = 0;
+    if (tb != last_changed_tb) {
+      last_tb_change = millis();
+      last_changed_tb = tb;
+    }
+    if (millis() - last_tb_change > SENSOR_DEBOUNCE) sensor_values.tank_bottom = tb;
+
+    bool tt = (settings.tank_top_on_level == digitalRead(TANK_TOP_PIN));
+    static bool last_changed_tt = false;
+    static uint32_t last_tt_change = 0;
+    if (tt != last_changed_tt) {
+      last_tt_change = millis();
+      last_changed_tt = tt;
+    }
+    if (millis() - last_tt_change > SENSOR_DEBOUNCE) sensor_values.tank_top = tt;
+  }
+
+
+  //rain
+  bool rain_condition_now = false;
+  bool rc = (settings.rain_detected_on_level == digitalRead(RAIN_DETECTOR_PIN));
+  static bool last_changed_rc = false;
+  static uint32_t last_rc_change = 0;
+  if (rc != last_changed_rc) {
+    last_rc_change = millis();
+    last_changed_rc = rc;
+  }
+  if (millis() - last_rc_change > SENSOR_DEBOUNCE) rain_condition_now = rc;
+
   static bool last_rain_condition = false;
   if (rain_condition_now != last_rain_condition and millis() - sensor_values.rain_start_millis > 10000 and millis() - sensor_values.rain_end_millis > 10000) { //if changed set millis vars and debounce rain sensor
 
