@@ -465,7 +465,11 @@ void edit_change_callback() {
     case PAGE_TIMER:
       if (!menu_editing) { //if leaving edit mode
         if (menu_entry_cursor > 0) {
-          irrigation_timer.last_watering_day = 0;
+          //if the time already happened today, be done.
+          if (irrigation_timer.start_hour > current_time.Hour) irrigation_timer.last_watering_day = 0;
+          else if (irrigation_timer.start_hour == current_time.Hour and irrigation_timer.start_minute > current_time.Minute) irrigation_timer.last_watering_day = 0;
+          if (irrigation_timer.start_hour < current_time.Hour) irrigation_timer.last_watering_day = current_time.Day;
+          else if (irrigation_timer.start_hour == current_time.Hour and irrigation_timer.start_minute <= current_time.Minute) irrigation_timer.last_watering_day = current_time.Day;
           EEPROM.put(0 + sizeof(settings), irrigation_timer); //save timer settings when leaving
         }
       }

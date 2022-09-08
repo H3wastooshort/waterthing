@@ -959,9 +959,15 @@ void handle_lora() {
             case PACKET_TYPE_CMD_AUTH_FAIL:
             case PACKET_TYPE_CMD_DISABLED:
               if (auth_state == AUTH_STEP_WAIT_CMD_SUCCESS) {
+                Serial.println(F("CMD Response"));
                 auth_state = AUTH_STEP_IDLE;
                 last_auth_cmd_response = lora_incoming_queue[p_idx][2];
                 clear_packet(lora_incoming_queue[p_idx][3]);
+              }
+              break;
+
+            case PACKET_TYPE_TEST: {
+                Serial.println(F("Test"));
               }
               break;
 
