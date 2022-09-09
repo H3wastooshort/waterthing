@@ -200,6 +200,7 @@ std::map<uint8_t, String> gw_page_to_text{
 };
 uint8_t rx_indicator_blink = 0;
 uint8_t tx_indicator_blink = 0;
+uint8_t web_indicator_blink = 0;
 
 uint64_t last_disp_button_down = 0;
 void IRAM_ATTR disp_button_down() {
@@ -259,7 +260,7 @@ void draw_display_boilerplate() {
 
   //rx/tx indicators
   oled.setTextAlignment(TEXT_ALIGN_LEFT);
-  uint8_t bottom_pos = 2;
+  uint8_t bottom_pos = 0;
   oled.drawString(bottom_pos , 55, "RX");
   bottom_pos += oled.getStringWidth("RX") + 2;
   if (rx_indicator_blink > 0) {
@@ -275,8 +276,14 @@ void draw_display_boilerplate() {
     tx_indicator_blink--;
   }
   else  oled.drawRect(bottom_pos, 55, 8, 8);
-
-  //oled.display();
+  bottom_pos += 8 + 4;
+  oled.drawString(bottom_pos , 55, "WEB");
+  bottom_pos += oled.getStringWidth("WEB") + 2;
+  if (web_indicator_blink > 0) {
+    oled.fillRect(bottom_pos, 55, 8, 8);
+    web_indicator_blink--;
+  }
+  else  oled.drawRect(bottom_pos, 55, 8, 8);
 }
 
 void config_ap_callback(WiFiManager *myWiFiManager) {
@@ -327,6 +334,7 @@ bool check_auth() {
 }
 
 void rest_status() {
+  web_indicator_blink += 1;
   DynamicJsonDocument stuff(1024);
   stuff["status"]["state"] = last_wt_status >> 4;
   stuff["status"]["extra"] = last_wt_status & 0b00001111;
@@ -351,6 +359,7 @@ void rest_status() {
 
 
 void rest_login() {
+  web_indicator_blink += 1;
   if (check_auth()) {
     server.send(200, "application/json", "{\"success\":\"Already Authenticated.\"}");
     Serial.println(F("Login Attempt: Already Authed"));
@@ -394,6 +403,7 @@ void rest_login() {
 }
 
 void rest_control() {
+  web_indicator_blink += 1;
   if (!check_auth()) {
     server.send(403, "application/json", "{\"error\":403}");
     return;
@@ -435,6 +445,7 @@ void rest_control() {
 }
 
 void rest_control_status() {
+  web_indicator_blink += 1;
   uint16_t status_code = 200;
   DynamicJsonDocument resp(128);
 
@@ -454,6 +465,7 @@ void rest_control_status() {
 }
 
 void rest_admin_get() {
+  web_indicator_blink += 1;
   if (!check_auth()) {
     server.send(403, "application/json", "{\"error\":403}");
     return;
@@ -467,6 +479,7 @@ void rest_admin_get() {
 }
 
 void rest_admin_set() {
+  web_indicator_blink += 1;
   if (!check_auth()) {
     server.send(403, "application/json", "{\"error\":403}");
     return;
@@ -474,6 +487,7 @@ void rest_admin_set() {
 }
 
 void rest_debug() {
+  web_indicator_blink += 1;
   if (!check_auth()) {
     server.send(403, "application/json", "{\"error\":403}");
     return;
