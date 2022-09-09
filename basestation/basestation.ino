@@ -190,14 +190,21 @@ std::map<byte, String> status_to_text {
 };
 
 //display
+enum gw_page_e {PAGE_STATUS = 0, PAGE_WT = 1, PAGE_LORA = 2, PAGE_WIFI = 3};
 uint8_t disp_page = 0;
+std::map<uint8_t, String> gw_page_to_text{
+  {PAGE_STATUS, "Stat"},
+  {PAGE_WT, "WT"},
+  {PAGE_LORA, "LoRa"},
+  {PAGE_WIFI, "WiFi"}
+};
 uint8_t rx_indicator_blink = 0;
 uint8_t tx_indicator_blink = 0;
 
 uint64_t last_disp_button_down = 0;
 void IRAM_ATTR disp_button_down() {
-  if (millis() - last_disp_button_down > 100) disp_page++;
-  if (disp_page > 2) disp_page = 0;
+  if (millis() - last_disp_button_down > 250) disp_page++;
+  if (disp_page > 3) disp_page = 0;
   last_disp_button_down = millis();
 }
 
@@ -236,9 +243,9 @@ void draw_display_boilerplate() {
   oled.setFont(Lato_Thin_8);
   oled.drawRect(0, 11, 127, 42);
 
-  //last lora rssi left
+  //page number
   oled.setTextAlignment(TEXT_ALIGN_LEFT);
-  oled.drawString(0, 0, (String)last_lora_rssi);
+  oled.drawString(0, 0, gw_page_to_text[disp_page]);
 
   //name
   oled.setTextAlignment(TEXT_ALIGN_CENTER);
@@ -250,20 +257,24 @@ void draw_display_boilerplate() {
   sprintf(time_buf, "%02d:%02d", ntp.getHours(), ntp.getMinutes());
   oled.drawString(127, 0, (String)time_buf);
 
-
-  //todo: add indicators on bottom
-
+  //rx/tx indicators
+  oled.setTextAlignment(TEXT_ALIGN_LEFT);
+  uint8_t bottom_pos = 2;
+  oled.drawString(bottom_pos , 55, "RX");
+  bottom_pos += oled.getStringWidth("RX") + 2;
   if (rx_indicator_blink > 0) {
-    oled.fillRect(2, 55, 8, 8);
+    oled.fillRect(bottom_pos, 55, 8, 8);
     rx_indicator_blink--;
   }
-  else  oled.drawRect(2, 55, 8, 8);
-
+  else  oled.drawRect(bottom_pos, 55, 8, 8);
+  bottom_pos += 8 + 4;
+  oled.drawString(bottom_pos , 55, "TX");
+  bottom_pos += oled.getStringWidth("TX") + 2;
   if (tx_indicator_blink > 0) {
-    oled.fillRect(12, 55, 8, 8);
+    oled.fillRect(bottom_pos, 55, 8, 8);
     tx_indicator_blink--;
   }
-  else  oled.drawRect(12, 55, 8, 8);
+  else  oled.drawRect(bottom_pos, 55, 8, 8);
 
   //oled.display();
 }
@@ -839,7 +850,7 @@ void update_display() {
     oled.setTextAlignment(TEXT_ALIGN_CENTER);
 
     switch (disp_page) {
-      case 0: {
+      case PAGE_STATUS: {
           String status_time = "Last Status ( ";
           uint32_t seconds_since = ntp.getEpochTime() - last_wt_status_timestamp;
           status_time += (seconds_since / 60) > 999 ? ">999" : (String)(int)round((seconds_since / 60));
@@ -850,16 +861,16 @@ void update_display() {
         }
         break;
 
-      case 1: {
+      case PAGE_WT: {
           String volt_string = "Battery: ";
           volt_string += last_wt_battery_voltage;
           volt_string += 'V';
           oled.drawString(63, 12, volt_string);
           if ((last_wt_status && 0b00010000) or (last_wt_status && 0b00100000)) { //only show while watering
-            String water_string = ""; 
+            String water_string = "";
             water_string += last_liters_left;
             water_string += " L left";
-            oled.drawString(63, 24, water_string);
+            oled.drawString(63, 25, water_string);
             String water2_string = "of ";
             water2_string += last_liters_called;
             water2_string += " L";
@@ -868,13 +879,26 @@ void update_display() {
         }
         break;
 
-      case 2: {
+      case PAGE_LORA: {
+          String rssi_string = "RSSI: ";
+          rssi_string += last_lora_rssi;
+          oled.drawString(63, 12, rssi_string);
+          String snr_string = "SNR: ";
+          snr_string += last_lora_snr;
+          oled.drawString(63, 25, snr_string);
+          String fe_string = "FE: ";
+          fe_string += last_lora_freq_error;
+          oled.drawString(63, 38, fe_string);
+        }
+        break;
+
+      case PAGE_WIFI: {
           String ip_string = "IP: ";
-          ip_string += WiFi.localIP();
+          ip_string += WiFi.localIP().toString();
           oled.drawString(63, 12, ip_string);
           String ssid_string = "SSID: ";
           ssid_string += WiFi.SSID();
-          oled.drawString(63, 12, ip_string);
+          oled.drawString(63, 25, ip_string);
         }
         break;
     }
@@ -1160,8 +1184,8 @@ void handle_lora() {
           lora_outgoing_queue_last_tx[p_idx] = 0;
           lora_outgoing_queue_tx_attempts[p_idx] = 0;
         }
-        
-        rx_indicator_blink = 0.5 * OLED_FPS;
+
+        tx_indicator_blink = 0.5 * OLED_FPS;
       }
     }
   }
