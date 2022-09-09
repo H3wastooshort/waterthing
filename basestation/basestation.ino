@@ -189,6 +189,18 @@ std::map<byte, String> status_to_text {
   {0b01111010, "TS+RTC FAIL"}
 };
 
+//display
+uint8_t disp_page = 0;
+uint8_t rx_indicator_blink = 0;
+uint8_t tx_indicator_blink = 0;
+
+uint64_t last_disp_button_down = 0;
+void IRAM_ATTR disp_button_down() {
+  if (millis() - last_disp_button_down > 100) disp_page++;
+  if (disp_page > 2) disp_page = 0;
+  last_disp_button_down = millis();
+}
+
 
 char randomASCII() { //give random lowercase ascii
   return std::min(std::max(double(std::round(LoRa.random() / 10)) + double('a'), double('z')), double('a'));
@@ -240,6 +252,18 @@ void draw_display_boilerplate() {
 
 
   //todo: add indicators on bottom
+
+  if (rx_indicator_blink > 0) {
+    oled.fillRect(2, 55, 8, 8);
+    rx_indicator_blink--;
+  }
+  else  oled.drawRect(2, 55, 8, 8);
+
+  if (tx_indicator_blink > 0) {
+    oled.fillRect(12, 55, 8, 8);
+    tx_indicator_blink--;
+  }
+  else  oled.drawRect(12, 55, 8, 8);
 
   //oled.display();
 }
@@ -800,6 +824,9 @@ void setup() {
   oled.clear();
   oled.display();
 
+  //PRG button interrupt
+  attachInterrupt(digitalPinToInterrupt(0), disp_button_down, FALLING);
+
   Serial.println(F("Booted\n"));
   digitalWrite(LED_BUILTIN, HIGH);
 }
@@ -808,16 +835,50 @@ void update_display() {
   static uint32_t last_disp_update = 0;
   if (millis() - last_disp_update > 1000 / OLED_FPS) {
     draw_display_boilerplate();
-
     oled.setFont(Lato_Thin_12);
     oled.setTextAlignment(TEXT_ALIGN_CENTER);
-    String status_time = "Last Status ( ";
-    uint32_t seconds_since = ntp.getEpochTime() - last_wt_status_timestamp;
-    status_time += (seconds_since / 60) > 999 ? ">999" : (String)(int)round((seconds_since / 60));
-    status_time += "m ago):";
-    oled.drawString(63, 12, status_time);
-    oled.setFont(Lato_Thin_20);
-    oled.drawString(63, 24, status_to_text[last_wt_status]);
+
+    switch (disp_page) {
+      case 0: {
+          String status_time = "Last Status ( ";
+          uint32_t seconds_since = ntp.getEpochTime() - last_wt_status_timestamp;
+          status_time += (seconds_since / 60) > 999 ? ">999" : (String)(int)round((seconds_since / 60));
+          status_time += "m ago):";
+          oled.drawString(63, 12, status_time);
+          oled.setFont(Lato_Thin_20);
+          oled.drawString(63, 24, status_to_text[last_wt_status]);
+        }
+        break;
+
+      case 1: {
+          String volt_string = "Battery: ";
+          volt_string += last_wt_battery_voltage;
+          volt_string += 'V';
+          oled.drawString(63, 12, volt_string);
+          if ((last_wt_status && 0b00010000) or (last_wt_status && 0b00100000)) { //only show while watering
+            String water_string = ""; 
+            water_string += last_liters_left;
+            water_string += " L left";
+            oled.drawString(63, 24, water_string);
+            String water2_string = "of ";
+            water2_string += last_liters_called;
+            water2_string += " L";
+            oled.drawString(63, 38, water2_string);
+          }
+        }
+        break;
+
+      case 2: {
+          String ip_string = "IP: ";
+          ip_string += WiFi.localIP();
+          oled.drawString(63, 12, ip_string);
+          String ssid_string = "SSID: ";
+          ssid_string += WiFi.SSID();
+          oled.drawString(63, 12, ip_string);
+        }
+        break;
+    }
+
     oled.display();
 
     last_disp_update = millis();
@@ -830,7 +891,7 @@ void send_ack(byte packet_id) {
   lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_ACK;
   lora_outgoing_queue[lora_outgoing_queue_idx][3] = packet_id;
 
-  lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis() - LORA_RETRANSMIT_TIME + 2500; //ack only sent 1000ms after
+  lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis() - LORA_RETRANSMIT_TIME + 1700; //ack only sent 1000ms after
   lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] =  LORA_RETRANSMIT_TRIES - 1; //there is no response to ACKs so this ensures ther is only one ACK sent
   lora_outgoing_packet_id++;
   if (lora_outgoing_packet_id < 1) lora_outgoing_packet_id == 1; //never let it go to 0, that causes bugs
@@ -988,6 +1049,7 @@ void handle_lora() {
 
       for (uint8_t i = 0; i < 48; i++) lora_incoming_queue[p_idx][i] = 0;
       Serial.println();
+      rx_indicator_blink = 0.5 * OLED_FPS;
     }
   }
 
@@ -1098,6 +1160,8 @@ void handle_lora() {
           lora_outgoing_queue_last_tx[p_idx] = 0;
           lora_outgoing_queue_tx_attempts[p_idx] = 0;
         }
+        
+        rx_indicator_blink = 0.5 * OLED_FPS;
       }
     }
   }
