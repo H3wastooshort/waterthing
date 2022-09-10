@@ -645,7 +645,7 @@ void setup() {
     LoRa.setSyncWord(0x12);
     LoRa.setTxPower(LORA_TX_PWR);
     LoRa.setSpreadingFactor(12);
-    LoRa.setSignalBandwidth(250E3);
+    LoRa.setSignalBandwidth(125E3);
     LoRa.setCodingRate4(8); //sf,bw,cr make a data rate of 366 bits per sec or 45,75 bytes per sec
     LoRa.enableCrc();
     //LoRa.onTxDone(handle_lora_tx_done); //uncomment when async fixed

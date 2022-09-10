@@ -210,6 +210,11 @@ uint8_t gw_to_ws_packet_type_to_length(uint8_t pt) {
 }
 //shared stuff end
 
+//auth stuff
+enum auth_states_e {
+  
+} auth_state;
+
 //global menu variables
 int8_t menu_page = 0; // 0-> main page, 1 -> Timer Setup, 2 -> Tank Setup, 3 -> Clock Setup
 int8_t menu_entry_cursor = 0; //-2 -> not in menu system, 0 -> page selection, 1-255 differs per page
@@ -808,7 +813,7 @@ void setup() {
     LoRa.setSyncWord(0x12);
     LoRa.setTxPower(LORA_TX_PWR);
     LoRa.setSpreadingFactor(12);
-    LoRa.setSignalBandwidth(250E3);
+    LoRa.setSignalBandwidth(125E3);
     LoRa.setCodingRate4(8); //sf,bw,cr make a data rate of 366 bits per sec or 45,75 bytes per sec
     LoRa.enableCrc();
     //LoRa.onTxDone(handle_lora_tx_done);
