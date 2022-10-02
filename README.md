@@ -1,6 +1,8 @@
 # waterthing
  Wierd Garden Watering system
  
+# all shit blow this is outdated, just ignore it i will fix it some day....
+
 ## pump concept
 ![concept pixelart of the setup](images/concept_pixelart_hires.png)
  

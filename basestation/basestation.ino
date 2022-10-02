@@ -526,44 +526,47 @@ void rest_debug() {
 
 enum mail_alert_enum {
   MAIL_ALERT_WATER = 0,
-  MAIL_ALERT_BAT,
-  MAIL_ALERT_RADIO_SILENCE,
-  MAIL_ALERT_GENERAL
-};
+  MAIL_ALERT_BAT = 1,
+  MAIL_ALERT_RADIO_SILENCE = 2,
+  MAIL_ALERT_GENERAL = 3,
+  MAIL_ALERT_NONE = 255
+}; //function wont take enum as arg, gonna use uint8_t
 
+uint8_t last_mail_alert = MAIL_ALERT_NONE;
 void send_email_alert(uint8_t alert_type) { //fuck this enum shit
+  if (alert_type == last_mail_alert) return;
+  last_mail_alert = alert_type;
+
   Serial.println(F("Sending mail alert:"));
   EMailSender::EMailMessage msg;
+  File msg_body_file;
   msg.mime = "text/html";
 
   switch (alert_type) { //read in first part of mail and add values
-    case uint8_t(MAIL_ALERT_WATER):
-      File msg_body_file;
-      msg.subject = "[WT] ACHTUNG: Wassertank Leer!";
-      msg_body_file = SPIFFS.open("/mail/de_alert_water.html", "r");
-      while (msg_body_file.available()) msg.message += msg_body_file.read();
-      msg_body_file.close();
-      break;
-    case uint8_t(MAIL_ALERT_BAT):
-      File msg_body_file;
-      msg.subject = "[WT] ACHTUNG: Batterie Leer!";
-      msg_body_file = SPIFFS.open("/mail/de_alert_battery.html", "r");
-      while (msg_body_file.available()) msg.message += msg_body_file.read();
-      msg_body_file.close();
-      msg.message += last_wt_battery_voltage;
-      msg.message += 'V';
-      break;
-    case uint8_t(MAIL_ALERT_WATER):
-      File msg_body_file;
-      msg.subject = "[WT] ACHTUNG: Systemfehler!";
-      msg_body_file = SPIFFS.open("/mail/de_alert_gen_fail.html", "r");
-      while (msg_body_file.available()) msg.message += msg_body_file.read();
-      msg_body_file.close();
-      //                     XXXXTMU?
-      if (last_wt_status & 0b00001000) msg.message += " * Tanksensoren Werte Unsinnig";
-      if (last_wt_status & 0b00000100) msg.message += " * RTC fehlt.";
-      if (last_wt_status & 0b00000010) msg.message += " * RTC nicht eingestellt.";
-      break;
+    case MAIL_ALERT_WATER: {
+        msg.subject = "[WT] ACHTUNG: Wassertank Leer!";
+        msg_body_file = SPIFFS.open("/mail/de_alert_water.html", "r");
+        while (msg_body_file.available()) msg.message += msg_body_file.read();
+        msg_body_file.close();
+      } break;
+    case MAIL_ALERT_BAT: {
+        msg.subject = "[WT] ACHTUNG: Batterie Leer!";
+        msg_body_file = SPIFFS.open("/mail/de_alert_battery.html", "r");
+        while (msg_body_file.available()) msg.message += msg_body_file.read();
+        msg_body_file.close();
+        msg.message += last_wt_battery_voltage;
+        msg.message += 'V';
+      } break;
+    case MAIL_ALERT_GENERAL: {
+        msg.subject = "[WT] ACHTUNG: Systemfehler!";
+        msg_body_file = SPIFFS.open("/mail/de_alert_gen_fail.html", "r");
+        while (msg_body_file.available()) msg.message += msg_body_file.read();
+        msg_body_file.close();
+        //                     XXXXTMU?
+        if (last_wt_status & 0b00001000) msg.message += " * Tanksensoren Werte Unsinnig";
+        if (last_wt_status & 0b00000100) msg.message += " * RTC fehlt.";
+        if (last_wt_status & 0b00000010) msg.message += " * RTC nicht eingestellt.";
+      } break;
   }
 
   msg.message += "\n<br><br>\nUNIX Zeist.: ";
@@ -1014,6 +1017,11 @@ void handle_lora() {
                 bat_b[1] = lora_incoming_queue[p_idx][5];
                 last_wt_battery_voltage = (double)bat_v / 100;
                 last_wt_status_timestamp = last_wt_battery_voltage_timestamp = ntp.getEpochTime();
+
+                if (last_wt_status && 0b01110000) send_email_alert(MAIL_ALERT_GENERAL);
+                else if (last_wt_status && 0b01000000) send_email_alert(MAIL_ALERT_WATER);
+                else if (last_wt_status && 0b01010000) send_email_alert(MAIL_ALERT_BATTERY);
+
               }
               break;
 

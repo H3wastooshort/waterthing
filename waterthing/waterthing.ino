@@ -88,6 +88,7 @@ struct settings_s {
   bool block_water_after_rain = false;
   byte lora_security_key[16];
   uint8_t lora_enable = 0; //0=off, 1=broadcast only, 2=control
+  //maybe verify with a crc32 here
 } settings;
 
 struct i_timer_s {
@@ -2023,8 +2024,8 @@ void handle_lora() {
           }
           else Serial.println(F("Unauthorized"));;
 
-          auth_state = AUTH_STEP_IDLE;
-          }*/
+          auth_state = AUTH_STEP_IDLE;*/
+          }
         break;
       }
   }
