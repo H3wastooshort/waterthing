@@ -219,7 +219,7 @@ enum auth_states_e {
   AUTH_STEP_RESPOND = 3
 } auth_state;
 
-byte auth_challange[16];
+byte auth_challange[16] = {0}; //all 0 means invalid
 byte last_auth_response[32];
 
 byte last_authed_cmd[16]; //only data section, not the rest
@@ -1755,8 +1755,43 @@ void handle_lora() {
                 break;
 
               case PACKET_TYPE_REQUST_CHALLANGE: {
+                  Serial.println(F("Chal. Req."));
+
                   clear_packet(lora_incoming_queue[p_idx][3]);
+
+                  for (uint8_t b = 0; b < 16; b++) auth_challange[b] = LoRa.random(); //make new challange
+
+                  lora_outgoing_queue[lora_outgoing_queue_idx][0] = 42;
+                  lora_outgoing_queue[lora_outgoing_queue_idx][1] = lora_outgoing_packet_id;
+                  lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_AUTH_CHALLANGE;
+                  lora_outgoing_queue[lora_outgoing_queue_idx][3] = lora_incoming_queue[p_idx][3]; //include packet id to not need ACK
+                  for (uint8_t b = 0; b < 16; b++) lora_outgoing_queue[lora_outgoing_queue_idx][4 + b] = auth_challange[b];
+
+                  Serial.print(F("Sending Challange: "));
+                  for (uint8_t b = 0; b < 16; b++) Serial.print(auth_challange[b], HEX);
+                  Serial.println();
+
+                  afterpacket_stuff();
+                  auth_state = AUTH_STEP_WAIT_CMD;
                   do_ack = false;
+                }
+                break;
+
+              case PACKET_TYPE_ADD_WATER: {
+                  Serial.println(F("Call for Water"));
+                  bool chal_valid = false;
+                  for (uint8_t b = 0; b < 16; b++) if (auth_challange[b] != 0) chal_valid = true;
+                  if (!chal_valid) break;
+
+                }
+                break;
+
+              case PACKET_TYPE_CANCEL_WATER: {
+                  Serial.println(F("Cancel Irrigation."));
+                  bool chal_valid = false;
+                  for (uint8_t b = 0; b < 16; b++) if (auth_challange[b] != 0) chal_valid = true;
+                  if (!chal_valid) break;
+
                 }
                 break;
 
@@ -1943,22 +1978,6 @@ void handle_lora() {
   switch (auth_state) {
     case AUTH_STEP_IDLE: {
         //do nothing
-      }
-      break;
-
-    case AUTH_STEP_MAKE_CHALLANGE: {
-        for (uint8_t b = 0; b < 16; b++) auth_challange[b] = LoRa.random(); //make new challange
-
-        lora_outgoing_queue[lora_outgoing_queue_idx][0] = 42;
-        lora_outgoing_queue[lora_outgoing_queue_idx][1] = lora_outgoing_packet_id;
-        lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_AUTH_CHALLANGE;
-        for (uint8_t b = 0; b < 16; b++) lora_outgoing_queue[lora_outgoing_queue_idx][3 + b] = auth_challange[b];
-
-        Serial.println(F("Sending Challange: "));
-        //
-
-        afterpacket_stuff();
-        auth_state = AUTH_STEP_WAIT_CMD;
       }
       break;
 
