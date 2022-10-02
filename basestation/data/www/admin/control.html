@@ -24,6 +24,7 @@
 <hr>
 
 <div class="auth_status">
+<noscript><p>JS required. Sorry.</p></noscript>
 <img style="height:16px;width:32px;" src="/admin/lora_activity_none.gif"><br>
 <ol class="auth_tx_states">
 <li id="auth_state_idle">Bereit</li>
@@ -36,12 +37,13 @@
 <p id="auth_success"></p>
 </div>
 
-<noscript><p>JS required. Sorry.</p></noscript>
+<form>
 <div class="box">
 <h2>Sofort Bewässern</h2>
 <label for="liter">Liter: </label><input id="liter_field" name="liter" type="number" min="0" max="999" step="1"></input><br>
 <button id="submit_btn_inst">Übermitteln</button><br>
 </div>
+</form>
 
 <script>
 

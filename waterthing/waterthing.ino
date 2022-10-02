@@ -1,26 +1,17 @@
 //Bewässerungssystem
-/*
-  Zyklus:
-   Pumpe An
-   Warten Bis Tank Voll
-   Pumpe Aus
-   Ventil Auf
-   Warten bis Tank leer
-   wiederholen bis gewünschte menge bewässert
-*/
 
 #include <EEPROM.h>
 #include <LiquidCrystal_I2C.h>
 #include "gfx.h"
 #include <TimeLib.h>
 #include <Wire.h>
-#include <DS1307RTC.h>
+#include <DS1307RTC.h> //https://github.com/PaulStoffregen/DS1307RTC/
 #include <math.h>
 #include <pcf8574.h> //https://github.com/MSZ98/pcf8574
 #include <SPI.h>
 #include <LoRa.h> //https://github.com/sandeepmistry/arduino-LoRa
 #include <avr/wdt.h>
-#include <Crypto.h>
+//#include <SHA256.h> https://github.com/rweather/arduinolibs/tree/master/libraries/Crypto
 
 #define LOW_WATER_PIN A1
 #define TANK_BOTTOM_PIN A2
@@ -1699,7 +1690,6 @@ void clear_packet(byte packet_id) {
 }
 
 void afterpacket_stuff() {
-  last_lora_tx = millis();
   lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = 0;
   lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] = 0;
   lora_outgoing_packet_id++;
@@ -1782,7 +1772,14 @@ void handle_lora() {
                   bool chal_valid = false;
                   for (uint8_t b = 0; b < 16; b++) if (auth_challange[b] != 0) chal_valid = true;
                   if (!chal_valid) break;
+                  union {
+                    uint16_t liters = 0;
+                    byte liters_b[2];
+                  };
+                  liters_b[0] = lora_incoming_queue[p_idx][3];
+                  liters_b[1] = lora_incoming_queue[p_idx][4];
 
+                  tank_fillings_remaining = (settings.tank_capacity > 0) ? literToTanks(liters) : liters;
                 }
                 break;
 
@@ -1792,6 +1789,7 @@ void handle_lora() {
                   for (uint8_t b = 0; b < 16; b++) if (auth_challange[b] != 0) chal_valid = true;
                   if (!chal_valid) break;
 
+                  tank_fillings_remaining = 0;
                 }
                 break;
 
@@ -1970,6 +1968,7 @@ void handle_lora() {
 
       }
 
+      last_lora_tx = millis();
       afterpacket_stuff();
     }
   }
@@ -1989,62 +1988,64 @@ void handle_lora() {
     case AUTH_STEP_RESPOND: {
         Serial.println(F("Got ACMD"));
 
-        //make hash
-        SHA256 hasher;
-        hasher.doUpdate(auth_challange, 16);
-        hasher.doUpdate(settings.lora_security_key, 16);
-        byte hash[32];
-        hasher.doFinal(hash);
-        Serial.print(F(" * Correct Hash: "));
-        for (uint8_t b = 0; b < 32; b++) {
+        //WHY IS THE FUCKING SHA256 SO BIG?!?! Its 16% of the flash and im already at 98% reeeeee
+
+        /*//make hash
+          SHA256 h;
+          h.reset();
+          h.update(auth_challange, 16);
+          h.update(settings.lora_security_key, 16);
+          byte hash[32];
+          h.finalize(hash, 32);
+          Serial.print(F(" * Correct Hash: "));
+          for (uint8_t b = 0; b < 32; b++) {
           Serial.print(hash[b], HEX);
           Serial.print(' ');
-        }
-        Serial.println();
+          }
+          Serial.println();
 
-        Serial.print(F(" * Received Hash: "));
-        for (uint8_t b = 0; b < 32; b++) {
+          Serial.print(F(" * Received Hash: "));
+          for (uint8_t b = 0; b < 32; b++) {
           Serial.print(last_auth_response[b], HEX);
           Serial.print(' ');
-        }
-        Serial.println();
+          }
+          Serial.println();
 
-        //compare hash
-        bool are_same = true;
-        for (uint8_t b = 0; b < 32; b++) if (last_auth_response[b] != hash[b]) are_same = false;
-
-        Serial.print(F(" * Action: "));
-        //act on command
-        if (are_same) switch (last_authed_cmd[0]) {
+          //compare hash
+          bool are_same = true;
+          for (uint8_t b = 0; b < 32; b++) if (last_auth_response[b] != hash[b]) are_same = false; //i should just use memcmp() for this why did i not think of that?!
+          Serial.print(F(" * Action: "));
+          //act on command
+          if (are_same) switch (last_authed_cmd[0]) {
             default:
               Serial.println(F("Unknown ACMD."));
               break;
           }
-        else Serial.println(F("Unauthorized"));;
+          else Serial.println(F("Unauthorized"));;
 
-        auth_state = AUTH_STEP_IDLE;
+          auth_state = AUTH_STEP_IDLE;
+          }*/
+        break;
       }
-      break;
   }
-}
 
-void loop() {
-  //Serial.println('S');
-  read_sensors_and_clock();
-  //Serial.println('P');
-  handle_pump_stuff();
-  //Serial.println('D');
-  update_display();
+  void loop() {
+    //Serial.println('S');
+    read_sensors_and_clock();
+    //Serial.println('P');
+    handle_pump_stuff();
+    //Serial.println('D');
+    update_display();
 
-  //Serial.println('U');
-  handle_serial();
-  //Serial.println('B');
-  do_stored_buttons();
-  //Serial.println('L');
-  handle_lora();
-  //Serial.println('-');
-  //Serial.println();
+    //Serial.println('U');
+    handle_serial();
+    //Serial.println('B');
+    do_stored_buttons();
+    //Serial.println('L');
+    handle_lora();
+    //Serial.println('-');
+    //Serial.println();
 
-  wdt_reset();
-  delay(10);
-}
+    wdt_reset();
+    delay(10);
+  }

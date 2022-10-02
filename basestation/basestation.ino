@@ -1,3 +1,5 @@
+//Gateway
+
 #include <EEPROM.h>
 #include <LoRa.h>
 #include <Wire.h>
@@ -16,7 +18,6 @@
 #include <ArduinoOTA.h>
 #include <map>
 #include "mbedtls/md.h"
-//#include <Crypto.h> //https://github.com/intrbiz/arduino-crypto
 
 #undef LED_BUILTIN
 #define LED_BUILTIN 25
@@ -55,8 +56,8 @@ EMailSender email("", "", "", "", 0);
 
 //conf
 struct settings_s {
-  char conf_ssid[16] = "WaterthingGW\0\0\0";
-  char conf_pass[16] = "524901457882057";
+  char conf_ssid[16] = "WaterthingGW";
+  char conf_pass[16] = "CHANGE_ME_42";
   uint8_t lora_security_key[16] = {0};
   char alert_email[32] = "max.mustermann@example.com";
   char smtp_server[32] = {0};
@@ -522,28 +523,28 @@ void rest_debug() {
   server.send(status_code, "application/json", buf);
 }
 
-/*
-  enum mail_alert_enum {
+
+enum mail_alert_enum {
   MAIL_ALERT_WATER = 0,
   MAIL_ALERT_BAT,
   MAIL_ALERT_RADIO_SILENCE,
   MAIL_ALERT_GENERAL
-  };
+};
 
-  void send_email_alert(mail_alert_enum alert_type) { //TODO: fugure out why "variable or field 'send_email_alert' declared void" when i use the mail_alert_enum
+void send_email_alert(uint8_t alert_type) { //fuck this enum shit
   Serial.println(F("Sending mail alert:"));
   EMailSender::EMailMessage msg;
   msg.mime = "text/html";
 
   switch (alert_type) { //read in first part of mail and add values
-    case MAIL_ALERT_WATER:
+    case uint8_t(MAIL_ALERT_WATER):
       File msg_body_file;
       msg.subject = "[WT] ACHTUNG: Wassertank Leer!";
       msg_body_file = SPIFFS.open("/mail/de_alert_water.html", "r");
       while (msg_body_file.available()) msg.message += msg_body_file.read();
       msg_body_file.close();
       break;
-    case MAIL_ALERT_BAT:
+    case uint8_t(MAIL_ALERT_BAT):
       File msg_body_file;
       msg.subject = "[WT] ACHTUNG: Batterie Leer!";
       msg_body_file = SPIFFS.open("/mail/de_alert_battery.html", "r");
@@ -552,7 +553,7 @@ void rest_debug() {
       msg.message += last_wt_battery_voltage;
       msg.message += 'V';
       break;
-    case MAIL_ALERT_WATER:
+    case uint8_t(MAIL_ALERT_WATER):
       File msg_body_file;
       msg.subject = "[WT] ACHTUNG: Systemfehler!";
       msg_body_file = SPIFFS.open("/mail/de_alert_gen_fail.html", "r");
@@ -578,8 +579,7 @@ void rest_debug() {
   Serial.print(F(" * Description: "));
   Serial.println(r.desc);
   Serial.println();
-  }
-*/
+}
 
 void setup() {
   pinMode(LED_BUILTIN, OUTPUT);

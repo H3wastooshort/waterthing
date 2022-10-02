@@ -19,16 +19,17 @@
 </menu>
 <hr>
 
-<noscript><p>JS required. Sorry.</p></noscript>
 <div class="box" id="login_box">
+<form>
 <h2>Login</h2>
 <label for="user">Nutzer: </label><input id="user_field" name="user"></input><br>
 <label for="pass">Passwort: </label><input id="pass_field" name="pass"></input><br>
 <button id="submit_btn">Übermitteln</button><br>
 <span id="login_msg"></span>
 </div>
+</form>
 
-<script>
+<!--<script>
 submit_btn.onclick = function () {
 	let login = {'user': user_field.value, 'pass': pass_field.value};
 	fetch("/admin/login_rest", {
@@ -53,7 +54,7 @@ submit_btn.onclick = function () {
 		}
 	});
 }
-</script>
+</script>-->
 
 </body>
 </html>
