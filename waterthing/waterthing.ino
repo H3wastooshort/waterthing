@@ -12,6 +12,7 @@
 #include <LoRa.h> //https://github.com/sandeepmistry/arduino-LoRa
 #include <avr/wdt.h>
 //#include <SHA256.h> https://github.com/rweather/arduinolibs/tree/master/libraries/Crypto
+#include "asm_sha256.h"
 
 #define LOW_WATER_PIN A1
 #define TANK_BOTTOM_PIN A2
