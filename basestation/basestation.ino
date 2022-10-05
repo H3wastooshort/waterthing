@@ -526,7 +526,7 @@ void rest_debug() {
 
 enum mail_alert_enum {
   MAIL_ALERT_WATER = 0,
-  MAIL_ALERT_BAT = 1,
+  MAIL_ALERT_BATTERY = 1,
   MAIL_ALERT_RADIO_SILENCE = 2,
   MAIL_ALERT_GENERAL = 3,
   MAIL_ALERT_NONE = 255
@@ -549,7 +549,7 @@ void send_email_alert(uint8_t alert_type) { //fuck this enum shit
         while (msg_body_file.available()) msg.message += msg_body_file.read();
         msg_body_file.close();
       } break;
-    case MAIL_ALERT_BAT: {
+    case MAIL_ALERT_BATTERY: {
         msg.subject = "[WT] ACHTUNG: Batterie Leer!";
         msg_body_file = SPIFFS.open("/mail/de_alert_battery.html", "r");
         while (msg_body_file.available()) msg.message += msg_body_file.read();
@@ -680,9 +680,13 @@ void setup() {
   delay(100);
 
   //wifi connect
-  Serial.println(F("Connecting WiFi..."));
+  Serial.print(F("Connecting to "));
+  Serial.print(wm.getWiFiSSID());
+  Serial.println(F("..."));
   oled.clear();
   oled.drawString(0, 0, "WiFi...");
+  String wifi_ssid_s = wm.getWiFiSSID(true);
+  oled.drawString(0, 16, wifi_ssid_s);
   oled.drawString(0, 40, "Hold PRG button NOW");
   oled.drawString(0, 50, "to start config AP.");
   oled.display();
