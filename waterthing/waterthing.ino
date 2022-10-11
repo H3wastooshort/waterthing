@@ -11,8 +11,7 @@
 #include <SPI.h>
 #include <LoRa.h> //https://github.com/sandeepmistry/arduino-LoRa
 #include <avr/wdt.h>
-//#include <SHA256.h> https://github.com/rweather/arduinolibs/tree/master/libraries/Crypto
-#include "asm_sha256.h"
+#include "sha256_small.h" //https://github.com/simonratner/Arduino-SHA-256
 
 #define LOW_WATER_PIN A1
 #define TANK_BOTTOM_PIN A2
@@ -30,7 +29,6 @@
 #define BLUE_LED_PIN 7
 #define TB_SENSOR_LED 2 //tank bottom sensor indicator
 #define TT_SENSOR_LED 1 //tank top sensor indicator
-//#define ACTIVITY_LED 0 //lights up on operations that take a bit longer (like drawing siplay and commonicating with lora module)
 #define PUMP_LED 0
 #define LORA_TX_LED 3
 #define LORA_RX_LED 4
@@ -442,18 +440,18 @@ void edit_change_callback() {
           if (!menu_editing) { //if leaving edit mode
             if (settings.tank_capacity > 0) tank_fillings_remaining = literToTanks(page_1_irrigate_order);
             else tank_fillings_remaining = page_1_irrigate_order;
-            /*Serial.print(F("Manual water call for "));
-              Serial.print(page_1_irrigate_order);
-              Serial.print(F("L wich makes "));
-              Serial.print(tank_fillings_remaining);
-              Serial.println(F(" tank fillings"));*/
+            /*//noser Serial.print(F("Manual water call for "));
+              //noser Serial.print(page_1_irrigate_order);
+              //noser Serial.print(F("L wich makes "));
+              //noser Serial.print(tank_fillings_remaining);
+              //noser Serial.println(F(" tank fillings"));*/
           }
         }
         else {
           system_state = STATUS_IDLE;
           tank_fillings_remaining = 0;
           menu_editing = false;
-          //Serial.print(F("Watering canceled"));
+          ////noser Serial.print(F("Watering canceled"));
         }
       }
       break;
@@ -663,24 +661,24 @@ void setup() {
   set_status_led(1, 1, 0);
 
   Serial.begin(9600);
-  //Serial.println(F("H3 Bewässerungssystem\nhttps://blog.hacker3000.cf/waterthing.php"));
+  ////noser Serial.println(F("H3 Bewässerungssystem\nhttps://blog.hacker3000.cf/waterthing.php"));
 
   wdt_reset();
 
-  //Serial.print(F("Reset Cause: "));
-  Serial.print(F("Reset: "));
+  ////noser Serial.print(F("Reset Cause: "));
+  //noser Serial.print(F("Reset: "));
   mcusr_copy = MCUSR;
   MCUSR = 0;
   if (mcusr_copy & (1 << WDRF)) {
-    //Serial.print(F("WATCHDOG! Firmware may be unstable!"));
+    ////noser Serial.print(F("WATCHDOG! Firmware may be unstable!"));
     Serial.print(F("WATCHDOG!"));
   }
   else if (mcusr_copy & (1 << BORF)) {
-    //Serial.print(F("BROWNOUT! Check your Arduino's Power Suppy!"));
+    ////noser Serial.print(F("BROWNOUT! Check your Arduino's Power Suppy!"));
     Serial.print(F("BROWNOUT!"));
   }
   else if (mcusr_copy & (1 << EXTRF)) {
-    //Serial.print(F("External. For example the Reset Button."));
+    ////noser Serial.print(F("External. For example the Reset Button."));
     Serial.print(F("External."));
   }
   else if (mcusr_copy & (1 << PORF)) {
@@ -690,7 +688,7 @@ void setup() {
 
   wdt_reset();
 
-  Serial.println(F("LCD setup..."));
+  //noser Serial.println(F("LCD setup..."));
   Wire.setClock(400000); //faster drawing
   lcd.init();
   lcd.backlight();
@@ -724,7 +722,7 @@ void setup() {
   wdt_reset();
 
   //check for LED pcf
-  //Serial.println(F("Checking for LED PCF..."));
+  ////noser Serial.println(F("Checking for LED PCF..."));
   lcd.clear();
   lcd.home();
   lcd.print(F("LED PCF8574..."));
@@ -750,7 +748,7 @@ void setup() {
   wdt_reset();
 
   //EEPROM
-  //Serial.println(F("Reading EEPROM..."));
+  ////noser Serial.println(F("Reading EEPROM..."));
   lcd.clear();
   lcd.home();
   lcd.print(F("EEPROM..."));
@@ -780,7 +778,7 @@ void setup() {
   wdt_reset();
 
   //rtc setup
-  //Serial.println(F("Setting up RTC..."));
+  ////noser Serial.println(F("Setting up RTC..."));
   lcd.clear();
   lcd.home();
   lcd.print(F("RTC..."));
@@ -811,7 +809,7 @@ void setup() {
 
   wdt_reset();
 
-  //Serial.println(F("Setting up LoRa..."));
+  ////noser Serial.println(F("Setting up LoRa..."));
   lcd.clear();
   lcd.home();
   lcd.print(F("LoRa..."));
@@ -875,7 +873,7 @@ void setup() {
   PCMSK1 |= 0b00001000; //enable pcint for pin A3
 
 
-  //Serial.println(F("System Started."));
+  ////noser Serial.println(F("System Started."));
   Serial.println();
   set_status_led(0, 0, 0);
   wdt_reset();
@@ -953,7 +951,7 @@ void update_display() {
     print_page_basics();
     switch (menu_page) {
       default:
-        //Serial.println(F("Unknown Menu Entry Selected!"));
+        ////noser Serial.println(F("Unknown Menu Entry Selected!"));
         lcd.print(F("PAGE UNKNOWN!!"));
         //menu_page = 0;
         break;
@@ -1287,8 +1285,8 @@ void update_display() {
     if (millis() - last_interface_interaction > LCD_BACKLIGHT_TIMEOUT) lcd.noBacklight();
     else lcd.backlight();
 
-    //Serial.print(F("Display drawing time [ms]: "));
-    //Serial.println(last_display_update - display_draw_start_time);
+    ////noser Serial.print(F("Display drawing time [ms]: "));
+    ////noser Serial.println(last_display_update - display_draw_start_time);
     //digitalWrite(pcf, ACTIVITY_LED, HIGH);
   }
 
@@ -1515,73 +1513,73 @@ void handle_serial() {
     if (controlCharacter == 's') btn_callback();
 
     /*if (controlCharacter == 'V') { //dump all sensor values to serial
-      Serial.println(F("Sensor Values:"));
+      //noser Serial.println(F("Sensor Values:"));
 
-      Serial.print(s_star); Serial.print(F("Low Water: "));
-      Serial.println((sensor_values.low_water) ? F("Water too low") : F("Water fine"));
-      Serial.print(s_star); Serial.print(F("Bottom Tank Swimmer: "));
-      Serial.println((sensor_values.tank_bottom) ? F("Under Water") : F("Dry"));
-      Serial.print(s_star); Serial.print(F("Top Tank Swimmer: "));
-      Serial.println((sensor_values.tank_top) ? F("Under Water") : F("Dry"));
-      Serial.print(s_star); Serial.print(F("Battery Voltage: "));
-      Serial.print(sensor_values.battery_voltage );
-      Serial.print(F("V\r\n * Water flow clicks: "));
-      Serial.println(sensor_values.water_flow_clicks);
-      Serial.print(s_star); Serial.print(s_star);Serial.print(F("Rain: "));
-      Serial.println((sensor_values.rain_detected) ? F("Detected") : F("Somewhere else"));
+      //noser Serial.print(s_star); //noser Serial.print(F("Low Water: "));
+      //noser Serial.println((sensor_values.low_water) ? F("Water too low") : F("Water fine"));
+      //noser Serial.print(s_star); //noser Serial.print(F("Bottom Tank Swimmer: "));
+      //noser Serial.println((sensor_values.tank_bottom) ? F("Under Water") : F("Dry"));
+      //noser Serial.print(s_star); //noser Serial.print(F("Top Tank Swimmer: "));
+      //noser Serial.println((sensor_values.tank_top) ? F("Under Water") : F("Dry"));
+      //noser Serial.print(s_star); //noser Serial.print(F("Battery Voltage: "));
+      //noser Serial.print(sensor_values.battery_voltage );
+      //noser Serial.print(F("V\r\n * Water flow clicks: "));
+      //noser Serial.println(sensor_values.water_flow_clicks);
+      //noser Serial.print(s_star); //noser Serial.print(s_star);//noser Serial.print(F("Rain: "));
+      //noser Serial.println((sensor_values.rain_detected) ? F("Detected") : F("Somewhere else"));
 
 
-      Serial.println(F("System: "));
+      //noser Serial.println(F("System: "));
 
-      Serial.print(s_star);Serial.print(F("Reset Cause: "));
+      //noser Serial.print(s_star);//noser Serial.print(F("Reset Cause: "));
       if (mcusr_copy & (1 << WDRF)) {
-        Serial.print(F("WATCHDOG! Firmware may be unstable!"));
+        //noser Serial.print(F("WATCHDOG! Firmware may be unstable!"));
       }
       else if (mcusr_copy & (1 << BORF)) {
-        Serial.print(F("BROWNOUT! Check your Arduino's Power Suppy!"));
+        //noser Serial.print(F("BROWNOUT! Check your Arduino's Power Suppy!"));
       }
       else if (mcusr_copy & (1 << EXTRF)) {
-        Serial.print(F("External. For example the Reset Button."));
+        //noser Serial.print(F("External. For example the Reset Button."));
       }
       else if (mcusr_copy & (1 << PORF)) {
-        Serial.print(F("Power on."));
+        //noser Serial.print(F("Power on."));
       }
-      Serial.println();
+      //noser Serial.println();
 
-      Serial.print(s_star);Serial.print(F("Uptime: "));
-      Serial.print(round(millis() / 1000));
-      Serial.print('s');
-      Serial.println();
+      //noser Serial.print(s_star);//noser Serial.print(F("Uptime: "));
+      //noser Serial.print(round(millis() / 1000));
+      //noser Serial.print('s');
+      //noser Serial.println();
 
 
-      Serial.print(s_star);Serial.print(F("New ADC divider: "));
-      Serial.println(settings.battery_voltage_adc_divider);
+      //noser Serial.print(s_star);//noser Serial.print(F("New ADC divider: "));
+      //noser Serial.println(settings.battery_voltage_adc_divider);
 
-      Serial.print(s_star);Serial.print(F("Lora Missing: "));
-      Serial.println(component_errors.lora_missing ? F("YES") : F("No"));
+      //noser Serial.print(s_star);//noser Serial.print(F("Lora Missing: "));
+      //noser Serial.println(component_errors.lora_missing ? F("YES") : F("No"));
 
-      Serial.print(s_star);Serial.print(F("LoRa Enable: "));
-      Serial.println(settings.lora_enable);
+      //noser Serial.print(s_star);//noser Serial.print(F("LoRa Enable: "));
+      //noser Serial.println(settings.lora_enable);
 
-      Serial.println();
-    }*/
+      //noser Serial.println();
+      }*/
 
     if (controlCharacter == 'G') { //generate new lora key
       for (uint8_t b = 0; b < 16; b++) settings.lora_security_key[b] = LoRa.random();
       EEPROM.put(0, settings);
 
-      Serial.println(F("New Key."));
+      //noser Serial.println(F("New Key."));
       controlCharacter = 'K';
     }
 
     if (controlCharacter == 'K') { //generate new lora key
-      Serial.print(F("LoRa Sec Key: "));
+      //noser Serial.print(F("LoRa Sec Key: "));
       for (uint8_t b = 0; b < 16; b++) {
         if (settings.lora_security_key[b] < 0x10) Serial.write('0');
-        Serial.print(settings.lora_security_key[b], HEX);
+        //noser Serial.print(settings.lora_security_key[b], HEX);
         Serial.write(' ');
       }
-      Serial.println();
+      //noser Serial.println();
     }
 
     if (controlCharacter == 'P') {
@@ -1612,16 +1610,16 @@ void handle_serial() {
     }
 
     if (controlCharacter == 'C') { //resistor divider cal, enter as C13.20 for 13.20V or C05.00 for 5V
-      //Serial.println("Calibrating Vbat ADC divider:");
-      Serial.println(F("Cal Vbat div:"));
+      ////noser Serial.println("Calibrating Vbat ADC divider:");
+      //noser Serial.println(F("Cal Vbat div:"));
       uint32_t smoothed_adc_val = 0;
       for (uint8_t s = 0; s < 64; s++) {
         smoothed_adc_val += analogRead(BATTERY_VOLTAGE_PIN);
       }
 
       smoothed_adc_val /= 64;
-      Serial.print(s_star);Serial.print(F("ADC Val: "));
-      Serial.println(smoothed_adc_val);
+      //noser Serial.print(s_star); //noser Serial.print(F("ADC Val: "));
+      //noser Serial.println(smoothed_adc_val);
 
       String volt_buf;
       for (uint8_t c = 0; c < 5; c++) { //read part after C into mem
@@ -1637,9 +1635,9 @@ void handle_serial() {
       float correct_volt = volt_buf.toFloat(); //convert it to float
 
 
-//Serial.print(F("V:"));
-      Serial.print(s_star);Serial.print(F("Voltage entered: "));
-      Serial.println(correct_volt);
+      ////noser Serial.print(F("V:"));
+      //noser Serial.print(s_star); //noser Serial.print(F("Voltage entered: "));
+      //noser Serial.println(correct_volt);
 
       settings.battery_voltage_adc_divider = smoothed_adc_val / correct_volt;
       EEPROM.put(0, settings);
@@ -1690,10 +1688,10 @@ void clear_packet(byte packet_id) {
       for (uint8_t b = 0; b < 48; b++) lora_outgoing_queue[p][b] = 0; //clear packet
       lora_outgoing_queue_last_tx[p] = 0;
       lora_outgoing_queue_tx_attempts[p] = LORA_RETRANSMIT_TRIES;
-      Serial.print(s_star);Serial.print(F("Cleared Packet ID: "));
-      Serial.println(packet_id);
-      Serial.print(s_star);Serial.print(F("Cleared Packet Slot: "));
-      Serial.println(p);
+      //noser Serial.print(s_star); //noser Serial.print(F("Cleared Packet ID: "));
+      //noser Serial.println(packet_id);
+      //noser Serial.print(s_star); //noser Serial.print(F("Cleared Packet Slot: "));
+      //noser Serial.println(p);
     }
   }
 }
@@ -1714,7 +1712,7 @@ void handle_lora() {
   if (settings.lora_enable >= 2) {
     auto possible_packet_size = LoRa.parsePacket(); //the onRecieve() callback seems to just FUCKING CRASH sometimes
     if (possible_packet_size > 0) {
-      Serial.println(F("Possible packet incoming."));
+      //noser Serial.println(F("Possible packet incoming."));
       handle_lora_packet(possible_packet_size);
     }
 
@@ -1726,15 +1724,15 @@ void handle_lora() {
         }
       if (!is_empty) {
         //digitalWrite(pcf, ACTIVITY_LED, LOW);
-        Serial.println(F("Incoming LoRa Packet:"));
-        Serial.print(s_star);Serial.print(F("Length: "));
-        Serial.println(lora_incoming_queue_len[p_idx]);
-        Serial.print(s_star);Serial.print(F("Content: "));
+        //noser Serial.println(F("Incoming LoRa Packet:"));
+        //noser Serial.print(s_star); //noser Serial.print(F("Length: "));
+        //noser Serial.println(lora_incoming_queue_len[p_idx]);
+        //noser Serial.print(s_star); //noser Serial.print(F("Content: "));
         for (uint8_t b = 0; b < min(lora_incoming_queue_len[p_idx], 48); b++) {
-          Serial.print(lora_incoming_queue[p_idx][b], HEX);
+          //noser Serial.print(lora_incoming_queue[p_idx][b], HEX);
           Serial.write(' ');
         }
-        Serial.println();
+        //noser Serial.println();
 
         if (lora_incoming_queue[p_idx][0] == 42) { //if magic correct
           bool already_recieved = false;
@@ -1743,10 +1741,10 @@ void handle_lora() {
           bool do_ack = true;
           if (!already_recieved) {
             bool dedup_this = true;
-            Serial.print(s_star);Serial.print(F("Magic Correct.\r\n * Packet type: "));
+            //noser Serial.print(s_star); //noser Serial.print(F("Magic Correct.\r\n * Packet type: "));
             switch (lora_incoming_queue[p_idx][2]) {
               case PACKET_TYPE_ACK: {
-                  Serial.println(F("ACK"));
+                  //noser Serial.println(F("ACK"));
                   clear_packet(lora_incoming_queue[p_idx][3]);
                   dedup_this = false;
                   do_ack = false;
@@ -1754,7 +1752,7 @@ void handle_lora() {
                 break;
 
               case PACKET_TYPE_REQUST_CHALLANGE: {
-                  Serial.println(F("Chal. Req."));
+                  //noser Serial.println(F("Chal. Req."));
 
                   clear_packet(lora_incoming_queue[p_idx][3]);
 
@@ -1766,9 +1764,9 @@ void handle_lora() {
                   lora_outgoing_queue[lora_outgoing_queue_idx][3] = lora_incoming_queue[p_idx][3]; //include packet id to not need ACK
                   for (uint8_t b = 0; b < 16; b++) lora_outgoing_queue[lora_outgoing_queue_idx][4 + b] = auth_challange[b];
 
-                  Serial.print(F("Sending Challange: "));
-                  for (uint8_t b = 0; b < 16; b++) Serial.print(auth_challange[b], HEX);
-                  Serial.println();
+                  //noser Serial.print(F("Sending Challange: "));
+                  for (uint8_t b = 0; b < 16; b++) //noser Serial.print(auth_challange[b], HEX);
+                  //noser Serial.println();
 
                   afterpacket_stuff();
                   auth_state = AUTH_STEP_WAIT_CMD;
@@ -1777,7 +1775,7 @@ void handle_lora() {
                 break;
 
               case PACKET_TYPE_ADD_WATER: {
-                  Serial.println(F("Call for Water"));
+                  //noser Serial.println(F("Call for Water"));
                   bool chal_valid = false;
                   for (uint8_t b = 0; b < 16; b++) if (auth_challange[b] != 0) chal_valid = true;
                   if (!chal_valid) break;
@@ -1793,7 +1791,7 @@ void handle_lora() {
                 break;
 
               case PACKET_TYPE_CANCEL_WATER: {
-                  Serial.println(F("Cancel Irrigation."));
+                  //noser Serial.println(F("Cancel Irrigation."));
                   bool chal_valid = false;
                   for (uint8_t b = 0; b < 16; b++) if (auth_challange[b] != 0) chal_valid = true;
                   if (!chal_valid) break;
@@ -1803,7 +1801,7 @@ void handle_lora() {
                 break;
 
               case PACKET_TYPE_GW_REBOOT: {
-                  Serial.println(F("GW Reboot"));
+                  //noser Serial.println(F("GW Reboot"));
                   for (uint8_t i = 0; i < 16; i++) lora_last_incoming_message_IDs[i] = 0; //counter on other side reset, so we reset too
 
                 }
@@ -1819,12 +1817,12 @@ void handle_lora() {
               if (lora_last_incoming_message_IDs_idx >= 16) lora_last_incoming_message_IDs_idx = 0;
             }
           }
-          else Serial.println(F("Packet already recieved."));
+          else //noser Serial.println(F("Packet already recieved."));
           if (do_ack) send_ack(lora_incoming_queue[p_idx][1]);
         }
         for (uint8_t i = 0; i < 48; i++) lora_incoming_queue[p_idx][i] = 0; //clear after processing
 
-        Serial.println();
+        //noser Serial.println();
         //digitalWrite(pcf, ACTIVITY_LED, HIGH);
       }
 
@@ -1845,28 +1843,28 @@ void handle_lora() {
       if (!is_empty and millis() - lora_outgoing_queue_last_tx[p_idx] > LORA_RETRANSMIT_TIME and lora_tx_ready) {
         //digitalWrite(pcf, ACTIVITY_LED, LOW);
         digitalWrite(pcf, LORA_TX_LED, LOW);
-        Serial.println(F("Sending LoRa Packet: "));
+        //noser Serial.println(F("Sending LoRa Packet: "));
 
         lora_tx_ready = false;
         LoRa.idle(); //no recieving while transmitting!
         LoRa.beginPacket();
 
         uint8_t lora_bytes = ws_to_gw_packet_type_to_length(lora_outgoing_queue[p_idx][2]) + 3 ; // check 2nd byte (packet type), get data length and add 3 for magic + packet id+ packett type
-        Serial.print(s_star);Serial.print(F("Length: "));
-        Serial.println(lora_bytes);
+        //noser Serial.print(s_star); //noser Serial.print(F("Length: "));
+        //noser Serial.println(lora_bytes);
 
-        Serial.print(s_star);Serial.print(F("Content: "));
+        //noser Serial.print(s_star); //noser Serial.print(F("Content: "));
         for (uint8_t b = 0; b < lora_bytes; b++) {
           LoRa.write(lora_outgoing_queue[p_idx][b]);
           if (lora_outgoing_queue[p_idx][b] < 0x10) Serial.write('0');
-          Serial.print(lora_outgoing_queue[p_idx][b], HEX);
+          //noser Serial.print(lora_outgoing_queue[p_idx][b], HEX);
           Serial.write(' ');
         }
         wdt_reset();
         LoRa.endPacket(/*true*/false); //tx in not async mode becaus that never seems to work
         handle_lora_tx_done();
-        Serial.println();
-        Serial.print(F("Sent"));
+        //noser Serial.println();
+        //noser Serial.print(F("Sent"));
 
         lora_outgoing_queue_last_tx[p_idx] = millis();
         lora_outgoing_queue_tx_attempts[p_idx]++;
@@ -1875,8 +1873,8 @@ void handle_lora() {
           lora_outgoing_queue_last_tx[p_idx] = 0;
           lora_outgoing_queue_tx_attempts[p_idx] = 0;
         }
-        Serial.println(F(" and Done."));
-        Serial.println();
+        //noser Serial.println(F(" and Done."));
+        //noser Serial.println();
         //digitalWrite(pcf, ACTIVITY_LED, HIGH);
       }
     }
@@ -1925,8 +1923,8 @@ void handle_lora() {
     bool state_stable = true;
     for (uint8_t s = 1; s < 8; s++) if (last_system_states_arr[s] != last_system_states_arr[s - 1]) {
         state_stable = false; //if states 2-8 not stable, wait
-        //Serial.println(F("State not Stable"));
-        //Serial.println(current_status_byte, HEX);
+        ////noser Serial.println(F("State not Stable"));
+        ////noser Serial.println(current_status_byte, HEX);
         break;
       }
 
@@ -1934,7 +1932,7 @@ void handle_lora() {
     static byte last_system_state = 0xFF;
     if (((last_system_state != current_status_byte) or (millis() - last_lora_tx > LORA_TX_INTERVAL)) and state_stable) { //if there was a change or the timer ran out and the state is stable
       last_system_state = current_status_byte;
-      Serial.println(F("Made new status to be sent"));
+      //noser Serial.println(F("Made new status to be sent"));
       //if new state, make lora packet
       lora_outgoing_queue[lora_outgoing_queue_idx][0] = LORA_MAGIC;
       lora_outgoing_queue[lora_outgoing_queue_idx][1] = lora_outgoing_packet_id;
@@ -1995,65 +1993,65 @@ void handle_lora() {
       break;
 
     case AUTH_STEP_RESPOND: {
-        Serial.println(F("Got ACMD"));
+        //noser Serial.println(F("Got ACMD"));
 
         //WHY IS THE FUCKING SHA256 SO BIG?!?! Its 16% of the flash and im already at 98% reeeeee
 
-        /*//make hash
-          SHA256 h;
-          h.reset();
-          h.update(auth_challange, 16);
-          h.update(settings.lora_security_key, 16);
-          byte hash[32];
-          h.finalize(hash, 32);
-          Serial.print(s_star);Serial.print(F("Correct Hash: "));
-          for (uint8_t b = 0; b < 32; b++) {
-          Serial.print(hash[b], HEX);
-          Serial.print(' ');
-          }
-          Serial.println();
+        //make hash
+        Sha256 sha;
+        byte *hash;
+        sha.init();
+        sha.write(auth_challange, 16);
+        sha.write(settings.lora_security_key, 16);
+        hash = sha.result();
+        //noser Serial.print(s_star); //noser Serial.print(F("Correct Hash: "));
+        for (uint8_t b = 0; b < 32; b++) {
+          //noser Serial.print(hash[b], HEX);
+          //noser Serial.print(' ');
+        }
+        //noser Serial.println();
 
-          Serial.print(s_star);Serial.print(F("Received Hash: "));
-          for (uint8_t b = 0; b < 32; b++) {
-          Serial.print(last_auth_response[b], HEX);
-          Serial.print(' ');
-          }
-          Serial.println();
+        //noser Serial.print(s_star); //noser Serial.print(F("Received Hash: "));
+        for (uint8_t b = 0; b < 32; b++) {
+          //noser Serial.print(last_auth_response[b], HEX);
+          //noser Serial.print(' ');
+        }
+        //noser Serial.println();
 
-          //compare hash
-          bool are_same = true;
-          for (uint8_t b = 0; b < 32; b++) if (last_auth_response[b] != hash[b]) are_same = false; //i should just use memcmp() for this why did i not think of that?!
-          Serial.print(s_star);Serial.print(F("Action: "));
-          //act on command
-          if (are_same) switch (last_authed_cmd[0]) {
+        //compare hash
+        bool are_same = true;
+        for (uint8_t b = 0; b < 32; b++) if (last_auth_response[b] != hash[b]) are_same = false; //i should just use memcmp() for this why did i not think of that?!
+        //noser Serial.print(s_star); //noser Serial.print(F("Action: "));
+        //act on command
+        if (are_same) switch (last_authed_cmd[0]) {
             default:
-              Serial.println(F("Unknown ACMD."));
+              //noser Serial.println(F("Unknown ACMD."));
               break;
           }
-          else Serial.println(F("Unauthorized"));;
+        else //noser Serial.println(F("Unauthorized"));;
 
-          auth_state = AUTH_STEP_IDLE;*/
+        auth_state = AUTH_STEP_IDLE;
       }
       break;
   }
 }
 
 void loop() {
-  //Serial.println('S');
+  ////noser Serial.println('S');
   read_sensors_and_clock();
-  //Serial.println('P');
+  ////noser Serial.println('P');
   handle_pump_stuff();
-  //Serial.println('D');
+  ////noser Serial.println('D');
   update_display();
 
-  //Serial.println('U');
+  ////noser Serial.println('U');
   handle_serial();
-  //Serial.println('B');
+  ////noser Serial.println('B');
   do_stored_buttons();
-  //Serial.println('L');
+  ////noser Serial.println('L');
   handle_lora();
-  //Serial.println('-');
-  //Serial.println();
+  ////noser Serial.println('-');
+  ////noser Serial.println();
 
   wdt_reset();
   delay(10);
