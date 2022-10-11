@@ -1,2 +1,4 @@
 
 *.tmp
+waterthing/sha256_small.h
+waterthing/sha256_small.cpp
