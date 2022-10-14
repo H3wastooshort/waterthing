@@ -212,7 +212,8 @@ void IRAM_ATTR disp_button_down() {
 
 
 char randomASCII() { //give random lowercase ascii
-  return std::min(std::max(double(std::round(LoRa.random() / 10)) + double('a'), double('z')), double('a'));
+  delay(0.5);
+  return std::max(std::min(double(std::round(LoRa.random() / 10)) + double('a'), double('z')), double('a'));
 }
 
 void handle_lora_packet(int packet_size) { //TODO: maybe move magic checking here
@@ -305,28 +306,34 @@ void config_ap_callback(WiFiManager *myWiFiManager) {
 
 
 bool check_auth() {
-  String cookie_header = server.header("Cookie");
-  uint16_t lc_start = cookie_header.indexOf("login_cookie=");
-  uint16_t lc_end = cookie_header.substring(lc_start).indexOf("; ");
-
-  String login_cookie = cookie_header.substring(lc_start, lc_end);
-
   Serial.println(F("Authed Access Attempt"));
-  Serial.print(F(" * Cookie: "));
-  Serial.println(login_cookie);
-  Serial.print(F(" * Cookie Length: "));
-  Serial.println(login_cookie.length());
-
   bool authed = false;
-  if (login_cookie.length() == 32) {
-    for (uint16_t c; c <= 255; c++) { //check if login cookie valid
-      String correct_l_cookie = web_login_cookies[c];
-      if (login_cookie.equals(correct_l_cookie)) {
-        authed = true;
-        break;
+  
+  if (server.hasHeader("Cookie")) {
+    String cookie_header = server.header("Cookie");
+    uint16_t lc_start = cookie_header.indexOf("login_cookie=");
+    uint16_t lc_end = cookie_header.substring(lc_start).indexOf("; ");
+    if (lc_end == 0) lc_end = cookie_header.length() - lc_start;
+    String login_cookie = cookie_header.substring(lc_start+13, lc_end);
+
+    Serial.print(F(" * Header: "));
+    Serial.println(cookie_header);
+    Serial.print(F(" * Cookie: "));
+    Serial.println(login_cookie);
+    Serial.print(F(" * Cookie Length: "));
+    Serial.println(login_cookie.length());
+
+    if (login_cookie.length() == 32) {
+      for (uint16_t c; c <= 255; c++) { //check if login cookie valid
+        String correct_l_cookie = web_login_cookies[c];
+        if (login_cookie.equals(correct_l_cookie)) {
+          authed = true;
+          break;
+        }
       }
     }
   }
+  else Serial.println(F(" * Cookie Header Missing"));
 
   Serial.print(F(" * "));
   Serial.println(authed ? F("SUCCESS") : F("FAIL"));
@@ -386,7 +393,8 @@ void rest_login() {
   Serial.println(correct_pass);
 
   if (user.equals(correct_user) and pass.equals(correct_pass)) {
-    for (uint8_t b = 0; b < 32; b++) web_login_cookies[web_login_cookies_idx][b] = randomASCII();
+    for (uint8_t b = 0; b < 31; b++) web_login_cookies[web_login_cookies_idx][b] = randomASCII();
+    web_login_cookies[web_login_cookies_idx][32] = 0;
     String cookiestring = "login_cookie=";
     cookiestring += web_login_cookies[web_login_cookies_idx];
     cookiestring += "; Path=/admin/; SameSite=Strict; Max-Age=86400"; //cookie kept for a day
@@ -431,7 +439,7 @@ void rest_control() {
     if (lora_auth_cmd_queue_idx >= 16) lora_auth_cmd_queue_idx = 0;
   }
 
-  if (req["cancel_water"].is<bool>() or server.hasArg("cancel_water")) {
+  if (req["cancel_water"] == true or server.hasArg("cancel_water")) {
     for (uint8_t b = 0; b < 16; b++) lora_auth_cmd_queue[lora_auth_cmd_queue_idx][b] = 0;
 
     lora_auth_cmd_queue[lora_auth_cmd_queue_idx][0] = PACKET_TYPE_CANCEL_WATER;
@@ -835,6 +843,9 @@ void setup() {
   oled.drawString(0, 0, "WebServer...");
   oled.display();
   SPIFFS.begin();
+  const char * headerkeys[] = {"User-Agent", "Cookie"} ;
+  size_t headerkeyssize = sizeof(headerkeys) / sizeof(char*);
+  server.collectHeaders(headerkeys, headerkeyssize);
   server.on("/rest", HTTP_GET, rest_status);
   server.on("/admin/login_rest", HTTP_POST, rest_login);
   server.on("/admin/control_rest", HTTP_GET, rest_control_status);
@@ -919,7 +930,10 @@ void update_display() {
           oled.drawString(63, 12, ip_string);
           String ssid_string = "SSID: ";
           ssid_string += WiFi.SSID();
-          oled.drawString(63, 25, ip_string);
+          oled.drawString(63, 25, ssid_string);
+          String rssi_string = "RSSI: ";
+          rssi_string +=  WiFi.RSSI();
+          oled.drawString(63, 38, rssi_string);
         }
         break;
     }
@@ -972,7 +986,7 @@ void handle_lora() {
         is_empty = false;  //check for data in packet
         break;
       }
-    if (/*!is_empty*/lora_incoming_queue[p_idx][0] == 42) {
+    if (/*!is_empty*/lora_incoming_queue[p_idx][0] == LORA_MAGIC) {
       Serial.println(F("Incoming LoRa Packet:"));
       Serial.print(F(" * Length: "));
       Serial.println(lora_incoming_queue_len[p_idx]);
@@ -991,7 +1005,7 @@ void handle_lora() {
          3... -> data
       */
 
-      if (lora_incoming_queue[p_idx][0] == 42) { //if magic correct
+      if (lora_incoming_queue[p_idx][0] == LORA_MAGIC) { //if magic correct
         Serial.println(F("Magic Correct."));
         bool already_recieved = false;
         for (uint8_t i = 0; i < 16; i++) if (lora_incoming_queue[p_idx][1] == lora_last_incoming_message_IDs[i]) already_recieved = true;

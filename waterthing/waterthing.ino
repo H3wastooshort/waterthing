@@ -1734,7 +1734,7 @@ void handle_lora() {
         }
         //noser Serial.println();
 
-        if (lora_incoming_queue[p_idx][0] == 42) { //if magic correct
+        if (lora_incoming_queue[p_idx][0] == LORA_MAGIC) { //if magic correct
           bool already_recieved = false;
           for (uint8_t i = 0; i < 16; i++) if (lora_incoming_queue[p_idx][1] == lora_last_incoming_message_IDs[i]) already_recieved = true;
 
