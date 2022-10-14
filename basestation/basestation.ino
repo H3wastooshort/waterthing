@@ -1135,7 +1135,7 @@ void handle_lora() {
   //handle auth state thing
   switch (auth_state) {
     case AUTH_STEP_IDLE: {
-        for (uint8_t p = 0; p < 4; p + 16) {
+        /*for (uint8_t p = 0; p < 4; p++) {
           bool is_empty = true;
           for (uint8_t b = 0; b < 16; b++) if (lora_auth_cmd_queue[p][b] != 0) is_empty = false;
           if (!is_empty) {
@@ -1143,7 +1143,7 @@ void handle_lora() {
             auth_state = AUTH_STEP_TX_CHALLANGE_REQUEST;
             break;
           }
-        }
+        }*/
         break;
       }
     case AUTH_STEP_TX_CHALLANGE_REQUEST: {
