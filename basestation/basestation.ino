@@ -286,6 +286,17 @@ void draw_display_boilerplate() {
     web_indicator_blink--;
   }
   else  oled.drawRect(bottom_pos, 55, 8, 8);
+  bottom_pos += 8 + 4;
+
+  //moving line to show its alive
+  static uint8_t alive_line_pos = 127;
+  static bool alive_line_dir = false; //false towards left, true towards right
+  alive_line_pos += alive_line_dir ? 1 : -1;
+  if (alive_line_pos) alive_line_pos++;
+  else alive_line_pos--;
+  if (alive_line_pos >= 127) alive_line_dir = false;
+  if (alive_line_pos <= bottom_pos) alive_line_dir = true;
+  oled.drawLine(alive_line_pos , 55, alive_line_pos, 63);
 }
 
 void config_ap_callback(WiFiManager *myWiFiManager) {
@@ -308,13 +319,13 @@ void config_ap_callback(WiFiManager *myWiFiManager) {
 bool check_auth() {
   Serial.println(F("Authed Access Attempt"));
   bool authed = false;
-  
+
   if (server.hasHeader("Cookie")) {
     String cookie_header = server.header("Cookie");
     uint16_t lc_start = cookie_header.indexOf("login_cookie=");
     uint16_t lc_end = cookie_header.substring(lc_start).indexOf("; ");
     if (lc_end == 0) lc_end = cookie_header.length() - lc_start;
-    String login_cookie = cookie_header.substring(lc_start+13, lc_end);
+    String login_cookie = cookie_header.substring(lc_start + 13, lc_end);
 
     Serial.print(F(" * Header: "));
     Serial.println(cookie_header);
@@ -323,7 +334,7 @@ bool check_auth() {
     Serial.print(F(" * Cookie Length: "));
     Serial.println(login_cookie.length());
 
-    if (login_cookie.length() == 32) {
+    if (login_cookie.length() == 31) {
       for (uint16_t c; c <= 255; c++) { //check if login cookie valid
         String correct_l_cookie = web_login_cookies[c];
         if (login_cookie.equals(correct_l_cookie)) {
@@ -393,8 +404,8 @@ void rest_login() {
   Serial.println(correct_pass);
 
   if (user.equals(correct_user) and pass.equals(correct_pass)) {
-    for (uint8_t b = 0; b < 31; b++) web_login_cookies[web_login_cookies_idx][b] = randomASCII();
-    web_login_cookies[web_login_cookies_idx][32] = 0;
+    for (uint8_t b = 0; b <= 30; b++) web_login_cookies[web_login_cookies_idx][b] = randomASCII();
+    web_login_cookies[web_login_cookies_idx][31] = 0;
     String cookiestring = "login_cookie=";
     cookiestring += web_login_cookies[web_login_cookies_idx];
     cookiestring += "; Path=/admin/; SameSite=Strict; Max-Age=86400"; //cookie kept for a day
@@ -437,6 +448,8 @@ void rest_control() {
 
     lora_auth_cmd_queue_idx++;
     if (lora_auth_cmd_queue_idx >= 16) lora_auth_cmd_queue_idx = 0;
+
+    resp["success"] = "queued water call command";
   }
 
   if (req["cancel_water"] == true or server.hasArg("cancel_water")) {
@@ -446,6 +459,8 @@ void rest_control() {
 
     lora_auth_cmd_queue_idx++;
     if (lora_auth_cmd_queue_idx >= 16) lora_auth_cmd_queue_idx = 0;
+
+    resp["success"] = "queued cancel command";
   }
 
   char buf[512];
@@ -858,7 +873,7 @@ void setup() {
     server.send(300, "text/html", "<a href=\"/index.html\">click here</a>");
   });
   server.serveStatic("/", SPIFFS, "/www/");
-  for (uint16_t c; c <= 255; c++) for (uint8_t b = 0; b < 32; b++) web_login_cookies[c][b] = randomASCII();
+  for (uint16_t c; c <= 255; c++) for (uint8_t b = 0; b < 31; b++) web_login_cookies[c][b] = randomASCII();
   server.begin();
   oled.drawString(0, 12, F("OK"));
   oled.display();
@@ -1125,11 +1140,8 @@ void handle_lora() {
           for (uint8_t b = 0; b < 16; b++) if (lora_auth_cmd_queue[p][b] != 0) is_empty = false;
           if (!is_empty) {
             lora_auth_packet_processing = p;
-            break;
-          }
-
-          if (lora_auth_packet_processing != 255) {
             auth_state = AUTH_STEP_TX_CHALLANGE_REQUEST;
+            break;
           }
         }
         break;
