@@ -33,13 +33,28 @@
 </form>
 
 <form method="POST" action="/admin/settings_rest">
+<div class="box">
 <h2>LoRa</h2>
-<span>LoRa Schlüssel: </span><input class="lora_key" name="lora_key_1" maxlength="2" size="2"></input> <input class="lora_key" name="lora_key_2" maxlength="2" size="2"></input> <input class="lora_key" name="lora_key_3" maxlength="2" size="2"></input> <input class="lora_key" name="lora_key_4" maxlength="2" size="2"></input> <input class="lora_key" name="lora_key_5" maxlength="2" size="2"></input> <input class="lora_key" name="lora_key_6" maxlength="2" size="2"></input> <input class="lora_key" name="lora_key_7" maxlength="2" size="2"></input> <input class="lora_key" name="lora_key_8" maxlength="2" size="2"></input> <input class="lora_key" name="lora_key_9" maxlength="2" size="2"></input> <input class="lora_key" name="lora_key_10" maxlength="2" size="2"></input> <input class="lora_key" name="lora_key_11" maxlength="2" size="2"></input> <input class="lora_key" name="lora_key_12" maxlength="2" size="2"></input> <input class="lora_key" name="lora_key_13" maxlength="2" size="2"></input> <input class="lora_key" name="lora_key_14" maxlength="2" size="2"></input> <input class="lora_key" name="lora_key_15" maxlength="2" size="2"></input> <input class="lora_key" name="lora_key_16" maxlength="2" size="2"></input><br>
+<span>LoRa Schlüssel: </span><input class="lora_key" pattern="[A-F,a-f,0-9]{1,2}" name="lora_key_1" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-F,a-f,0-9]{1,2}" name="lora_key_2" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-F,a-f,0-9]{1,2}" name="lora_key_3" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-F,a-f,0-9]{1,2}" name="lora_key_4" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-F,a-f,0-9]{1,2}" name="lora_key_5" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-F,a-f,0-9]{1,2}" name="lora_key_6" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-F,a-f,0-9]{1,2}" name="lora_key_7" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-F,a-f,0-9]{1,2}" name="lora_key_8" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-F,a-f,0-9]{1,2}" name="lora_key_9" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-F,a-f,0-9]{1,2}" name="lora_key_10" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-F,a-f,0-9]{1,2}" name="lora_key_11" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-F,a-f,0-9]{1,2}" name="lora_key_12" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-F,a-f,0-9]{1,2}" name="lora_key_13" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-F,a-f,0-9]{1,2}" name="lora_key_14" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-F,a-f,0-9]{1,2}" name="lora_key_15" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-F,a-f,0-9]{1,2}" name="lora_key_16" maxlength="2" size="2"></input><br>
 <button id="submit_lora">Übermitteln</button><br>
 </div>
 </form>
 <script>
-//add space between each hex byte
+function hex_change() {
+  //upper chars
+  this.value = this.value.toUpperCase();
+  
+  //skip to next
+  if (this.value.length >= 2) {
+    let next_num = Number(this.name.substring(this.name.lastIndexOf('_')+1))+1;
+	  console.log("lora_key_"+next_num);
+	  if (next_num <= 16) document.getElementsByName("lora_key_"+next_num)[0].focus();
+  }
+}
+
+Array.prototype.forEach.call(document.getElementsByClassName("lora_key"), e=> {
+  e.addEventListener("input",hex_change);
+});
 </script>
 
 <form method="POST" action="/admin/settings_rest">
