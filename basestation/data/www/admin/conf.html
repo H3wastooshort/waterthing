@@ -21,7 +21,7 @@
 
 <noscript><p>JS required for some things. Sorry.</p></noscript>
 
-<form method="POST" action="/admin/settings_rest">
+<form method="POST" action="/admin/settings">
 <div class="box">
 <h2>WiFi</h2>
 <!--<label for="wifi_ssid">WiFi SSID: </label><input id="wifi_ssid" name="wifi_ssid"></input><br>
@@ -32,10 +32,10 @@
 </div>
 </form>
 
-<form method="POST" action="/admin/settings_rest">
+<form method="POST" action="/admin/settings">
 <div class="box">
 <h2>LoRa</h2>
-<span>LoRa Schlüssel: </span><input class="lora_key" pattern="[A-F,a-f,0-9]{1,2}" name="lora_key_1" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-F,a-f,0-9]{1,2}" name="lora_key_2" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-F,a-f,0-9]{1,2}" name="lora_key_3" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-F,a-f,0-9]{1,2}" name="lora_key_4" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-F,a-f,0-9]{1,2}" name="lora_key_5" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-F,a-f,0-9]{1,2}" name="lora_key_6" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-F,a-f,0-9]{1,2}" name="lora_key_7" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-F,a-f,0-9]{1,2}" name="lora_key_8" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-F,a-f,0-9]{1,2}" name="lora_key_9" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-F,a-f,0-9]{1,2}" name="lora_key_10" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-F,a-f,0-9]{1,2}" name="lora_key_11" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-F,a-f,0-9]{1,2}" name="lora_key_12" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-F,a-f,0-9]{1,2}" name="lora_key_13" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-F,a-f,0-9]{1,2}" name="lora_key_14" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-F,a-f,0-9]{1,2}" name="lora_key_15" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-F,a-f,0-9]{1,2}" name="lora_key_16" maxlength="2" size="2"></input><br>
+<span>LoRa Schlüssel: </span><input class="lora_key" pattern="[A-Fa-f0-9]{1,2}" name="lora_key_1" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-Fa-f0-9]{1,2}" name="lora_key_2" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-Fa-f0-9]{1,2}" name="lora_key_3" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-Fa-f0-9]{1,2}" name="lora_key_4" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-Fa-f0-9]{1,2}" name="lora_key_5" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-Fa-f0-9]{1,2}" name="lora_key_6" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-Fa-f0-9]{1,2}" name="lora_key_7" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-Fa-f0-9]{1,2}" name="lora_key_8" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-Fa-f0-9]{1,2}" name="lora_key_9" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-Fa-f0-9]{1,2}" name="lora_key_10" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-Fa-f0-9]{1,2}" name="lora_key_11" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-Fa-f0-9]{1,2}" name="lora_key_12" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-Fa-f0-9]{1,2}" name="lora_key_13" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-Fa-f0-9]{1,2}" name="lora_key_14" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-Fa-f0-9]{1,2}" name="lora_key_15" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-Fa-f0-9]{1,2}" name="lora_key_16" maxlength="2" size="2"></input><br>
 <button id="submit_lora">Übermitteln</button><br>
 </div>
 </form>
@@ -43,12 +43,12 @@
 function hex_change() {
   //upper chars
   this.value = this.value.toUpperCase();
+  this.value.replaceAll(/[^a-fA-F0-9]+/g,"");
   
   //skip to next
   if (this.value.length >= 2) {
     let next_num = Number(this.name.substring(this.name.lastIndexOf('_')+1))+1;
-	  console.log("lora_key_"+next_num);
-	  if (next_num <= 16) document.getElementsByName("lora_key_"+next_num)[0].focus();
+	if (next_num <= 16) document.getElementsByName("lora_key_"+next_num)[0].focus();
   }
 }
 
@@ -57,7 +57,7 @@ Array.prototype.forEach.call(document.getElementsByClassName("lora_key"), e=> {
 });
 </script>
 
-<form method="POST" action="/admin/settings_rest">
+<form method="POST" action="/admin/settings">
 <div class="box">
 <h2>E-Mail</h2>
 <h3>Empfänger</h3>
@@ -71,14 +71,19 @@ Array.prototype.forEach.call(document.getElementsByClassName("lora_key"), e=> {
 </div>
 </form>
 
-<form method="POST" action="/admin/settings_rest">
+<form method="POST" action="/admin/settings">
 <div class="box">
 <h2>Webinterface</h2>
 <label for="web_user">Web Nutzer: </label><input id="web_user" name="web_user" maxlength="15" size="15"></input><br>
-<label for="web_pass">Web Passwort: </label><input id="web_pass" name="web_pass" maxlength="15" size="15"></input><br>
+<label for="web_pass">Web Passwort: </label><input id="web_pass" name="web_pass" maxlength="15" size="15" type="password"></input><br>
 <button id="submit_webui">Übermitteln</button><br>
 </div>
 </form>
+
+<script>
+//js in here replaces form submit that loads page with a fetch() that turns the box red/green on success/fail but does not reload page
+//this is nice bc you dont loose fields
+</script>
 
 </body>
 </html>

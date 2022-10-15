@@ -37,7 +37,7 @@
 <p id="auth_success"></p>
 </div>
 
-<form action="/admin/control_rest" method="POST">
+<form action="/admin/control" method="POST">
 <div class="box">
 <h2>Sofort Bewässern</h2>
 <label for="call_for_water">Liter: </label><input id="call_water_field" name="call_for_water" type="number" min="0" max="999" step="1"></input><br>
@@ -45,7 +45,7 @@
 </div>
 </form>
 
-<form action="/admin/control_rest" method="POST">
+<form action="/admin/control" method="POST">
 <div class="box">
 <h2>Bewässerung Stoppen</h2>
 <button id="cancel_water">STOP</button><br>
@@ -53,7 +53,7 @@
 </form>
 
 <script>
-
+//js in here replaces form submit that loads page with a fetch() that turns the box red/green on success/fail but does not reload page
 </script>
 
 </body>

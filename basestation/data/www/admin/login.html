@@ -20,7 +20,7 @@
 <hr>
 
 <div class="box" id="login_box">
-<form action="/admin/login_rest" method="POST">
+<form action="/admin/login" method="POST">
 <h2>Login</h2>
 <label for="user">Nutzer: </label><input id="user_field" name="user"></input><br>
 <label for="pass">Passwort: </label><input id="pass_field" name="pass" type="password"></input><br>
@@ -32,7 +32,7 @@
 <!--<script>
 submit_btn.onclick = function () {
 	let login = {'user': user_field.value, 'pass': pass_field.value};
-	fetch("/admin/login_rest", {
+	fetch("/admin/login", {
 		'method':'POST',
 		'credentials':'same-origin',
 		'body': JSON.stringify(login)

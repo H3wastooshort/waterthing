@@ -35,6 +35,8 @@ menu li a {
   width: max-content;
   padding: 4px;
   margin: auto;
+  margin-top: 3px;
+  margin-bottom: 3px;
 }
 
 #status_time {

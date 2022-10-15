@@ -377,6 +377,10 @@ void rest_status() {
   server.send(200, "application/json", json_stuff);
 }
 
+void rest_login_get() {
+  DynamicJsonDocument resp(128);
+  server.send(200, "application/json", check_auth() ? "true" : "false");
+}
 
 void rest_login() {
   web_indicator_blink += 1;
@@ -902,12 +906,13 @@ void setup() {
   size_t headerkeyssize = sizeof(headerkeys) / sizeof(char*);
   server.collectHeaders(headerkeys, headerkeyssize);
   server.on("/rest", HTTP_GET, rest_status);
-  server.on("/admin/login_rest", HTTP_POST, rest_login);
-  server.on("/admin/control_rest", HTTP_GET, rest_control_status);
-  server.on("/admin/control_rest", HTTP_POST, rest_control);
-  server.on("/admin/settings_rest", HTTP_POST, rest_admin_set);
-  server.on("/admin/settings_rest", HTTP_GET, rest_admin_get);
-  server.on("/admin/debug_rest", HTTP_GET, rest_debug);
+  server.on("/admin/login", HTTP_GET, rest_login_get);
+  server.on("/admin/login", HTTP_POST, rest_login);
+  server.on("/admin/control", HTTP_GET, rest_control_status);
+  server.on("/admin/control", HTTP_POST, rest_control);
+  server.on("/admin/settings", HTTP_POST, rest_admin_set);
+  server.on("/admin/settings", HTTP_GET, rest_admin_get);
+  server.on("/admin/debug", HTTP_GET, rest_debug);
   server.on("/", []() { //redirect to index
     server.sendHeader("Location", "/index.html");
     server.send(300, "text/html", "<a href=\"/index.html\">click here</a>");
