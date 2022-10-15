@@ -240,11 +240,13 @@ void handle_lora_tx_done() {
 }
 
 //display
+uint8_t alive_line_pos = 125;
+bool alive_line_dir = false; //false towards left, true towards right
 void draw_display_boilerplate() {
   oled.clear();
   oled.setColor(WHITE);
   oled.setFont(Lato_Thin_8);
-  oled.drawRect(0, 11, 127, 42);
+  oled.drawRect(0, 11, 127, 42); //content outline
 
   //page number
   oled.setTextAlignment(TEXT_ALIGN_LEFT);
@@ -289,12 +291,8 @@ void draw_display_boilerplate() {
   bottom_pos += 8 + 4;
 
   //moving line to show its alive
-  static uint8_t alive_line_pos = 127;
-  static bool alive_line_dir = false; //false towards left, true towards right
   alive_line_pos += alive_line_dir ? 1 : -1;
-  if (alive_line_pos) alive_line_pos++;
-  else alive_line_pos--;
-  if (alive_line_pos >= 127) alive_line_dir = false;
+  if (alive_line_pos >= 125) alive_line_dir = false;
   if (alive_line_pos <= bottom_pos) alive_line_dir = true;
   oled.drawLine(alive_line_pos , 55, alive_line_pos, 63);
 }
@@ -495,9 +493,20 @@ void rest_admin_get() {
     return;
   }
   uint16_t status_code = 200;
-  DynamicJsonDocument resp(512);
+  DynamicJsonDocument resp(1024);
+  //settings
+  resp["wifi"]["conf_ssid"] = settings.conf_ssid;
+  resp["wifi"]["conf_pass"] = settings.conf_pass;
+  resp["lora"]["security_key"] = settings.lora_security_key;
+  resp["mail"]["alert_email"] = settings.alert_email;
+  resp["mail"]["smtp_server"] = settings.smtp_server;
+  resp["mail"]["smtp_user"] = settings.smtp_user;
+  resp["mail"]["smtp_pass"] = settings.smtp_pass;
+  resp["mail"]["smtp_port"] = settings.smtp_port;
+  resp["mail"]["web_user"] = settings.web_user;
+  resp["mail"]["web_pass"] = settings.web_pass;
 
-  char buf[512];
+  char buf[2048];
   serializeJson(resp, buf);
   server.send(status_code, "application/json", buf);
 }
@@ -508,6 +517,34 @@ void rest_admin_set() {
     server.send(403, "application/json", "{\"error\":403}");
     return;
   }
+
+  if (server.hasArg("mail_address")) {
+    server.arg("mail_address").toCharArray(settings.alert_email, 32);
+  }
+  if (server.hasArg("smtp_server")) {
+    server.arg("smtp_server").toCharArray(settings.smtp_server, 32);
+  }
+  if (server.hasArg("smtp_user")) {
+    server.arg("smtp_user").toCharArray(settings.smtp_user, 32);
+  }
+  if (server.hasArg("smtp_pass")) {
+    server.arg("smtp_pass").toCharArray(settings.smtp_pass, 32);
+  }
+  if (server.hasArg("smtp_port")) {
+    settings.smtp_port = server.arg("smtp_port").toInt();
+  }
+  if (server.hasArg("web_user")) {
+    server.arg("web_user").toCharArray(settings.web_user, 32);
+  }
+  if (server.hasArg("conf_ssid")) {
+    server.arg("conf_ssid").toCharArray(settings.conf_ssid, 16);
+  }
+  if (server.hasArg("conf_pass")) {
+    server.arg("conf_pass").toCharArray(settings.conf_pass, 16);
+  }
+
+  EEPROM.put(0, settings);
+  server.send(200, "application/json", "{\"success\":\"ok\"");
 }
 
 void rest_debug() {
@@ -1143,7 +1180,7 @@ void handle_lora() {
             auth_state = AUTH_STEP_TX_CHALLANGE_REQUEST;
             break;
           }
-        }*/
+          }*/
         break;
       }
     case AUTH_STEP_TX_CHALLANGE_REQUEST: {

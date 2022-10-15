@@ -21,47 +21,47 @@
 
 <noscript><p>JS required for some things. Sorry.</p></noscript>
 
-<form method="POST" formaction="/admin/settings_rest">
+<form method="POST" action="/admin/settings_rest">
 <div class="box">
 <h2>WiFi</h2>
-<label for="wifi_ssid">WiFi SSID: </label><input id="wifi_ssid" name="wifi_ssid"></input><br>
-<label for="wifi_pass">WiFi Passwort: </label><input id="wifi_pass" name="wifi_pass"></input><br>
+<!--<label for="wifi_ssid">WiFi SSID: </label><input id="wifi_ssid" name="wifi_ssid"></input><br>
+<label for="wifi_pass">WiFi Passwort: </label><input id="wifi_pass" name="wifi_pass"></input><br>-->
 <label for="conf_ssid">Konfigurations SSID: </label><input id="conf_ssid" name="conf_ssid"></input><br>
 <label for="conf_pass">Konfigurations Passwort: </label><input id="conf_pass" name="conf_pass"></input><br>
-<button id="submit_btn">Übermitteln</button><br>
+<button id="submit_wifi">Übermitteln</button><br>
 </div>
 </form>
 
-<form method="POST" formaction="/admin/settings_rest">
+<form method="POST" action="/admin/settings_rest">
 <h2>LoRa</h2>
-<label for="lora_key">LoRa Schlüssel: </label><input id="lora_key" name="lora_key"></input><br>
-<button id="submit_btn">Übermitteln</button><br>
+<span>LoRa Schlüssel: </span><input class="lora_key" name="lora_key_1" maxlength="2" size="2"></input> <input class="lora_key" name="lora_key_2" maxlength="2" size="2"></input> <input class="lora_key" name="lora_key_3" maxlength="2" size="2"></input> <input class="lora_key" name="lora_key_4" maxlength="2" size="2"></input> <input class="lora_key" name="lora_key_5" maxlength="2" size="2"></input> <input class="lora_key" name="lora_key_6" maxlength="2" size="2"></input> <input class="lora_key" name="lora_key_7" maxlength="2" size="2"></input> <input class="lora_key" name="lora_key_8" maxlength="2" size="2"></input> <input class="lora_key" name="lora_key_9" maxlength="2" size="2"></input> <input class="lora_key" name="lora_key_10" maxlength="2" size="2"></input> <input class="lora_key" name="lora_key_11" maxlength="2" size="2"></input> <input class="lora_key" name="lora_key_12" maxlength="2" size="2"></input> <input class="lora_key" name="lora_key_13" maxlength="2" size="2"></input> <input class="lora_key" name="lora_key_14" maxlength="2" size="2"></input> <input class="lora_key" name="lora_key_15" maxlength="2" size="2"></input> <input class="lora_key" name="lora_key_16" maxlength="2" size="2"></input><br>
+<button id="submit_lora">Übermitteln</button><br>
 </div>
 </form>
 <script>
 //add space between each hex byte
 </script>
 
-<form method="POST" formaction="/admin/settings_rest">
+<form method="POST" action="/admin/settings_rest">
 <div class="box">
 <h2>E-Mail</h2>
 <h3>Empfänger</h3>
-<label for="wifi_ssid">Mail Empfänger: </label><input id="wifi_ssid" name="wifi_ssid"></input><br>
+<label for="mail_address">Mail Empfänger: </label><input id="mail_address" name="mail_address" maxlength="31" size="31"></input><br>
 <h3>Absender</h3>
-<label for="smtp_server">SMTP Server: </label><input id="smtp_server" name="smtp_server"></input><br>
-<label for="smtp_user">SMTP Nutername: </label><input id="smtp_user" name="smtp_user"></input><br>
-<label for="smtp_pass">SMTP Passwort: </label><input id="smtp_pass" name="smtp_pass"></input><br>
+<label for="smtp_server">SMTP Server: </label><input id="smtp_server" name="smtp_server" maxlength="31" size="31"></input><br>
+<label for="smtp_user">SMTP Nutername: </label><input id="smtp_user" name="smtp_user" maxlength="31" size="31"></input><br>
+<label for="smtp_pass">SMTP Passwort: </label><input id="smtp_pass" name="smtp_pass" maxlength="31" size="31"></input><br>
 <label for="smtp_port">SMTP Port: </label><input id="smtp_port" type="number" name="smtp_port"></input><br>
-<button id="submit_btn">Übermitteln</button><br>
+<button id="submit_mail">Übermitteln</button><br>
 </div>
 </form>
 
-<form method="POST" formaction="/admin/settings_rest">
+<form method="POST" action="/admin/settings_rest">
 <div class="box">
 <h2>Webinterface</h2>
-<label for="web_user">Web Nutzer: </label><input id="web_user" name="web_user"></input><br>
-<label for="web_pass">Web Passwort: </label><input id="web_pass" name="web_pass"></input><br>
-<button id="submit_btn">Übermitteln</button><br>
+<label for="web_user">Web Nutzer: </label><input id="web_user" name="web_user" maxlength="15" size="15"></input><br>
+<label for="web_pass">Web Passwort: </label><input id="web_pass" name="web_pass" maxlength="15" size="15"></input><br>
+<button id="submit_webui">Übermitteln</button><br>
 </div>
 </form>
 
