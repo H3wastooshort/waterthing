@@ -333,8 +333,11 @@ bool check_auth() {
     Serial.println(login_cookie.length());
 
     if (login_cookie.length() == 31) {
-      for (uint16_t c; c <= 255; c++) { //check if login cookie valid
+      for (uint16_t c = 0; c <= 255; c++) { //check if login cookie valid
         String correct_l_cookie = web_login_cookies[c];
+        Serial.print(F(" * Cookie Candidate: "));
+        Serial.println(correct_l_cookie);
+
         if (login_cookie.equals(correct_l_cookie)) {
           authed = true;
           break;
