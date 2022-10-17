@@ -680,10 +680,44 @@ void setup() {
   oled.init();
   oled.displayOn();
   oled.clear();
-  oled.setColor(WHITE);
   oled.setFont(Lato_Thin_12);
   oled.setContrast(settings.display_brightness);
   oled.flipScreenVertically();
+  oled.setColor(WHITE);
+  oled.fillRect(0, 0, 128, 64); //able to see dead pixels
+  oled.display();
+  delay(100);
+  //====dumb cool effect, you can comment this out====
+  oled.setColor(BLACK);
+  oled.setTextAlignment(TEXT_ALIGN_CENTER);
+  String boot_msg = "Waterthing Gateway";
+  uint8_t boot_msg_pos = 64;
+  for (uint16_t i = 0; i < 2048; i++) { //dumb cool effect, you can comment this out
+    if (!digitalRead(0)) { //skippable with PRG button
+      while (!digitalRead(0));;
+      delay(50);//bounce
+      break; //exit
+    }
+    
+    //lines
+    oled.setColor(BLACK);
+    oled.drawLine(random(-200, 200), random(-200, 200), random(-200, 200), random(-200, 200));
+
+    //text
+    if (i > 1024) { //after 1024 draw slowed
+      if (i % 8 and boot_msg_pos > 24) {
+          oled.setColor(BLACK);
+          oled.drawString(63, boot_msg_pos, boot_msg);
+          boot_msg_pos--;
+        }
+      oled.setColor(WHITE);
+      oled.drawString(63, boot_msg_pos, boot_msg);
+    }
+    oled.display();
+  }
+  //====effect end====
+  oled.setTextAlignment(TEXT_ALIGN_LEFT);
+  oled.setColor(WHITE);
 
   //eeprom setup
   Serial.println(F("EEPROM Setup..."));
@@ -1189,22 +1223,22 @@ void handle_lora() {
   //handle auth state thing
   switch (auth_state) {
     case AUTH_STEP_IDLE: {
-        /*for (uint8_t p = 0; p < 4; p++) {
+        for (uint8_t p = 0; p < 4; p++) {
           bool is_empty = true;
-          for (uint8_t b = 0; b < 16; b++) if (lora_auth_cmd_queue[p][b] != 0) is_empty = false;
+          //for (uint8_t b = 0; b < 16; b++) if (lora_auth_cmd_queue[p][b] != 0) is_empty = false;
           if (!is_empty) {
             lora_auth_packet_processing = p;
             auth_state = AUTH_STEP_TX_CHALLANGE_REQUEST;
             break;
           }
-          }*/
-        break;
+        }
       }
+      break;
     case AUTH_STEP_TX_CHALLANGE_REQUEST: {
         //wait for tx done (if async works).
         if (true) auth_state = AUTH_STEP_WAIT_CHALLANGE;
-        break;
       }
+      break;
     case AUTH_STEP_WAIT_CHALLANGE: {
         if (last_wt_challange != 0) {
           //generate response and put in queue
@@ -1238,17 +1272,17 @@ void handle_lora() {
           for (uint8_t b = 0; b < 16; b++) last_wt_challange[b] = 0; //invalid because used
           auth_state = AUTH_STEP_TX_ANSWER;
         };
-        break;
       }
+      break;
     case AUTH_STEP_TX_ANSWER: {
         //wait for tx done (if async works).
         if (true) auth_state = AUTH_STEP_WAIT_CMD_SUCCESS;
-        break;
       }
+      break;
     case AUTH_STEP_WAIT_CMD_SUCCESS: {
         //state is changed to next by receive/decode code
-        break;
       }
+      break;
   }
 
   //queue handle
