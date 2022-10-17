@@ -28,7 +28,7 @@
 <label for="wifi_pass">WiFi Passwort: </label><input id="wifi_pass" name="wifi_pass"></input><br>-->
 <label for="conf_ssid">Konfigurations SSID: </label><input id="conf_ssid" name="conf_ssid"></input><br>
 <label for="conf_pass">Konfigurations Passwort: </label><input id="conf_pass" name="conf_pass"></input><br>
-<button id="submit_wifi">Übermitteln</button><br>
+<button name="submit_wifi">Übermitteln</button><br>
 </div>
 </form>
 
@@ -36,7 +36,7 @@
 <div class="box">
 <h2>LoRa</h2>
 <span>LoRa Schlüssel: </span><input class="lora_key" pattern="[A-Fa-f0-9]{1,2}" name="lora_key_1" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-Fa-f0-9]{1,2}" name="lora_key_2" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-Fa-f0-9]{1,2}" name="lora_key_3" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-Fa-f0-9]{1,2}" name="lora_key_4" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-Fa-f0-9]{1,2}" name="lora_key_5" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-Fa-f0-9]{1,2}" name="lora_key_6" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-Fa-f0-9]{1,2}" name="lora_key_7" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-Fa-f0-9]{1,2}" name="lora_key_8" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-Fa-f0-9]{1,2}" name="lora_key_9" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-Fa-f0-9]{1,2}" name="lora_key_10" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-Fa-f0-9]{1,2}" name="lora_key_11" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-Fa-f0-9]{1,2}" name="lora_key_12" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-Fa-f0-9]{1,2}" name="lora_key_13" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-Fa-f0-9]{1,2}" name="lora_key_14" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-Fa-f0-9]{1,2}" name="lora_key_15" maxlength="2" size="2"></input> <input class="lora_key" pattern="[A-Fa-f0-9]{1,2}" name="lora_key_16" maxlength="2" size="2"></input><br>
-<button id="submit_lora">Übermitteln</button><br>
+<button name="submit_lora">Übermitteln</button><br>
 </div>
 </form>
 <script>
@@ -67,7 +67,7 @@ Array.prototype.forEach.call(document.getElementsByClassName("lora_key"), e=> {
 <label for="smtp_user">SMTP Nutername: </label><input id="smtp_user" name="smtp_user" maxlength="31" size="31"></input><br>
 <label for="smtp_pass">SMTP Passwort: </label><input id="smtp_pass" name="smtp_pass" maxlength="31" size="31"></input><br>
 <label for="smtp_port">SMTP Port: </label><input id="smtp_port" type="number" name="smtp_port"></input><br>
-<button id="submit_mail">Übermitteln</button><br>
+<button name="submit_mail">Übermitteln</button><br>
 </div>
 </form>
 
@@ -76,11 +76,13 @@ Array.prototype.forEach.call(document.getElementsByClassName("lora_key"), e=> {
 <h2>Webinterface</h2>
 <label for="web_user">Web Nutzer: </label><input id="web_user" name="web_user" maxlength="15" size="15"></input><br>
 <label for="web_pass">Web Passwort: </label><input id="web_pass" name="web_pass" maxlength="15" size="15" type="password"></input><br>
-<button id="submit_webui">Übermitteln</button><br>
+<button name="submit_webui">Übermitteln</button><br>
 </div>
 </form>
 
 <script>
+//js to load current config into fields
+
 //js in here replaces form submit that loads page with a fetch() that turns the box red/green on success/fail but does not reload page
 //this is nice bc you dont loose fields
 </script>

@@ -200,8 +200,9 @@ std::map<uint8_t, String> gw_page_to_text{
   {PAGE_WIFI, "WiFi"}
 };
 uint8_t rx_indicator_blink = 0;
-uint8_t tx_indicator_blink = 0;
+//uint8_t tx_indicator_blink = 0;
 uint8_t web_indicator_blink = 0;
+uint8_t tx_indicator_pos = 0;
 
 uint64_t last_disp_button_down = 0;
 void IRAM_ATTR disp_button_down() {
@@ -275,9 +276,11 @@ void draw_display_boilerplate() {
   bottom_pos += 8 + 4;
   oled.drawString(bottom_pos , 55, "TX");
   bottom_pos += oled.getStringWidth("TX") + 2;
-  if (tx_indicator_blink > 0) {
+  tx_indicator_pos = bottom_pos;
+  //if (tx_indicator_blink > 0) {
+  if (!lora_tx_ready) {
     oled.fillRect(bottom_pos, 55, 8, 8);
-    tx_indicator_blink--;
+    //tx_indicator_blink--;
   }
   else  oled.drawRect(bottom_pos, 55, 8, 8);
   bottom_pos += 8 + 4;
@@ -374,6 +377,7 @@ void rest_status() {
   stuff["gateway"]["wifi"]["rssi"] = WiFi.RSSI();
   char json_stuff[2048];
   serializeJsonPretty(stuff, json_stuff);
+  server.sendHeader("Refresh", "10");
   server.send(200, "application/json", json_stuff);
 }
 
@@ -416,10 +420,12 @@ void rest_login() {
     cookiestring += "; Path=/admin/; SameSite=Strict; Max-Age=86400"; //cookie kept for a day
 
     server.sendHeader("Set-Cookie", cookiestring);
+    if (!server.hasArg("plain")) server.sendHeader("Refresh", "3;url=/admin/control.html");
     server.send(200, "application/json", "{\"success\":\"Authenticated\",\"login_cookie\":\"" + cookiestring + "\"}");
     Serial.println(F(" * SUCCESS"));
   }
   else {
+    if (!server.hasArg("plain")) server.sendHeader("Refresh", "5;url=/admin/login.html");
     server.send(403, "application/json", "{\"error\":\"Credentials invalid.\"}");
     Serial.println(F(" * FAIL"));
   }
@@ -468,6 +474,7 @@ void rest_control() {
     resp["success"] = "queued cancel command";
   }
 
+  if (!server.hasArg("plain")) server.sendHeader("Refresh", "3;url=/admin/control.html");
   char buf[512];
   serializeJson(resp, buf);
   server.send(status_code, "application/json", buf);
@@ -521,6 +528,7 @@ void rest_admin_get() {
 void rest_admin_set() {
   web_indicator_blink += 1;
   if (!check_auth()) {
+    server.sendHeader("Refresh", "3;url=/admin/conf.html");
     server.send(403, "application/json", "{\"error\":403}");
     return;
   }
@@ -551,6 +559,7 @@ void rest_admin_set() {
   }
 
   EEPROM.put(0, settings);
+  server.sendHeader("Refresh", "3;url=/admin/conf.html");
   server.send(200, "application/json", "{\"success\":\"ok\"");
 }
 
@@ -1253,6 +1262,10 @@ void handle_lora() {
       if (!is_empty and millis() - lora_outgoing_queue_last_tx[p_idx] > LORA_RETRANSMIT_TIME and lora_tx_ready) {
         Serial.println(F("Sending LoRa Packet: "));
 
+        //kind of hacky way to display the tx indicator on the display. comment out if it causes visual problems
+        oled.fillRect(tx_indicator_pos, 55, 8, 8);
+        oled.display();
+
         lora_tx_ready = false;
         LoRa.idle(); //no recieving while transmitting!
         LoRa.beginPacket();
@@ -1282,7 +1295,7 @@ void handle_lora() {
           lora_outgoing_queue_tx_attempts[p_idx] = 0;
         }
 
-        tx_indicator_blink = 0.5 * OLED_FPS;
+        //tx_indicator_blink = 0.5 * OLED_FPS;
       }
     }
   }
