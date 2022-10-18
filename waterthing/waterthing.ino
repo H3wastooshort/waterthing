@@ -4,7 +4,7 @@
 ====IMPORTANT====
 If you run insto space issues (you will),
 install the Optiboot bootloader on your board (it saves about 1 kb space)
-and compile with the ATMega324 option in MightyCore (https://github.com/MCUdude/MightyCore)
+and compile with the ATMega328P option in MiniCore (https://github.com/MCUdude/MiniCore)
 as that has the correct space limit and can turn on LTO (Link-time optimizations)
 to save even more space. good luck
 */

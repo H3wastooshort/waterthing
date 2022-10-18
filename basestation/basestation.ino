@@ -214,9 +214,9 @@ void IRAM_ATTR disp_button_down() {
 
 char randomASCII() { //give random lowercase ascii
   switch (random(0, 3)) {
-  default:
-  case 0:
-    return max(min(uint8_t(random(0, 24) + 'a'), uint8_t('z')), uint8_t('a'));
+    default:
+    case 0:
+      return max(min(uint8_t(random(0, 24) + 'a'), uint8_t('z')), uint8_t('a'));
       break;
 
     case 1:

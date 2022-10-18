@@ -2,3 +2,6 @@
 *.tmp
 waterthing/sha256_small.h
 waterthing/sha256_small.cpp
+waterthing/waterthing.ino.with_bootloader_atmega328p_16000000L.hex
+waterthing/waterthing.ino_atmega328p_16000000L.hex
+waterthing/waterthing.ino_atmega328p_16000000L.lst
