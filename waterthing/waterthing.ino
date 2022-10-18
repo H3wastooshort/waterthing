@@ -1,5 +1,14 @@
 //Bewässerungssystem
 
+/*
+====IMPORTANT====
+If you run insto space issues (you will),
+install the Optiboot bootloader on your board (it saves about 1 kb space)
+and compile with the ATMega324 option in MightyCore (https://github.com/MCUdude/MightyCore)
+as that has the correct space limit and can turn on LTO (Link-time optimizations)
+to save even more space. good luck
+*/
+
 #include <EEPROM.h>
 #include <LiquidCrystal_I2C.h>
 #include "gfx.h"
@@ -1571,12 +1580,12 @@ void handle_serial() {
       for (uint8_t b = 0; b < 16; b++) settings.lora_security_key[b] = random(0, 255);
       EEPROM.put(0, settings);
 
-      //noser Serial.println(F("New Key."));
+      Serial.println(F("New Key"));
       controlCharacter = 'K';
     }
 
     if (controlCharacter == 'K') { //generate new lora key
-      //noser Serial.print(F("LoRa Sec Key: "));
+      Serial.print(F("LoRa Key: "));
       for (uint8_t b = 0; b < 16; b++) {
         if (settings.lora_security_key[b] < 0x10) Serial.write('0');
         //noser Serial.print(settings.lora_security_key[b], HEX);
@@ -1621,7 +1630,7 @@ void handle_serial() {
       }
 
       smoothed_adc_val /= 64;
-      //noser Serial.print(s_star); //noser Serial.print(F("ADC Val: "));
+      //noser Serial.print(s_star); Serial.print(F("ADC: "));
       //noser Serial.println(smoothed_adc_val);
 
       String volt_buf;
@@ -1638,8 +1647,7 @@ void handle_serial() {
       float correct_volt = volt_buf.toFloat(); //convert it to float
 
 
-      ////noser Serial.print(F("V:"));
-      //noser Serial.print(s_star); //noser Serial.print(F("Voltage entered: "));
+      //noser Serial.print(s_star); //noser Serial.print(F("V entered: "));
       //noser Serial.println(correct_volt);
 
       settings.battery_voltage_adc_divider = smoothed_adc_val / correct_volt;
@@ -1997,9 +2005,7 @@ void handle_lora() {
 
     case AUTH_STEP_RESPOND: {
         //noser Serial.println(F("Got ACMD"));
-
-        //WHY IS THE FUCKING SHA256 SO BIG?!?! Its 16% of the flash and im already at 98% reeeeee
-
+        
         //make hash
         Sha256 sha;
         byte *hash;
