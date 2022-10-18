@@ -484,7 +484,7 @@ void edit_change_callback() {
       break;
     case PAGE_LORA:
       if (menu_entry_cursor == 3) {
-        for (uint8_t b = 0; b < 16; b++) settings.lora_security_key[b] = LoRa.random();
+        for (uint8_t b = 0; b < 16; b++) settings.lora_security_key[b] = random(0, 255);
         EEPROM.put(0, settings);
         menu_editing = false;
       }
@@ -711,13 +711,13 @@ void setup() {
   lcd.print(F("Bew\x05sserungs"));
   lcd.setCursor(0, 1);
   lcd.print(F("System by H3"));
-  delay(1000);
+  delay(1000);/*
   lcd.clear();
   lcd.home();
   lcd.print(F("Blog-Artikel/Doku"));
   lcd.setCursor(0, 1);
   lcd.print(F("-> hacker3000.cf"));
-  delay(1000);
+  delay(1000);*/
 
   wdt_reset();
 
@@ -740,7 +740,8 @@ void setup() {
   }
   else {
     lcd.print(F("Missing"));
-    Serial.println(F("LED PCF missing."));
+    //Serial.println(F("LED PCF missing."));
+    Serial.println(F("PCF"));
     delay(900);
   }
   delay(100);
@@ -827,6 +828,8 @@ void setup() {
     //LoRa.onTxDone(handle_lora_tx_done);
     //LoRa.onReceive(handle_lora_packet);
     LoRa.receive();
+
+    randomSeed(LoRa.random());
 
     //boot packet
     lora_outgoing_queue[lora_outgoing_queue_idx][0] = LORA_MAGIC;
@@ -1565,7 +1568,7 @@ void handle_serial() {
       }*/
 
     if (controlCharacter == 'G') { //generate new lora key
-      for (uint8_t b = 0; b < 16; b++) settings.lora_security_key[b] = LoRa.random();
+      for (uint8_t b = 0; b < 16; b++) settings.lora_security_key[b] = random(0, 255);
       EEPROM.put(0, settings);
 
       //noser Serial.println(F("New Key."));
@@ -1756,7 +1759,7 @@ void handle_lora() {
 
                   clear_packet(lora_incoming_queue[p_idx][3]);
 
-                  for (uint8_t b = 0; b < 16; b++) auth_challange[b] = LoRa.random(); //make new challange
+                  for (uint8_t b = 0; b < 16; b++) auth_challange[b] = random(0, 255); //make new challange
 
                   lora_outgoing_queue[lora_outgoing_queue_idx][0] = 42;
                   lora_outgoing_queue[lora_outgoing_queue_idx][1] = lora_outgoing_packet_id;
@@ -1766,9 +1769,9 @@ void handle_lora() {
 
                   //noser Serial.print(F("Sending Challange: "));
                   for (uint8_t b = 0; b < 16; b++) //noser Serial.print(auth_challange[b], HEX);
-                  //noser Serial.println();
+                    //noser Serial.println();
 
-                  afterpacket_stuff();
+                    afterpacket_stuff();
                   auth_state = AUTH_STEP_WAIT_CMD;
                   do_ack = false;
                 }
@@ -1818,7 +1821,7 @@ void handle_lora() {
             }
           }
           else //noser Serial.println(F("Packet already recieved."));
-          if (do_ack) send_ack(lora_incoming_queue[p_idx][1]);
+            if (do_ack) send_ack(lora_incoming_queue[p_idx][1]);
         }
         for (uint8_t i = 0; i < 48; i++) lora_incoming_queue[p_idx][i] = 0; //clear after processing
 
@@ -2030,7 +2033,7 @@ void handle_lora() {
           }
         else //noser Serial.println(F("Unauthorized"));;
 
-        auth_state = AUTH_STEP_IDLE;
+          auth_state = AUTH_STEP_IDLE;
       }
       break;
   }

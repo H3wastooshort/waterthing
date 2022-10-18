@@ -213,8 +213,20 @@ void IRAM_ATTR disp_button_down() {
 
 
 char randomASCII() { //give random lowercase ascii
-  delay(0.5);
-  return std::max(std::min(double(std::round(LoRa.random() / 10)) + double('a'), double('z')), double('a'));
+  switch (random(0, 3)) {
+  default:
+  case 0:
+    return max(min(uint8_t(random(0, 24) + 'a'), uint8_t('z')), uint8_t('a'));
+      break;
+
+    case 1:
+      return max(min(uint8_t(random(0, 24) + 'A'), uint8_t('Z')), uint8_t('A'));
+      break;
+
+    case 2:
+      return max(min(uint8_t(random(0, 10) + '0'), uint8_t('9')), uint8_t('0'));
+      break;
+  }
 }
 
 void handle_lora_packet(int packet_size) { //TODO: maybe move magic checking here
@@ -486,7 +498,7 @@ void rest_control_status() {
   DynamicJsonDocument resp(128);
 
   uint8_t left_q = 0;
-  for (uint8_t p = 0; p < 4; p + 16) {
+  for (uint8_t p = 0; p < 4; p++) {
     bool is_empty = true;
     for (uint8_t b = 0; b < 16; b++) if (lora_auth_cmd_queue[p][b] != 0) is_empty = false;
     if (!is_empty) left_q++;
@@ -698,7 +710,7 @@ void setup() {
       delay(50);//bounce
       break; //exit
     }
-    
+
     //lines
     oled.setColor(BLACK);
     oled.drawLine(random(-200, 200), random(-200, 200), random(-200, 200), random(-200, 200));
@@ -706,10 +718,10 @@ void setup() {
     //text
     if (i > 1024) { //after 1024 draw slowed
       if (i % 8 and boot_msg_pos > 24) {
-          oled.setColor(BLACK);
-          oled.drawString(63, boot_msg_pos, boot_msg);
-          boot_msg_pos--;
-        }
+        oled.setColor(BLACK);
+        oled.drawString(63, boot_msg_pos, boot_msg);
+        boot_msg_pos--;
+      }
       oled.setColor(WHITE);
       oled.drawString(63, boot_msg_pos, boot_msg);
     }
@@ -764,6 +776,8 @@ void setup() {
     //LoRa.onTxDone(handle_lora_tx_done); //uncomment when async fixed
     //LoRa.onReceive(handle_lora_packet);
     LoRa.receive();
+
+    randomSeed(LoRa.random());
 
     //boot packet
     lora_outgoing_queue[lora_outgoing_queue_idx][0] = LORA_MAGIC;
@@ -1225,7 +1239,7 @@ void handle_lora() {
     case AUTH_STEP_IDLE: {
         for (uint8_t p = 0; p < 4; p++) {
           bool is_empty = true;
-          //for (uint8_t b = 0; b < 16; b++) if (lora_auth_cmd_queue[p][b] != 0) is_empty = false;
+          for (uint8_t b = 0; b < 16; b++) if (lora_auth_cmd_queue[p][b] != 0) is_empty = false;
           if (!is_empty) {
             lora_auth_packet_processing = p;
             auth_state = AUTH_STEP_TX_CHALLANGE_REQUEST;
@@ -1240,7 +1254,9 @@ void handle_lora() {
       }
       break;
     case AUTH_STEP_WAIT_CHALLANGE: {
-        if (last_wt_challange != 0) {
+        bool is_empty = true;
+        for (uint8_t b = 0; b < 16; b++) if (last_wt_challange[b] != 0) is_empty = false;
+        if (!is_empty) {
           //generate response and put in queue
 
           byte val_to_hash[32];
@@ -1297,6 +1313,7 @@ void handle_lora() {
         Serial.println(F("Sending LoRa Packet: "));
 
         //kind of hacky way to display the tx indicator on the display. comment out if it causes visual problems
+        oled.setColor(WHITE);
         oled.fillRect(tx_indicator_pos, 55, 8, 8);
         oled.display();
 
@@ -1329,6 +1346,9 @@ void handle_lora() {
           lora_outgoing_queue_tx_attempts[p_idx] = 0;
         }
 
+        oled.setColor(BLACK);
+        oled.fillRect(tx_indicator_pos, 55, 8, 8);
+        oled.setColor(WHITE);
         //tx_indicator_blink = 0.5 * OLED_FPS;
       }
     }
