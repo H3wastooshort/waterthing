@@ -350,8 +350,8 @@ bool check_auth() {
     if (login_cookie.length() == 31) {
       for (uint16_t c = 0; c <= 255; c++) { //check if login cookie valid
         String correct_l_cookie = web_login_cookies[c];
-        Serial.print(F(" * Cookie Candidate: "));
-        Serial.println(correct_l_cookie);
+        //Serial.print(F(" * Cookie Candidate: "));
+        //Serial.println(correct_l_cookie);
 
         if (login_cookie.equals(correct_l_cookie)) {
           authed = true;
@@ -582,7 +582,7 @@ void rest_debug() {
     return;
   }
   uint16_t status_code = 200;
-  DynamicJsonDocument stuff(4096);
+  DynamicJsonDocument stuff(8192);
 
   //settings
   stuff["settings"]["conf_ssid"] = settings.conf_ssid;
@@ -598,15 +598,18 @@ void rest_debug() {
   stuff["settings"]["display_brightness"] = settings.display_brightness;
 
   //lora queues
-  stuff["lora_tx"]["next_packet_id"] = lora_outgoing_packet_id;
+  /*stuff["lora_tx"]["next_packet_id"] = lora_outgoing_packet_id;
   for (uint8_t i = 0; i < 4; i++) for (uint8_t b = 0; b < 48; b++) stuff["lora_tx"]["send_queue"]["entries"][i][b] = lora_outgoing_queue[i][b];
-  for (uint8_t i = 0; i < 4; i++) stuff["lora_tx"]["send_queue"]["entry_attempts"][i] = lora_outgoing_queue_tx_attempts[i];
+  for (uint8_t i = 0; i < 4; i++) stuff["lora_tx"]["send_queue"]["entry_attempts"][i] = lora_outgoing_queue_tx_attempts[i];*/
 
-  for (uint8_t i = 0; i < 16; i++) stuff["lora_rx"]["last_packet_IDs"][i] = lora_last_incoming_message_IDs[i];
+  for (uint8_t i = 0; i < 4; i++) for (uint8_t b = 0; b < 16; b++) stuff["lora_tx"]["auth_send_queue"]["entries"][i][b] = lora_auth_cmd_queue[i][b];
+  stuff["lora_tx"]["auth_state"] = auth_state;
+
+/*  for (uint8_t i = 0; i < 16; i++) stuff["lora_rx"]["last_packet_IDs"][i] = lora_last_incoming_message_IDs[i];
   for (uint8_t i = 0; i < 4; i++) for (uint8_t b = 0; b < 48; b++) stuff["lora_rx"]["recive_queue"]["entries"][i][b] = lora_incoming_queue[i][b];
-  for (uint8_t i = 0; i < 4; i++) stuff["lora_rx"]["recive_queue"]["entry_len"][i] = lora_incoming_queue_len[i];
+  for (uint8_t i = 0; i < 4; i++) stuff["lora_rx"]["recive_queue"]["entry_len"][i] = lora_incoming_queue_len[i];*/
 
-  char buf[8192];
+  char buf[16384];
   serializeJson(stuff, buf);
   server.send(status_code, "application/json", buf);
 }
@@ -1238,9 +1241,9 @@ void handle_lora() {
   switch (auth_state) {
     case AUTH_STEP_IDLE: {
         for (uint8_t p = 0; p < 4; p++) {
-          bool is_empty = true;
-          for (uint8_t b = 0; b < 16; b++) if (lora_auth_cmd_queue[p][b] != 0) is_empty = false;
-          if (!is_empty) {
+          bool is_valid = false;
+          for (uint8_t b = 0; b < 16; b++) if (lora_auth_cmd_queue[p][b] != 0) is_valid = true;
+          if (is_valid) {
             lora_auth_packet_processing = p;
             auth_state = AUTH_STEP_TX_CHALLANGE_REQUEST;
             break;
@@ -1300,6 +1303,8 @@ void handle_lora() {
       }
       break;
   }
+  //Serial.print(F("Auth State: "));
+  //Serial.println(auth_state);
 
   //queue handle
   if (lora_tx_ready) {
