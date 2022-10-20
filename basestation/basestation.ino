@@ -164,7 +164,7 @@ byte last_auth_cmd_response = 0xFF;
 byte last_auth_challange_packet_id = 0xFF;
 
 //web
-char web_login_cookies[255][32];
+char web_login_cookies[256][32];
 uint8_t web_login_cookies_idx = 0;
 
 std::map<byte, String> status_to_text {
@@ -348,7 +348,7 @@ bool check_auth() {
     Serial.println(login_cookie.length());
 
     if (login_cookie.length() == 31) {
-      for (uint16_t c = 0; c <= 255; c++) { //check if login cookie valid
+      for (uint16_t c = 0; c < 256; c++) { //check if login cookie valid
         String correct_l_cookie = web_login_cookies[c];
         //Serial.print(F(" * Cookie Candidate: "));
         //Serial.println(correct_l_cookie);
@@ -694,7 +694,7 @@ void setup() {
   digitalWrite(OLED_RST_PIN, HIGH);
   delay(50);
   Serial.begin(115200);
-  
+
   sprintf(host_name, "WaterthingGW-%04X", (uint16_t)ESP.getEfuseMac()); //last part of MAC
 
   //oled
@@ -814,7 +814,7 @@ void setup() {
     while (true) delay(10);
   }
   delay(100);
-
+  
   //wifi connect
   Serial.print(F("Connecting to "));
   Serial.print(wm.getWiFiSSID());
@@ -943,7 +943,7 @@ void setup() {
   oled.display();
   ArduinoOTA.begin();
   delay(100);
-
+  
   //ntp
   Serial.println(F("NTP Setup..."));
   oled.clear();
@@ -964,6 +964,8 @@ void setup() {
   email.setEMailPassword(settings.smtp_pass);
   email.setSMTPPort(settings.smtp_port);
   email.setIsSecure(true);
+
+//MEM CORRUPT BETWEEN HERE
 
   //webserver
   Serial.println(F("WebServer Setup..."));
@@ -987,7 +989,7 @@ void setup() {
     server.send(300, "text/html", "<a href=\"/index.html\">click here</a>");
   });
   server.serveStatic("/", SPIFFS, "/www/");
-  for (uint16_t c; c <= 255; c++) for (uint8_t b = 0; b < 31; b++) web_login_cookies[c][b] = randomASCII();
+  for (uint16_t c; c < 256; c++) for (uint8_t b = 0; b < 31; b++) web_login_cookies[c][b] = randomASCII();
   server.begin();
   oled.drawString(0, 12, F("OK"));
   oled.display();
@@ -996,11 +998,10 @@ void setup() {
   oled.clear();
   oled.display();
 
+  //AND HERE
+
   //PRG button interrupt
   attachInterrupt(digitalPinToInterrupt(0), disp_button_down, FALLING);
-
-
-  for (uint8_t i = 0; i < 4; i++) for (uint8_t b = 0; b < 16; b++) lora_auth_cmd_queue[i][b] = 0;
 
   Serial.println(F("Booted\n"));
   digitalWrite(LED_BUILTIN, HIGH);
