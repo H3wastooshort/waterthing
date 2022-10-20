@@ -616,7 +616,7 @@ void rest_debug() {
   for (uint8_t i = 0; i < 16; i++) stuff["lora_rx"]["last_packet_IDs"][i] = lora_last_incoming_message_IDs[i];
   for (uint8_t i = 0; i < 4; i++) for (uint8_t b = 0; b < 48; b++) stuff["lora_rx"]["recive_queue"]["entries"][i][b] = lora_incoming_queue[i][b];
   for (uint8_t i = 0; i < 4; i++) stuff["lora_rx"]["recive_queue"]["entry_len"][i] = lora_incoming_queue_len[i];
-  
+
   Serial.println(F("DEBUG: SEND IT")); delay(10);
   char buf[4096];
   serializeJson(stuff, buf);
@@ -694,7 +694,7 @@ void setup() {
   digitalWrite(OLED_RST_PIN, HIGH);
   delay(50);
   Serial.begin(115200);
-
+  
   sprintf(host_name, "WaterthingGW-%04X", (uint16_t)ESP.getEfuseMac()); //last part of MAC
 
   //oled
@@ -998,6 +998,9 @@ void setup() {
 
   //PRG button interrupt
   attachInterrupt(digitalPinToInterrupt(0), disp_button_down, FALLING);
+
+
+  for (uint8_t i = 0; i < 4; i++) for (uint8_t b = 0; b < 16; b++) lora_auth_cmd_queue[i][b] = 0;
 
   Serial.println(F("Booted\n"));
   digitalWrite(LED_BUILTIN, HIGH);
