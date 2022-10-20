@@ -425,7 +425,7 @@ void rest_login() {
   Serial.println(correct_pass);
 
   if (user.equals(correct_user) and pass.equals(correct_pass)) {
-    for (uint8_t b = 0; b <= 30; b++) web_login_cookies[web_login_cookies_idx][b] = randomASCII();
+    for (uint8_t b = 0; b < 31; b++) web_login_cookies[web_login_cookies_idx][b] = randomASCII();
     web_login_cookies[web_login_cookies_idx][31] = 0;
     String cookiestring = "login_cookie=";
     cookiestring += web_login_cookies[web_login_cookies_idx];
@@ -576,15 +576,22 @@ void rest_admin_set() {
 }
 
 void rest_debug() {
-  web_indicator_blink += 1;
-  if (!check_auth()) {
+  Serial.println(F("DEBUG REST CALLED")); delay(10);
+  //web_indicator_blink += 1;
+  /*if (!check_auth()) {
     server.send(403, "application/json", "{\"error\":403}");
     return;
-  }
-  uint16_t status_code = 200;
-  DynamicJsonDocument stuff(8192);
+    }*/
+  Serial.println(F("DEBUG AUTH OK")); delay(10);
+
+  DynamicJsonDocument stuff(4096);
+
+  //ram
+  Serial.println(F("DEBUG: RAM")); delay(10);
+  stuff["memory"]["heap_free"] = ESP.getFreeHeap();
 
   //settings
+  Serial.println(F("DEBUG: SETTINGS"));
   stuff["settings"]["conf_ssid"] = settings.conf_ssid;
   stuff["settings"]["conf_pass"] = settings.conf_pass;
   stuff["settings"]["lora_security_key"] = settings.lora_security_key;
@@ -593,25 +600,27 @@ void rest_debug() {
   stuff["settings"]["smtp_user"] = settings.smtp_user;
   //stuff["settings"]["smtp_pass"] = settings.smtp_pass;
   stuff["settings"]["smtp_port"] = settings.smtp_port;
-  stuff["settings"]["web_user"] = settings.web_user;
-  stuff["settings"]["web_pass"] = settings.web_pass;
+  //stuff["settings"]["web_user"] = settings.web_user;
+  //stuff["settings"]["web_pass"] = settings.web_pass;
   stuff["settings"]["display_brightness"] = settings.display_brightness;
 
   //lora queues
-  /*stuff["lora_tx"]["next_packet_id"] = lora_outgoing_packet_id;
+  Serial.println(F("DEBUG: QUEUES")); delay(10);
+  stuff["lora_tx"]["next_packet_id"] = lora_outgoing_packet_id;
   for (uint8_t i = 0; i < 4; i++) for (uint8_t b = 0; b < 48; b++) stuff["lora_tx"]["send_queue"]["entries"][i][b] = lora_outgoing_queue[i][b];
-  for (uint8_t i = 0; i < 4; i++) stuff["lora_tx"]["send_queue"]["entry_attempts"][i] = lora_outgoing_queue_tx_attempts[i];*/
+  for (uint8_t i = 0; i < 4; i++) stuff["lora_tx"]["send_queue"]["entry_attempts"][i] = lora_outgoing_queue_tx_attempts[i];
 
   for (uint8_t i = 0; i < 4; i++) for (uint8_t b = 0; b < 16; b++) stuff["lora_tx"]["auth_send_queue"]["entries"][i][b] = lora_auth_cmd_queue[i][b];
   stuff["lora_tx"]["auth_state"] = auth_state;
 
-/*  for (uint8_t i = 0; i < 16; i++) stuff["lora_rx"]["last_packet_IDs"][i] = lora_last_incoming_message_IDs[i];
+  for (uint8_t i = 0; i < 16; i++) stuff["lora_rx"]["last_packet_IDs"][i] = lora_last_incoming_message_IDs[i];
   for (uint8_t i = 0; i < 4; i++) for (uint8_t b = 0; b < 48; b++) stuff["lora_rx"]["recive_queue"]["entries"][i][b] = lora_incoming_queue[i][b];
-  for (uint8_t i = 0; i < 4; i++) stuff["lora_rx"]["recive_queue"]["entry_len"][i] = lora_incoming_queue_len[i];*/
-
-  char buf[16384];
+  for (uint8_t i = 0; i < 4; i++) stuff["lora_rx"]["recive_queue"]["entry_len"][i] = lora_incoming_queue_len[i];
+  
+  Serial.println(F("DEBUG: SEND IT")); delay(10);
+  char buf[4096];
   serializeJson(stuff, buf);
-  server.send(status_code, "application/json", buf);
+  server.send(200, "application/json", buf);
 }
 
 
