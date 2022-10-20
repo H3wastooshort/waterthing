@@ -463,7 +463,7 @@ void rest_control() {
       uint16_t water_call = 0;
       byte water_call_b[2];
     };
-    water_call = server.hasArg("plain") ? req["call_for_water"] : String(server.arg("plain")).toInt();
+    water_call = server.hasArg("plain") ? req["call_for_water"] : server.arg("call_for_water").toInt();
 
     lora_auth_cmd_queue[lora_auth_cmd_queue_idx][0] = PACKET_TYPE_ADD_WATER;
     lora_auth_cmd_queue[lora_auth_cmd_queue_idx][1] = water_call_b[0];
@@ -578,20 +578,17 @@ void rest_admin_set() {
 void rest_debug() {
   Serial.println(F("DEBUG REST CALLED")); delay(10);
   //web_indicator_blink += 1;
-  /*if (!check_auth()) {
+  if (!check_auth()) {
     server.send(403, "application/json", "{\"error\":403}");
     return;
-    }*/
-  Serial.println(F("DEBUG AUTH OK")); delay(10);
+  }
 
   DynamicJsonDocument stuff(4096);
 
   //ram
-  Serial.println(F("DEBUG: RAM")); delay(10);
   stuff["memory"]["heap_free"] = ESP.getFreeHeap();
 
   //settings
-  Serial.println(F("DEBUG: SETTINGS"));
   stuff["settings"]["conf_ssid"] = settings.conf_ssid;
   stuff["settings"]["conf_pass"] = settings.conf_pass;
   stuff["settings"]["lora_security_key"] = settings.lora_security_key;
@@ -605,7 +602,6 @@ void rest_debug() {
   stuff["settings"]["display_brightness"] = settings.display_brightness;
 
   //lora queues
-  Serial.println(F("DEBUG: QUEUES")); delay(10);
   stuff["lora_tx"]["next_packet_id"] = lora_outgoing_packet_id;
   for (uint8_t i = 0; i < 4; i++) for (uint8_t b = 0; b < 48; b++) stuff["lora_tx"]["send_queue"]["entries"][i][b] = lora_outgoing_queue[i][b];
   for (uint8_t i = 0; i < 4; i++) stuff["lora_tx"]["send_queue"]["entry_attempts"][i] = lora_outgoing_queue_tx_attempts[i];
@@ -617,7 +613,6 @@ void rest_debug() {
   for (uint8_t i = 0; i < 4; i++) for (uint8_t b = 0; b < 48; b++) stuff["lora_rx"]["recive_queue"]["entries"][i][b] = lora_incoming_queue[i][b];
   for (uint8_t i = 0; i < 4; i++) stuff["lora_rx"]["recive_queue"]["entry_len"][i] = lora_incoming_queue_len[i];
 
-  Serial.println(F("DEBUG: SEND IT")); delay(10);
   char buf[4096];
   serializeJson(stuff, buf);
   server.send(200, "application/json", buf);
@@ -814,7 +809,7 @@ void setup() {
     while (true) delay(10);
   }
   delay(100);
-  
+
   //wifi connect
   Serial.print(F("Connecting to "));
   Serial.print(wm.getWiFiSSID());
@@ -943,7 +938,7 @@ void setup() {
   oled.display();
   ArduinoOTA.begin();
   delay(100);
-  
+
   //ntp
   Serial.println(F("NTP Setup..."));
   oled.clear();
@@ -965,7 +960,7 @@ void setup() {
   email.setSMTPPort(settings.smtp_port);
   email.setIsSecure(true);
 
-//MEM CORRUPT BETWEEN HERE
+  //MEM CORRUPT BETWEEN HERE
 
   //webserver
   Serial.println(F("WebServer Setup..."));
