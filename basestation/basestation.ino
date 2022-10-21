@@ -160,7 +160,7 @@ byte last_wt_challange[16] = {0}; //if all 0, not valid/non recieved
 byte lora_auth_cmd_queue[4][16] = {0}; //the data part of all authed commands to be sent.
 uint8_t lora_auth_cmd_queue_idx = 0;
 uint8_t lora_auth_packet_processing = 255;
-byte last_auth_cmd_response = 0xFF;
+byte last_auth_cmd_response = 0; //0 means invalid
 byte last_auth_challange_packet_id = 0xFF;
 
 //web
@@ -506,6 +506,7 @@ void rest_control_status() {
 
   resp["auth_state"] = auth_state;
   resp["left_in_queue"] = left_q;
+  resp["last_auth_cmd_response"] = last_auth_cmd_response;
 
   char buf[256];
   serializeJson(resp, buf);
@@ -1072,6 +1073,15 @@ void update_display() {
   }
 }
 
+void afterpacket_stuff() {
+  lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = 0;
+  lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] = 0;
+  lora_outgoing_packet_id++;
+  if (lora_outgoing_packet_id < 1) lora_outgoing_packet_id == 1; //never let it go to 0, that causes bugs
+  lora_outgoing_queue_idx++;
+  if (lora_outgoing_queue_idx >= 4) lora_outgoing_queue_idx = 0;
+}
+
 void send_ack(byte packet_id) {
   lora_outgoing_queue[lora_outgoing_queue_idx][0] = LORA_MAGIC;
   lora_outgoing_queue[lora_outgoing_queue_idx][1] = lora_outgoing_packet_id;
@@ -1260,6 +1270,11 @@ void handle_lora() {
       }
       break;
     case AUTH_STEP_TX_CHALLANGE_REQUEST: {
+        lora_outgoing_queue[lora_outgoing_queue_idx][0] = LORA_MAGIC;
+        lora_outgoing_queue[lora_outgoing_queue_idx][1] = lora_outgoing_packet_id;
+        lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_REQUST_CHALLANGE;
+        afterpacket_stuff();
+
         //wait for tx done (if async works).
         if (true) auth_state = AUTH_STEP_WAIT_CHALLANGE;
       }
@@ -1283,15 +1298,9 @@ void handle_lora() {
           mbedtls_md_free(&hash_ctx);
 
           lora_outgoing_queue[lora_outgoing_queue_idx][0] = LORA_MAGIC;
-          lora_outgoing_queue[lora_outgoing_queue_idx][1] = lora_outgoing_packet_id;
-          for (uint8_t b = 0; b < 16; b++) lora_outgoing_queue[lora_outgoing_queue_idx][2 + b] = lora_auth_cmd_queue[lora_auth_packet_processing][b]; //append all of authed packet queue entry. the tx code will know what the true length is
-
-          lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = 0;
-          lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] = 0;
-          lora_outgoing_packet_id++;
-          if (lora_outgoing_packet_id < 1) lora_outgoing_packet_id == 1; //never let it go to 0, that causes bugs
-          lora_outgoing_queue_idx++;
-          if (lora_outgoing_queue_idx >= 4) lora_outgoing_queue_idx = 0;
+          lora_outgoing_queue[lora_outgoing_queue_idx][1] = lora_outgoing_packet_id;        
+          for (uint8_t b = 0; b < 16; b++) lora_outgoing_queue[lora_outgoing_queue_idx][2 + b] = lora_auth_cmd_queue[lora_auth_packet_processing][b]; //append all of authed packet queue entry (including packet type). the tx code will know what the true length is
+          afterpacket_stuff();
 
           for (uint8_t b = 0; b < 16; b++) lora_auth_cmd_queue[lora_auth_packet_processing][b] = 0; //clear authed packet
 
