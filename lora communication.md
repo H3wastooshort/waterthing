@@ -24,6 +24,7 @@ Packet Type | Name | Anatomy | Description
 240 | Reboot Notification | No Data | Packet sent once on boot
 249 | ACK | [1 byte packet ID] |
 250 | Auth challange | [1 byte Packet ID of 250 ask] [Auth challange 16 bytes] |
+251 | No Challange | [1 byte Packet ID] | Ask for a Challange Fist
 253 | Commands disabled | [1 byte Packet ID] |
 254 | Command Not Authenticated | [1 byte Packet ID] |
 255 | Command OK | [1 byte Packet ID] |

@@ -171,6 +171,7 @@ enum lora_packet_types_ws_to_gw { //water system to gateway
   PACKET_TYPE_REBOOT = 240,
   PACKET_TYPE_WS_ACK = 249,
   PACKET_TYPE_AUTH_CHALLANGE = 250,
+  PACKET_TYPE_NO_CHALLANGE = 251,
   PACKET_TYPE_CMD_DISABLED = 253,
   PACKET_TYPE_CMD_AUTH_FAIL = 254,
   PACKET_TYPE_CMD_OK = 255,
@@ -1703,12 +1704,19 @@ void afterpacket_stuff() {
   if (lora_outgoing_queue_idx >= 4) lora_outgoing_queue_idx = 0;
 }
 
-bool check_auth(uint8_t packet_num, uint8_t resp_offset) { //resp always 32bytes
+bool check_auth(uint8_t packet_num, uint8_t resp_offset, byte cmd_packet_id) { //resp always 32bytes
   Serial.println(F("Checking Auth:"));
   bool chal_valid = false;
   for (uint8_t b = 0; b < 16; b++) if (auth_challange[b] != 0) chal_valid = true;
   if (!chal_valid) {
     Serial.print(s_star); Serial.println(F("No Valid Chal"));
+
+    lora_outgoing_queue[lora_outgoing_queue_idx][0] = 42;
+    lora_outgoing_queue[lora_outgoing_queue_idx][1] = lora_outgoing_packet_id;
+    lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_NO_CHALLANGE;
+    lora_outgoing_queue[lora_outgoing_queue_idx][3] = cmd_packet_id; //include packet id to not need ACK
+    afterpacket_stuff();
+
     return false;
   }
 
@@ -1739,9 +1747,25 @@ bool check_auth(uint8_t packet_num, uint8_t resp_offset) { //resp always 32bytes
   bool are_same = true;
   for (uint8_t b = 0; b < 32; b++) if (auth_response[b] != hash[b]) are_same = false; //i should just use memcmp() for this why did i not think of that?!
   Serial.print(s_star);
-  //act on command
-  if (are_same) Serial.println(F("AUTH OK"));
-  else  Serial.println(F("UNAUTHED"));
+
+  if (are_same) {
+    Serial.println(F("AUTH OK"));
+
+    lora_outgoing_queue[lora_outgoing_queue_idx][0] = 42;
+    lora_outgoing_queue[lora_outgoing_queue_idx][1] = lora_outgoing_packet_id;
+    lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_CMD_OK;
+    lora_outgoing_queue[lora_outgoing_queue_idx][3] = cmd_packet_id; //include packet id to not need ACK
+    afterpacket_stuff();
+  }
+  else  {
+    Serial.println(F("UNAUTHED"));
+
+    lora_outgoing_queue[lora_outgoing_queue_idx][0] = 42;
+    lora_outgoing_queue[lora_outgoing_queue_idx][1] = lora_outgoing_packet_id;
+    lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_CMD_AUTH_FAIL;
+    lora_outgoing_queue[lora_outgoing_queue_idx][3] = cmd_packet_id; //include packet id to not need ACK
+    afterpacket_stuff();
+  }
 
   for (uint8_t b = 0; b < 16; b++) auth_challange[b] = 0; //clear chal
   return are_same;
@@ -1796,15 +1820,14 @@ void handle_lora() {
 
               case PACKET_TYPE_REQUST_CHALLANGE: {
                   Serial.println(F("Chal. Req."));
-
-                  last_auth_cr_packet_id = lora_incoming_queue[p_idx][1];
+                  do_ack = false;
 
                   for (uint8_t b = 0; b < 16; b++) auth_challange[b] = random(0, 255); //make new challange
 
                   lora_outgoing_queue[lora_outgoing_queue_idx][0] = 42;
                   lora_outgoing_queue[lora_outgoing_queue_idx][1] = lora_outgoing_packet_id;
                   lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_AUTH_CHALLANGE;
-                  lora_outgoing_queue[lora_outgoing_queue_idx][3] = lora_incoming_queue[p_idx][3]; //include packet id to not need ACK
+                  lora_outgoing_queue[lora_outgoing_queue_idx][3] = lora_incoming_queue[p_idx][1]; //include packet id to not need ACK
                   for (uint8_t b = 0; b < 16; b++) lora_outgoing_queue[lora_outgoing_queue_idx][4 + b] = auth_challange[b];
 
                   Serial.print(F("TX Chal: ")); //Serial.print(F("Sending Challange: "));
@@ -1812,7 +1835,6 @@ void handle_lora() {
                   Serial.println();
 
                   afterpacket_stuff();
-                  do_ack = false;
                 }
                 break;
 
@@ -1821,8 +1843,9 @@ void handle_lora() {
 
                   last_auth_cmd_packet_id = lora_incoming_queue[p_idx][1];
                   clear_packet(lora_incoming_queue[p_idx][3]);
+                  do_ack = false;
 
-                  if (!check_auth(p_idx, 6)) break;
+                  if (!check_auth(p_idx, 6, lora_incoming_queue[p_idx][1])) break;
 
                   union {
                     uint16_t liters = 0;
@@ -1839,10 +1862,10 @@ void handle_lora() {
               case PACKET_TYPE_CANCEL_WATER: {
                   Serial.println(F("Irr. Cancel"));
 
-                  last_auth_cmd_packet_id = lora_incoming_queue[p_idx][1];
                   clear_packet(lora_incoming_queue[p_idx][3]);
+                  do_ack = false;
 
-                  if (!check_auth(p_idx, 4)) break;
+                  if (!check_auth(p_idx, 4, lora_incoming_queue[p_idx][1])) break;
 
                   tank_fillings_remaining = 0;
                 }

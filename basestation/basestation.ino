@@ -91,6 +91,7 @@ enum lora_packet_types_ws_to_gw { //water system to gateway
   PACKET_TYPE_REBOOT = 240,
   PACKET_TYPE_WS_ACK = 249,
   PACKET_TYPE_AUTH_CHALLANGE = 250,
+  PACKET_TYPE_NO_CHALLANGE = 251,
   PACKET_TYPE_CMD_DISABLED = 253,
   PACKET_TYPE_CMD_AUTH_FAIL = 254,
   PACKET_TYPE_CMD_OK = 255,
@@ -1152,7 +1153,7 @@ void handle_lora() {
         bool do_ack = true;
         if (!already_recieved) {
           bool dedup_this = true;
-          Serial.print(F("Packet type: "));
+          Serial.print(F(" * Packet type: "));
           switch (lora_incoming_queue[p_idx][2]) {
             case PACKET_TYPE_WS_ACK: {
                 Serial.println(F("WS ACK"));
@@ -1212,6 +1213,7 @@ void handle_lora() {
                 Serial.println(F("Challange"));
 
                 last_auth_packet_millis = millis();
+                clear_packet(lora_incoming_queue[p_idx][3]);
 
                 if (auth_state == AUTH_STEP_WAIT_CHALLANGE) {
                   last_auth_challange_packet_id = lora_incoming_queue[p_idx][1];
@@ -1223,17 +1225,18 @@ void handle_lora() {
               break;
 
             case PACKET_TYPE_CMD_OK:
+            case PACKET_TYPE_NO_CHALLANGE:
             case PACKET_TYPE_CMD_AUTH_FAIL:
             case PACKET_TYPE_CMD_DISABLED:
               Serial.println(F("CMD Response"));
 
               last_auth_packet_millis = millis();
+              clear_packet(lora_incoming_queue[p_idx][3]);
 
               if (auth_state == AUTH_STEP_WAIT_CMD_SUCCESS) {
                 auth_state = AUTH_STEP_IDLE;
                 last_auth_cmd_response = lora_incoming_queue[p_idx][2];
                 lora_auth_packet_processing = 255;
-                clear_packet(lora_incoming_queue[p_idx][3]);
               }
               break;
 
@@ -1264,7 +1267,7 @@ void handle_lora() {
   }
 
   //handle auth state thing
-  
+
   if (millis() - last_auth_packet_millis > 30000) {//give up afer hearing nothing for 30 seconds
     for (uint8_t b = 0; b < 16; b++) lora_auth_cmd_queue[lora_auth_packet_processing][b] = 0; //clear authed packet
 
