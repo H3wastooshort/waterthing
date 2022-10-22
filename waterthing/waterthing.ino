@@ -161,6 +161,8 @@ uint16_t lora_incoming_queue_len[4] = {0}; //lengths of recieved packages
 byte lora_last_incoming_message_IDs[16] = {255};
 uint8_t lora_last_incoming_message_IDs_idx = 0;
 
+uint32_t last_auth_packet_millis = 0;
+
 //shared stuff start
 enum lora_packet_types_ws_to_gw { //water system to gateway
   PACKET_TYPE_STATUS = 0,
@@ -212,18 +214,7 @@ uint8_t gw_to_ws_packet_type_to_length(uint8_t pt) {
 //shared stuff end
 
 //auth stuff
-enum auth_states_e {
-  AUTH_STEP_IDLE = 0,
-  AUTH_STEP_MAKE_CHALLANGE = 1,
-  AUTH_STEP_WAIT_CMD = 2,
-  AUTH_STEP_RESPOND = 3
-} auth_state;
-
 byte auth_challange[16] = {0}; //all 0 means invalid
-byte last_auth_response[32];
-
-byte last_authed_cmd[16]; //only data section, not the rest
-
 byte last_auth_cr_packet_id = 0xFF;
 byte last_auth_cmd_packet_id = 0xFF;
 
@@ -1580,12 +1571,12 @@ void handle_serial() {
       for (uint8_t b = 0; b < 16; b++) settings.lora_security_key[b] = random(0, 255);
       EEPROM.put(0, settings);
 
-      Serial.println(F("New Key"));
+      //Serial.println(F("New Key"));
       controlCharacter = 'K';
     }
 
     if (controlCharacter == 'K') { //generate new lora key
-      Serial.print(F("LoRa Key: "));
+      //Serial.print(F("LoRa Key: "));
       for (uint8_t b = 0; b < 16; b++) {
         if (settings.lora_security_key[b] < 0x10) Serial.write('0');
         Serial.print(settings.lora_security_key[b], HEX);
@@ -1594,7 +1585,7 @@ void handle_serial() {
       Serial.println();
     }
 
-    if (controlCharacter == 'P') {
+    /*if (controlCharacter == 'P') {
       lora_outgoing_queue[lora_outgoing_queue_idx][0] = LORA_MAGIC;
       lora_outgoing_queue[lora_outgoing_queue_idx][1] = lora_outgoing_packet_id;
       lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_TEST;
@@ -1604,17 +1595,12 @@ void handle_serial() {
       lora_outgoing_queue[lora_outgoing_queue_idx][6] = 0xEE;
       lora_outgoing_queue[lora_outgoing_queue_idx][7] = 0xF1;
 
-      lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = 0;
-      lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] = 0;
-      lora_outgoing_packet_id++;
-      if (lora_outgoing_packet_id < 1) lora_outgoing_packet_id == 1; //never let it go to 0, that causes bugs
-      lora_outgoing_queue_idx++;
-      if (lora_outgoing_queue_idx >= 4) lora_outgoing_queue_idx = 0;
-    }
+      afterpacket_stuff();
+      }*/
 
-    if (controlCharacter == 'R') { //reset all settings
+    /*if (controlCharacter == 'R') { //reset all settings
       //todo: write this
-    }
+      }*/
 
     if (controlCharacter == 'B') { //reboot
       wdt_enable(WDTO_15MS);
@@ -1717,6 +1703,50 @@ void afterpacket_stuff() {
   if (lora_outgoing_queue_idx >= 4) lora_outgoing_queue_idx = 0;
 }
 
+bool check_auth(uint8_t packet_num, uint8_t resp_offset) { //resp always 32bytes
+  Serial.println(F("Checking Auth:"));
+  bool chal_valid = false;
+  for (uint8_t b = 0; b < 16; b++) if (auth_challange[b] != 0) chal_valid = true;
+  if (!chal_valid) {
+    Serial.print(s_star); Serial.println(F("No Valid Chal"));
+    return false;
+  }
+
+  byte* auth_response = &lora_incoming_queue[packet_num][resp_offset];
+
+  //make hash
+  Sha256 sha;
+  byte *hash;
+  sha.init();
+  sha.write(auth_challange, 16);
+  sha.write(settings.lora_security_key, 16);
+  hash = sha.result();
+  Serial.print(s_star);  Serial.print(F("Correct Hash: "));
+  for (uint8_t b = 0; b < 32; b++) {
+    Serial.print(hash[b], HEX);
+    Serial.print(' ');
+  }
+  Serial.println();
+
+  Serial.print(s_star);  Serial.print(F("Received Hash: "));
+  for (uint8_t b = 0; b < 32; b++) {
+    Serial.print(auth_response[b], HEX);
+    Serial.print(' ');
+  }
+  Serial.println();
+
+  //compare hash
+  bool are_same = true;
+  for (uint8_t b = 0; b < 32; b++) if (auth_response[b] != hash[b]) are_same = false; //i should just use memcmp() for this why did i not think of that?!
+  Serial.print(s_star);
+  //act on command
+  if (are_same) Serial.println(F("AUTH OK"));
+  else  Serial.println(F("UNAUTHED"));
+
+  for (uint8_t b = 0; b < 16; b++) auth_challange[b] = 0; //clear chal
+  return are_same;
+}
+
 void handle_lora() {
   if (component_errors.lora_missing or settings.lora_enable == 0) return; // if there is no lora, dont even bother
 
@@ -1767,7 +1797,7 @@ void handle_lora() {
               case PACKET_TYPE_REQUST_CHALLANGE: {
                   Serial.println(F("Chal. Req."));
 
-                  clear_packet(lora_incoming_queue[p_idx][3]);
+                  last_auth_cr_packet_id = lora_incoming_queue[p_idx][1];
 
                   for (uint8_t b = 0; b < 16; b++) auth_challange[b] = random(0, 255); //make new challange
 
@@ -1782,32 +1812,37 @@ void handle_lora() {
                   Serial.println();
 
                   afterpacket_stuff();
-                  auth_state = AUTH_STEP_WAIT_CMD;
                   do_ack = false;
                 }
                 break;
 
               case PACKET_TYPE_ADD_WATER: {
-                  Serial.println(F("Call for Water"));
-                  bool chal_valid = false;
-                  for (uint8_t b = 0; b < 16; b++) if (auth_challange[b] != 0) chal_valid = true;
-                  if (!chal_valid) break;
+                  Serial.println(F("Water Call"));
+
+                  last_auth_cmd_packet_id = lora_incoming_queue[p_idx][1];
+                  clear_packet(lora_incoming_queue[p_idx][3]);
+
+                  if (!check_auth(p_idx, 6)) break;
+
                   union {
                     uint16_t liters = 0;
                     byte liters_b[2];
                   };
-                  liters_b[0] = lora_incoming_queue[p_idx][3];
-                  liters_b[1] = lora_incoming_queue[p_idx][4];
+
+                  liters_b[0] = lora_incoming_queue[p_idx][4];
+                  liters_b[1] = lora_incoming_queue[p_idx][5];
 
                   tank_fillings_remaining = (settings.tank_capacity > 0) ? literToTanks(liters) : liters;
                 }
                 break;
 
               case PACKET_TYPE_CANCEL_WATER: {
-                  Serial.println(F("Cancel Irrigation."));
-                  bool chal_valid = false;
-                  for (uint8_t b = 0; b < 16; b++) if (auth_challange[b] != 0) chal_valid = true;
-                  if (!chal_valid) break;
+                  Serial.println(F("Irr. Cancel"));
+
+                  last_auth_cmd_packet_id = lora_incoming_queue[p_idx][1];
+                  clear_packet(lora_incoming_queue[p_idx][3]);
+
+                  if (!check_auth(p_idx, 4)) break;
 
                   tank_fillings_remaining = 0;
                 }
@@ -1830,7 +1865,7 @@ void handle_lora() {
               if (lora_last_incoming_message_IDs_idx >= 16) lora_last_incoming_message_IDs_idx = 0;
             }
           }
-          else Serial.println(F("Packet already recieved."));
+          //noser else Serial.println(F("Packet already recieved."));
           if (do_ack) send_ack(lora_incoming_queue[p_idx][1]);
         }
         for (uint8_t i = 0; i < 48; i++) lora_incoming_queue[p_idx][i] = 0; //clear after processing
@@ -1992,59 +2027,6 @@ void handle_lora() {
       last_lora_tx = millis();
       afterpacket_stuff();
     }
-  }
-
-  //auth stuff
-  switch (auth_state) {
-    case AUTH_STEP_IDLE: {
-        //do nothing
-      }
-      break;
-
-    case AUTH_STEP_WAIT_CMD: {
-        //do nothing
-      }
-      break;
-
-    case AUTH_STEP_RESPOND: {
-        Serial.println(F("Got ACMD"));
-
-        //make hash
-        Sha256 sha;
-        byte *hash;
-        sha.init();
-        sha.write(auth_challange, 16);
-        sha.write(settings.lora_security_key, 16);
-        hash = sha.result();
-        Serial.print(s_star);  Serial.print(F("Correct Hash: "));
-        for (uint8_t b = 0; b < 32; b++) {
-          Serial.print(hash[b], HEX);
-          Serial.print(' ');
-        }
-        Serial.println();
-
-        Serial.print(s_star);  Serial.print(F("Received Hash: "));
-        for (uint8_t b = 0; b < 32; b++) {
-          Serial.print(last_auth_response[b], HEX);
-          Serial.print(' ');
-        }
-        Serial.println();
-
-        //compare hash
-        bool are_same = true;
-        for (uint8_t b = 0; b < 32; b++) if (last_auth_response[b] != hash[b]) are_same = false; //i should just use memcmp() for this why did i not think of that?!
-        Serial.print(s_star);  Serial.print(F("Action: "));
-        //act on command
-        if (are_same) switch (last_authed_cmd[0]) {
-            default:
-              Serial.println(F("Unknown ACMD."));
-              break;
-          }
-        else  Serial.println(F("Unauthorized"));;
-
-        auth_state = AUTH_STEP_IDLE;
-      }
-      break;
   }
 }
 
