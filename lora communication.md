@@ -45,6 +45,8 @@ Packet ID increment individually on each side and rolls over to 0 when going ove
 ## system status
 0bLLLLRRRR
 ### Left
+| Bits | State |
+| ---- | ----- |
 | 0000 | Idle |
 | 0001 | Pumping |
 | 0010 | Emptying |
@@ -55,6 +57,8 @@ Packet ID increment individually on each side and rolls over to 0 when going ove
 | 0111 | GENERAL FAIL |
 ### Right
 #### Idle
+| Bits | Extra |
+| ---- | ----- |
 | 0000 | Normal |
 | 0001 | Off |
 | 0010 | Done Today |
