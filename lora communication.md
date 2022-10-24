@@ -3,6 +3,7 @@
 [Magic Number][Packet ID][Packet Type][Data]
 
 Magic Number is just 42
+
 Packet ID increment individually on each side and rolls over to 0 when going over 255
 
 ## Gateway -> Water System
@@ -44,20 +45,20 @@ Packet ID increment individually on each side and rolls over to 0 when going ove
 ## system status
 0bLLLLRRRR
 ### Left
-0000 | Idle
-0001 | Pumping
-0010 | Emptying
-0011 | Afterdrain
-0100 | NO WATER
-0101 | LOW BATTERY
-0110 | NO TIME
-0111 | GENERAL FAIL
+| 0000 | Idle |
+| 0001 | Pumping |
+| 0010 | Emptying |
+| 0011 | Afterdrain |
+| 0100 | NO WATER |
+| 0101 | LOW BATTERY |
+| 0110 | NO TIME |
+| 0111 | GENERAL FAIL |
 ### Right
 #### Idle
-0000 | Normal
-0001 | Off
-0010 | Done Today
-0011 | Rain
+| 0000 | Normal |
+| 0001 | Off |
+| 0010 | Done Today |
+| 0011 | Rain |
 #### General Fail
 [] = 1 bit, each can be set individually
 
