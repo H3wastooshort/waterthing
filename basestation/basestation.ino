@@ -1101,11 +1101,11 @@ void send_ack(byte packet_id) {
 void clear_packet(byte packet_id) {
   for (uint8_t p = 0; p < 4; p++) {
     if (packet_id == lora_outgoing_queue[p][1]) {
+      Serial.print(F(" * Clearing Packet ID: "));
+      Serial.println(lora_outgoing_queue[p][1]);
       for (uint8_t b = 0; b < 48; b++) lora_outgoing_queue[p][b] = 0; //clear packet
       lora_outgoing_queue_last_tx[p] = 0;
       lora_outgoing_queue_tx_attempts[p] = LORA_RETRANSMIT_TRIES;
-      Serial.print(F(" * Cleared Packet ID: "));
-      Serial.println(lora_outgoing_queue[p][1]);
     }
   }
 }
@@ -1146,7 +1146,7 @@ void handle_lora() {
       */
 
       if (lora_incoming_queue[p_idx][0] == LORA_MAGIC) { //if magic correct
-        Serial.println(F("Magic Correct."));
+        Serial.println(F(" * Magic Correct."));
         bool already_recieved = false;
         for (uint8_t i = 0; i < 16; i++) if (lora_incoming_queue[p_idx][1] == lora_last_incoming_message_IDs[i]) already_recieved = true;
 
@@ -1221,6 +1221,7 @@ void handle_lora() {
                   clear_packet(lora_incoming_queue[p_idx][3]);
                   do_ack = false;
                 }
+                else Serial.println(F("Not waiting for a Challange."));
               }
               break;
 
@@ -1297,7 +1298,7 @@ void handle_lora() {
       }
       break;
     case AUTH_STEP_TX_CHALLANGE_REQUEST: {
-        if (lora_auth_packet_processing >= 4) {
+        if (lora_auth_packet_processing >= 4) { //just in case an invalid request is made
           auth_state = AUTH_STEP_IDLE;
           break;
         }
@@ -1307,7 +1308,7 @@ void handle_lora() {
       }
       break;
     case AUTH_STEP_WAIT_CHALLANGE: {
-        if (lora_auth_packet_processing >= 4) {
+        if (lora_auth_packet_processing >= 4) {//just in case
           auth_state = AUTH_STEP_IDLE;
           break;
         }

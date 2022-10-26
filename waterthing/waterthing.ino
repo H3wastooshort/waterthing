@@ -1684,11 +1684,11 @@ void send_ack(byte packet_id) {
 void clear_packet(byte packet_id) {
   for (uint8_t p = 0; p < 4; p++) {
     if (packet_id == lora_outgoing_queue[p][1]) {
+      //noser Serial.print(s_star); //noser Serial.print(F("Clearing Packet ID: "));
+      //noser Serial.println(packet_id);
       for (uint8_t b = 0; b < 48; b++) lora_outgoing_queue[p][b] = 0; //clear packet
       lora_outgoing_queue_last_tx[p] = 0;
       lora_outgoing_queue_tx_attempts[p] = LORA_RETRANSMIT_TRIES;
-      //noser Serial.print(s_star); //noser Serial.print(F("Cleared Packet ID: "));
-      //noser Serial.println(packet_id);
       //noser Serial.print(s_star); //noser Serial.print(F("Cleared Packet Slot: "));
       //noser Serial.println(p);
     }
