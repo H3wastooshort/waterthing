@@ -509,6 +509,7 @@ void rest_control_status() {
   resp["auth_state"] = auth_state;
   resp["left_in_queue"] = left_q;
   resp["last_auth_cmd_response"] = last_auth_cmd_response;
+  resp["last_auth_packet_millis"] = last_auth_packet_millis;
 
   char buf[256];
   serializeJson(resp, buf);
@@ -1215,11 +1216,12 @@ void handle_lora() {
                 last_auth_packet_millis = millis();
                 clear_packet(lora_incoming_queue[p_idx][3]);
 
+                memcpy(last_wt_challange, &lora_incoming_queue[p_idx][4], 16); //save challange, should have starrted using memcpy a while ago tbh...
+
                 if (auth_state == AUTH_STEP_WAIT_CHALLANGE) {
                   last_auth_challange_packet_id = lora_incoming_queue[p_idx][1];
                   auth_state = AUTH_STEP_TX_ANSWER;
-                  clear_packet(lora_incoming_queue[p_idx][3]);
-                  do_ack = false;
+                  do_ack = false; //only skip ack packet if successful
                 }
                 else Serial.println(F("Not waiting for a Challange."));
               }
@@ -1269,6 +1271,14 @@ void handle_lora() {
 
   //handle auth state thing
 
+  static uint8_t last_auth_state = 255;
+  if (last_auth_state != auth_state) {
+    Serial.print(F("Auth State: "));
+    Serial.println(auth_state);
+    last_auth_state = auth_state;
+  }
+
+
   if (millis() - last_auth_packet_millis > 30000) {//give up afer hearing nothing for 30 seconds
     for (uint8_t b = 0; b < 16; b++) lora_auth_cmd_queue[lora_auth_packet_processing][b] = 0; //clear authed packet
 
@@ -1291,6 +1301,7 @@ void handle_lora() {
             lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_REQUST_CHALLANGE;
             afterpacket_stuff();
 
+            last_auth_packet_millis = millis(); //so that it does not get killed right away
             auth_state = AUTH_STEP_TX_CHALLANGE_REQUEST;
             break;
           }
