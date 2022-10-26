@@ -1091,6 +1091,7 @@ void send_ack(byte packet_id) {
   lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_ACK;
   lora_outgoing_queue[lora_outgoing_queue_idx][3] = packet_id;
 
+  //i should really just make them next_tx_millis and remaining_attempts instead of this fuckshit
   lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis() - LORA_RETRANSMIT_TIME + 1700; //ack only sent 1000ms after
   lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] =  LORA_RETRANSMIT_TRIES - 1; //there is no response to ACKs so this ensures ther is only one ACK sent
   lora_outgoing_packet_id++;
@@ -1220,7 +1221,6 @@ void handle_lora() {
 
                 if (auth_state == AUTH_STEP_WAIT_CHALLANGE) {
                   last_auth_challange_packet_id = lora_incoming_queue[p_idx][1];
-                  auth_state = AUTH_STEP_TX_ANSWER;
                   do_ack = false; //only skip ack packet if successful
                 }
                 else Serial.println(F("Not waiting for a Challange."));
@@ -1343,7 +1343,14 @@ void handle_lora() {
 
           lora_outgoing_queue[lora_outgoing_queue_idx][0] = LORA_MAGIC;
           lora_outgoing_queue[lora_outgoing_queue_idx][1] = lora_outgoing_packet_id;
-          for (uint8_t b = 0; b < 16; b++) lora_outgoing_queue[lora_outgoing_queue_idx][2 + b] = lora_auth_cmd_queue[lora_auth_packet_processing][b]; //append all of authed packet queue entry (including packet type). the tx code will know what the true length is
+          lora_outgoing_queue[lora_outgoing_queue_idx][2] = lora_auth_cmd_queue[lora_auth_packet_processing][0];
+          lora_outgoing_queue[lora_outgoing_queue_idx][3] = last_auth_challange_packet_id; //anclude ACKing
+
+          memcpy(&lora_outgoing_queue[lora_outgoing_queue_idx][4], &lora_auth_cmd_queue[lora_auth_packet_processing][1], 16); //append authed data
+          uint8_t hash_begin_pos = gw_to_ws_packet_type_to_length(lora_auth_cmd_queue[lora_auth_packet_processing][0]) + 3/*overhead bytes*/ + 1/*ACK packet id*/;
+          if (hash_begin_pos + 32 > 47) Serial.println(F("FUCK! Packet too big to fit with hash!")); //anti mem corrupt
+          else memcpy(&lora_outgoing_queue[lora_outgoing_queue_idx][hash_begin_pos], &val_to_hash, 32);
+
           afterpacket_stuff();
 
           for (uint8_t b = 0; b < 16; b++) lora_auth_cmd_queue[lora_auth_packet_processing][b] = 0; //clear authed packet
