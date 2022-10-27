@@ -541,20 +541,21 @@ void rest_admin_get() {
   server.send(status_code, "application/json", buf);
 }
 
-byte hexs_to_byte (const String& s) { //hex string to byte. take 1 byte of hex in string form, returns byte
+byte hexs_to_byte(const String& s) { //hex string to byte. take 1 byte of hex in string form, returns byte
   char hex_val[3]; //3rd is \0
-  byte b_val[2] = {0, 0};
   s.toCharArray(hex_val, 3);
-  Serial.println(hex_val);
-  for (uint8_t p = 0; p < 2; p++) { //this could also be used for longer nums, maybe i will do that
-    if (uint8_t(hex_val[p]) >= uint8_t('0') and uint8_t(hex_val[p]) <= uint8_t('9')) b_val[p] += (uint8_t(hex_val[p]) - uint8_t('0')) * (16 ^ p);
-    else if (uint8_t(hex_val[p]) >= uint8_t('A') and uint8_t(hex_val[p]) <= uint8_t('F')) b_val[p] += (uint8_t(hex_val[p]) - uint8_t('A')) * (16 ^ p);
-    else if (uint8_t(hex_val[p]) >= uint8_t('a') and uint8_t(hex_val[p]) <= uint8_t('f')) b_val[p] += (uint8_t(hex_val[p]) - uint8_t('a')) * (16 ^ p);
+  byte b_val[2] = {0, 0};
+  for (uint8_t p = 0; p < 2 /*why does it run 3 times when there is a 2 and one time when there is a 1?!*/; p++) { //this could also be used for longer nums, maybe i will do that
+    Serial.println(p);
+    if (hex_val[p] >= '0' and hex_val[p] <= '9') b_val[p] += (hex_val[p] - '0') * (16 ^ (1-p));
+    else if (hex_val[p] >= 'A' and hex_val[p] <= 'F') b_val[p] += (hex_val[p] - 'A') * (16 ^ (1-p));
+    else if (hex_val[p] >= 'a' and hex_val[p] <= 'f') b_val[p] += (hex_val[p] - 'a') * (16 ^ (1-p));
     else {
       Serial.println(F("Not a HEX value"));
       return 0x00;
     }
   }
+  return 0x00;
 }
 
 void rest_admin_set() {
