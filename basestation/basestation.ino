@@ -342,12 +342,12 @@ bool check_auth() {
     if (lc_end == 0) lc_end = cookie_header.length() - lc_start;
     String login_cookie = cookie_header.substring(lc_start + 13, lc_end);
 
-    Serial.print(F(" * Header: "));
-    Serial.println(cookie_header);
-    Serial.print(F(" * Cookie: "));
-    Serial.println(login_cookie);
-    Serial.print(F(" * Cookie Length: "));
-    Serial.println(login_cookie.length());
+    //Serial.print(F(" * Header: "));
+    //Serial.println(cookie_header);
+    //Serial.print(F(" * Cookie: "));
+    //Serial.println(login_cookie);
+    //Serial.print(F(" * Cookie Length: "));
+    //Serial.println(login_cookie.length());
 
     if (login_cookie.length() == 31) {
       for (uint16_t c = 0; c < 256; c++) { //check if login cookie valid
