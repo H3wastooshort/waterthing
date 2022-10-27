@@ -1092,7 +1092,7 @@ void send_ack(byte packet_id) {
   lora_outgoing_queue[lora_outgoing_queue_idx][3] = packet_id;
 
   //i should really just make them next_tx_millis and remaining_attempts instead of this fuckshit
-  lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis() - LORA_RETRANSMIT_TIME + 1700; //ack only sent 1000ms after
+  lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis() - LORA_RETRANSMIT_TIME + 200; //ack only sent 1000ms after
   lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] =  LORA_RETRANSMIT_TRIES - 1; //there is no response to ACKs so this ensures ther is only one ACK sent
   lora_outgoing_packet_id++;
   if (lora_outgoing_packet_id < 1) lora_outgoing_packet_id == 1; //never let it go to 0, that causes bugs
@@ -1329,7 +1329,7 @@ void handle_lora() {
         if (!is_empty) {
           //generate response and put in queue
 
-          byte val_to_hash[32];
+          byte resulting_hash[32];
 
           mbedtls_md_context_t hash_ctx;
           mbedtls_md_type_t md_type = MBEDTLS_MD_SHA256;
@@ -1338,7 +1338,7 @@ void handle_lora() {
           mbedtls_md_starts(&hash_ctx);
           mbedtls_md_update(&hash_ctx, (const unsigned char *) last_wt_challange, 16);
           mbedtls_md_update(&hash_ctx, (const unsigned char *) settings.lora_security_key, 16);
-          mbedtls_md_finish(&hash_ctx, val_to_hash);
+          mbedtls_md_finish(&hash_ctx, resulting_hash);
           mbedtls_md_free(&hash_ctx);
 
           lora_outgoing_queue[lora_outgoing_queue_idx][0] = LORA_MAGIC;
@@ -1347,9 +1347,18 @@ void handle_lora() {
           lora_outgoing_queue[lora_outgoing_queue_idx][3] = last_auth_challange_packet_id; //anclude ACKing
 
           memcpy(&lora_outgoing_queue[lora_outgoing_queue_idx][4], &lora_auth_cmd_queue[lora_auth_packet_processing][1], 16); //append authed data
-          uint8_t hash_begin_pos = gw_to_ws_packet_type_to_length(lora_auth_cmd_queue[lora_auth_packet_processing][0]) + 3/*overhead bytes*/ + 1/*ACK packet id*/;
-          if (hash_begin_pos + 32 > 47) Serial.println(F("FUCK! Packet too big to fit with hash!")); //anti mem corrupt
-          else memcpy(&lora_outgoing_queue[lora_outgoing_queue_idx][hash_begin_pos], &val_to_hash, 32);
+          uint8_t hash_begin_pos = gw_to_ws_packet_type_to_length(lora_auth_cmd_queue[lora_auth_packet_processing][0]) - 32/*minus hash*/ + 3/*overhead bytes*/;
+          if (hash_begin_pos + 32 >= 48) Serial.println(F("Packet too big to fit with hash!")); //anti mem corrupt
+          else {
+            memcpy(&lora_outgoing_queue[lora_outgoing_queue_idx][hash_begin_pos], &resulting_hash, sizeof(resulting_hash));
+            Serial.print(F("Using hash: "));
+            for (uint8_t b = 0; b < sizeof(resulting_hash); b++) {
+              if (resulting_hash[b] < 0x10) Serial.print(0);
+              Serial.print(resulting_hash[b], HEX);
+              Serial.print(' ');
+            }
+            Serial.println();
+          }
 
           afterpacket_stuff();
 
