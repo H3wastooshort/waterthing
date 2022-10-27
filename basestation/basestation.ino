@@ -527,18 +527,34 @@ void rest_admin_get() {
   //settings
   resp["wifi"]["conf_ssid"] = settings.conf_ssid;
   resp["wifi"]["conf_pass"] = settings.conf_pass;
-  resp["lora"]["security_key"] = settings.lora_security_key;
+  for (uint8_t b = 0; b < 16; b++) resp["lora"]["security_key"][b] = settings.lora_security_key[b];
   resp["mail"]["alert_email"] = settings.alert_email;
   resp["mail"]["smtp_server"] = settings.smtp_server;
   resp["mail"]["smtp_user"] = settings.smtp_user;
-  resp["mail"]["smtp_pass"] = settings.smtp_pass;
+  //resp["mail"]["smtp_pass"] = settings.smtp_pass;
   resp["mail"]["smtp_port"] = settings.smtp_port;
   resp["mail"]["web_user"] = settings.web_user;
-  resp["mail"]["web_pass"] = settings.web_pass;
+  //resp["mail"]["web_pass"] = settings.web_pass;
 
   char buf[2048];
   serializeJson(resp, buf);
   server.send(status_code, "application/json", buf);
+}
+
+byte hexs_to_byte (const String& s) { //hex string to byte. take 1 byte of hex in string form, returns byte
+  char hex_val[3]; //3rd is \0
+  byte b_val[2] = {0, 0};
+  s.toCharArray(hex_val, 3);
+  Serial.println(hex_val);
+  for (uint8_t p = 0; p < 2; p++) { //this could also be used for longer nums, maybe i will do that
+    if (uint8_t(hex_val[p]) >= uint8_t('0') and uint8_t(hex_val[p]) <= uint8_t('9')) b_val[p] += (uint8_t(hex_val[p]) - uint8_t('0')) * (16 ^ p);
+    else if (uint8_t(hex_val[p]) >= uint8_t('A') and uint8_t(hex_val[p]) <= uint8_t('F')) b_val[p] += (uint8_t(hex_val[p]) - uint8_t('A')) * (16 ^ p);
+    else if (uint8_t(hex_val[p]) >= uint8_t('a') and uint8_t(hex_val[p]) <= uint8_t('f')) b_val[p] += (uint8_t(hex_val[p]) - uint8_t('a')) * (16 ^ p);
+    else {
+      Serial.println(F("Not a HEX value"));
+      return 0x00;
+    }
+  }
 }
 
 void rest_admin_set() {
@@ -547,6 +563,12 @@ void rest_admin_set() {
     server.sendHeader("Refresh", "3;url=/admin/conf.html");
     server.send(403, "application/json", "{\"error\":403}");
     return;
+  }
+
+  if (server.hasArg("submit_lora")) {
+    for (uint8_t b = 0; b < 16; b++) {
+      settings.lora_security_key[b] = hexs_to_byte(server.arg("lora_key_" + String(b + 1)));
+    }
   }
 
   if (server.hasArg("mail_address")) {
@@ -743,9 +765,9 @@ void setup() {
   oled.setColor(WHITE);
 
   //eeprom setup
-  Serial.println(F("EEPROM Setup..."));
+  Serial.println(F("Loading Config..."));
   oled.clear();
-  oled.drawString(0, 0, "EEPROM...");
+  oled.drawString(0, 0, "Config...");
   oled.drawString(0, 40, "Hold PRG button NOW");
   oled.drawString(0, 50, "to reset to factory.");
   oled.display();
