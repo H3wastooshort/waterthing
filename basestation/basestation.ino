@@ -340,7 +340,7 @@ bool check_auth() {
     uint16_t lc_start = cookie_header.indexOf("login_cookie=");
     uint16_t lc_end = cookie_header.substring(lc_start).indexOf("; ");
     if (lc_end == 0) lc_end = cookie_header.length() - lc_start;
-    String login_cookie = cookie_header.substring(lc_start + 13, lc_end);
+    const char* login_cookie = cookie_header.substring(lc_start + 13, lc_end).c_str();
 
     //Serial.print(F(" * Header: "));
     //Serial.println(cookie_header);
@@ -349,13 +349,12 @@ bool check_auth() {
     //Serial.print(F(" * Cookie Length: "));
     //Serial.println(login_cookie.length());
 
-    if (login_cookie.length() == 31) {
+    if (strlen(login_cookie) == 31) {
       for (uint16_t c = 0; c < 256; c++) { //check if login cookie valid
-        String correct_l_cookie = web_login_cookies[c];
         //Serial.print(F(" * Cookie Candidate: "));
         //Serial.println(correct_l_cookie);
 
-        if (login_cookie.equals(correct_l_cookie)) {
+        if (strcmp(login_cookie, (const char*)web_login_cookies[c]) == 0) {
           authed = true;
           break;
         }
@@ -546,10 +545,9 @@ byte hexs_to_byte(const String& s) { //hex string to byte. take 1 byte of hex in
   s.toCharArray(hex_val, 3);
   byte b_val[2] = {0, 0};
   for (uint8_t p = 0; p < 2 /*why does it run 3 times when there is a 2 and one time when there is a 1?!*/; p++) { //this could also be used for longer nums, maybe i will do that
-    Serial.println(p);
-    if (hex_val[p] >= '0' and hex_val[p] <= '9') b_val[p] += (hex_val[p] - '0') * (16 ^ (1-p));
-    else if (hex_val[p] >= 'A' and hex_val[p] <= 'F') b_val[p] += (hex_val[p] - 'A') * (16 ^ (1-p));
-    else if (hex_val[p] >= 'a' and hex_val[p] <= 'f') b_val[p] += (hex_val[p] - 'a') * (16 ^ (1-p));
+    if (hex_val[p] >= '0' and hex_val[p] <= '9') b_val[p] += (hex_val[p] - '0') * (16 ^ (1 - p));
+    else if (hex_val[p] >= 'A' and hex_val[p] <= 'F') b_val[p] += (hex_val[p] - 'A') * (16 ^ (1 - p));
+    else if (hex_val[p] >= 'a' and hex_val[p] <= 'f') b_val[p] += (hex_val[p] - 'a') * (16 ^ (1 - p));
     else {
       Serial.println(F("Not a HEX value"));
       return 0x00;
