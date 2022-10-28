@@ -192,7 +192,7 @@ uint8_t ws_to_gw_packet_type_to_length(uint8_t pt) {
     case PACKET_TYPE_STATUS: return 3; break;
     case PACKET_TYPE_WATER: return 5; break;
     case PACKET_TYPE_TEST: return 5; break;
-    case PACKET_TYPE_AUTH_CHALLANGE: return 16; break;
+    case PACKET_TYPE_AUTH_CHALLANGE: return 17; break;
     case PACKET_TYPE_CMD_DISABLED: return 0; break;
     case PACKET_TYPE_CMD_AUTH_FAIL: return 1; break;
     case PACKET_TYPE_CMD_OK: return 1; break;
@@ -1727,7 +1727,19 @@ bool check_auth(uint8_t packet_num, uint8_t resp_offset, byte cmd_packet_id) { /
   byte *hash;
   sha.init();
   sha.write(auth_challange, 16);
+  Serial.print(s_star); Serial.print(F("Chal: "));
+  for (uint8_t b = 0; b < 16; b++) {
+    Serial.print(auth_challange[b], HEX);
+    Serial.write(' ');
+  }
+  Serial.println();
   sha.write(settings.lora_security_key, 16);
+  Serial.print(s_star); Serial.print(F("Key: "));
+  for (uint8_t b = 0; b < 16; b++) {
+    Serial.print(settings.lora_security_key[b], HEX);
+    Serial.write(' ');
+  }
+  Serial.println();
   hash = sha.result();
   Serial.print(s_star);  Serial.print(F("Correct Hash: "));
   for (uint8_t b = 0; b < 32; b++) {
@@ -1830,10 +1842,10 @@ void handle_lora() {
                   lora_outgoing_queue[lora_outgoing_queue_idx][1] = lora_outgoing_packet_id;
                   lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_AUTH_CHALLANGE;
                   lora_outgoing_queue[lora_outgoing_queue_idx][3] = lora_incoming_queue[p_idx][1]; //include packet id to not need ACK
-                  for (uint8_t b = 0; b < 16; b++) lora_outgoing_queue[lora_outgoing_queue_idx][4 + b] = auth_challange[b];
+                  memcpy(&lora_outgoing_queue[lora_outgoing_queue_idx][4],&auth_challange,16);
 
-                  Serial.print(F("TX Chal: ")); //Serial.print(F("Sending Challange: "));
-                  for (uint8_t b = 0; b < 16; b++)  Serial.print(auth_challange[b], HEX);
+                  /*Serial.print(F("TX Chal: ")); //Serial.print(F("Sending Challange: "));
+                  for (uint8_t b = 0; b < 16; b++)  Serial.print(auth_challange[b], HEX);*/
                   Serial.println();
 
                   afterpacket_stuff();

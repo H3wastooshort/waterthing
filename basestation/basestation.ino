@@ -112,7 +112,7 @@ uint8_t ws_to_gw_packet_type_to_length(uint8_t pt) {
     case PACKET_TYPE_STATUS: return 3; break;
     case PACKET_TYPE_WATER: return 5; break;
     case PACKET_TYPE_TEST: return 5; break;
-    case PACKET_TYPE_AUTH_CHALLANGE: return 16; break;
+    case PACKET_TYPE_AUTH_CHALLANGE: return 17; break;
     case PACKET_TYPE_CMD_DISABLED: return 0; break;
     case PACKET_TYPE_CMD_AUTH_FAIL: return 1; break;
     case PACKET_TYPE_CMD_OK: return 1; break;
@@ -596,8 +596,9 @@ void rest_admin_set() {
   }
 
   EEPROM.put(0, settings);
+  EEPROM.commit();
   server.sendHeader("Refresh", "3;url=/admin/conf.html");
-  server.send(200, "application/json", "{\"success\":\"ok\"");
+  server.send(200, "application/json", "{\"success\":\"ok\"}");
 }
 
 void rest_debug() {
@@ -1170,9 +1171,9 @@ void handle_lora() {
 
       if (lora_incoming_queue[p_idx][0] == LORA_MAGIC) { //if magic correct
         Serial.println(F(" * Magic Correct."));
-        
+
         lora_outgoing_queue_last_tx = 0; //after getting a packet, respond immediatly
-        
+
         bool already_recieved = false;
         for (uint8_t i = 0; i < 16; i++) if (lora_incoming_queue[p_idx][1] == lora_last_incoming_message_IDs[i]) already_recieved = true;
 
@@ -1352,6 +1353,7 @@ void handle_lora() {
         for (uint8_t b = 0; b < 16; b++) if (last_wt_challange[b] != 0) is_empty = false;
         if (!is_empty) {
           //generate response and put in queue
+          Serial.println(F("Auth Response:"));
 
           byte resulting_hash[32];
 
@@ -1361,7 +1363,19 @@ void handle_lora() {
           mbedtls_md_setup(&hash_ctx, mbedtls_md_info_from_type(md_type), 0);
           mbedtls_md_starts(&hash_ctx);
           mbedtls_md_update(&hash_ctx, (const unsigned char *) last_wt_challange, 16);
+          Serial.print(F(" * Challange: "));
+          for (uint8_t b = 0; b < 16; b++) {
+            Serial.print(last_wt_challange[b], HEX);
+            Serial.write(' ');
+          }
+          Serial.println();
           mbedtls_md_update(&hash_ctx, (const unsigned char *) settings.lora_security_key, 16);
+          Serial.print(F(" * Key: "));
+          for (uint8_t b = 0; b < 16; b++) {
+            Serial.print(settings.lora_security_key[b], HEX);
+            Serial.write(' ');
+          }
+          Serial.println();
           mbedtls_md_finish(&hash_ctx, resulting_hash);
           mbedtls_md_free(&hash_ctx);
 
@@ -1375,7 +1389,7 @@ void handle_lora() {
           if (hash_begin_pos + 32 >= 48) Serial.println(F("Packet too big to fit with hash!")); //anti mem corrupt
           else {
             memcpy(&lora_outgoing_queue[lora_outgoing_queue_idx][hash_begin_pos], &resulting_hash, sizeof(resulting_hash));
-            Serial.print(F("Using hash: "));
+            Serial.print(F(" * Hash: "));
             for (uint8_t b = 0; b < sizeof(resulting_hash); b++) {
               if (resulting_hash[b] < 0x10) Serial.print(0);
               Serial.print(resulting_hash[b], HEX);
