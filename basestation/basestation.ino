@@ -544,10 +544,10 @@ byte hexs_to_byte(const String& s) { //hex string to byte. take 1 byte of hex in
   char hex_val[3]; //3rd is \0
   s.toCharArray(hex_val, 3);
   byte b_val = 0;
-  for (uint8_t p = 0; p < 2 /*why does it run 3 times when there is a 2 and one time when there is a 1?!*/; p++) { //this could also be used for longer nums, maybe i will do that
-    if (hex_val[p] >= '0' and hex_val[p] <= '9') b_val += (hex_val[p] - '0') * (16 ^ (1 - p));
-    else if (hex_val[p] >= 'A' and hex_val[p] <= 'F') b_val += (hex_val[p] - 'A') * (16 ^ (1 - p));
-    else if (hex_val[p] >= 'a' and hex_val[p] <= 'f') b_val += (hex_val[p] - 'a') * (16 ^ (1 - p));
+  for (uint8_t p = 0; p < 2; p++) {
+    if (hex_val[p] >= '0' and hex_val[p] <= '9') b_val += ((hex_val[p] - '0') << ((1 - p) * 4));
+    else if (hex_val[p] >= 'A' and hex_val[p] <= 'F') b_val += ((hex_val[p] - 'A' + 10) << ((1 - p) * 4));
+    else if (hex_val[p] >= 'a' and hex_val[p] <= 'f') b_val += ((hex_val[p] - 'a' + 10) << ((1 - p) * 4));
     else {
       Serial.println(F("Not a HEX value"));
       return 0x00;
@@ -1203,9 +1203,9 @@ void handle_lora() {
                 last_wt_battery_voltage = (double)bat_v / 100;
                 last_wt_status_timestamp = last_wt_battery_voltage_timestamp = ntp.getEpochTime();
 
-                if (last_wt_status && 0b01110000) send_email_alert(MAIL_ALERT_GENERAL);
-                else if (last_wt_status && 0b01000000) send_email_alert(MAIL_ALERT_WATER);
-                else if (last_wt_status && 0b01010000) send_email_alert(MAIL_ALERT_BATTERY);
+                if ((last_wt_status >> 4) && 0b0111) send_email_alert(MAIL_ALERT_GENERAL);
+                else if ((last_wt_status >> 4 ) && 0b0100) send_email_alert(MAIL_ALERT_WATER);
+                else if ((last_wt_status  >> 4) && 0b0101) send_email_alert(MAIL_ALERT_BATTERY);
 
               }
               break;
