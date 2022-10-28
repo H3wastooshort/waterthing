@@ -471,7 +471,7 @@ void rest_control() {
     lora_auth_cmd_queue[lora_auth_cmd_queue_idx][2] = water_call_b[1];
 
     lora_auth_cmd_queue_idx++;
-    if (lora_auth_cmd_queue_idx >= 16) lora_auth_cmd_queue_idx = 0;
+    if (lora_auth_cmd_queue_idx >= 4) lora_auth_cmd_queue_idx = 0;
 
     resp["success"] = "queued water call command";
   }
@@ -482,7 +482,7 @@ void rest_control() {
     lora_auth_cmd_queue[lora_auth_cmd_queue_idx][0] = PACKET_TYPE_CANCEL_WATER;
 
     lora_auth_cmd_queue_idx++;
-    if (lora_auth_cmd_queue_idx >= 16) lora_auth_cmd_queue_idx = 0;
+    if (lora_auth_cmd_queue_idx >= 4) lora_auth_cmd_queue_idx = 0;
 
     resp["success"] = "queued cancel command";
   }
@@ -1315,7 +1315,7 @@ void handle_lora() {
 
   switch (auth_state) {
     case AUTH_STEP_IDLE: {
-        for (uint8_t p = 0; p < 16; p++) {
+        for (uint8_t p = 0; p < 4; p++) {
           bool is_valid = false;
           for (uint8_t b = 0; b < 16; b++) if (lora_auth_cmd_queue[p][b] != 0) is_valid = true;
           if (is_valid) {
