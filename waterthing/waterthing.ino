@@ -1704,7 +1704,7 @@ void afterpacket_stuff() {
   if (lora_outgoing_queue_idx >= 4) lora_outgoing_queue_idx = 0;
 }
 
-bool check_auth(uint8_t packet_num, uint8_t resp_offset, byte cmd_packet_id) { //resp always 32bytes
+bool check_lora_auth(uint8_t packet_num, uint8_t resp_offset, byte cmd_packet_id) { //resp always 32bytes
   Serial.println(F("Checking Auth:"));
   bool chal_valid = false;
   for (uint8_t b = 0; b < 16; b++) if (auth_challange[b] != 0) chal_valid = true;
@@ -1859,7 +1859,7 @@ void handle_lora() {
                   clear_packet(lora_incoming_queue[p_idx][3]);
                   do_ack = false;
 
-                  if (!check_auth(p_idx, 6, lora_incoming_queue[p_idx][1])) break;
+                  if (!check_lora_auth(p_idx, 6, lora_incoming_queue[p_idx][1])) break;
 
                   union {
                     uint16_t liters = 0;
@@ -1879,9 +1879,10 @@ void handle_lora() {
                   clear_packet(lora_incoming_queue[p_idx][3]);
                   do_ack = false;
 
-                  if (!check_auth(p_idx, 4, lora_incoming_queue[p_idx][1])) break;
+                  if (!check_lora_auth(p_idx, 4, lora_incoming_queue[p_idx][1])) break;
 
                   tank_fillings_remaining = 0;
+                  system_state = STATUS_IDLE;
                 }
                 break;
 
@@ -1960,7 +1961,7 @@ void handle_lora() {
           lora_outgoing_queue_tx_attempts[p_idx] = 0;
         }
         //noser Serial.println(F(" and Done."));
-        //noser Serial.println();
+        Serial.println();
         //digitalWrite(pcf, ACTIVITY_LED, HIGH);
       }
     }

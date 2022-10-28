@@ -1315,7 +1315,7 @@ void handle_lora() {
 
   switch (auth_state) {
     case AUTH_STEP_IDLE: {
-        for (uint8_t p = 0; p < 4; p++) {
+        for (uint8_t p = 0; p < 16; p++) {
           bool is_valid = false;
           for (uint8_t b = 0; b < 16; b++) if (lora_auth_cmd_queue[p][b] != 0) is_valid = true;
           if (is_valid) {
