@@ -73,7 +73,7 @@ struct settings_s {
 uint8_t lora_outgoing_packet_id = 1; //increments every packet
 byte lora_outgoing_queue[4][48] = {0}; //holds up to 4 messages that are to be sent with max 48 bits. first byte is magic, 2nd message id, 3nd is message type, rest is data. if all 0, no message in slot. set to 0 after up to 0 retransmits
 uint8_t lora_outgoing_queue_idx = 0; //idx where to write
-uint32_t lora_outgoing_queue_last_tx[4] = {0};
+uint64_t lora_outgoing_queue_last_tx = 0;
 uint8_t lora_outgoing_queue_tx_attempts[4] = {0};
 bool lora_tx_ready = true;
 
@@ -543,17 +543,17 @@ void rest_admin_get() {
 byte hexs_to_byte(const String& s) { //hex string to byte. take 1 byte of hex in string form, returns byte
   char hex_val[3]; //3rd is \0
   s.toCharArray(hex_val, 3);
-  byte b_val[2] = {0, 0};
+  byte b_val = 0;
   for (uint8_t p = 0; p < 2 /*why does it run 3 times when there is a 2 and one time when there is a 1?!*/; p++) { //this could also be used for longer nums, maybe i will do that
-    if (hex_val[p] >= '0' and hex_val[p] <= '9') b_val[p] += (hex_val[p] - '0') * (16 ^ (1 - p));
-    else if (hex_val[p] >= 'A' and hex_val[p] <= 'F') b_val[p] += (hex_val[p] - 'A') * (16 ^ (1 - p));
-    else if (hex_val[p] >= 'a' and hex_val[p] <= 'f') b_val[p] += (hex_val[p] - 'a') * (16 ^ (1 - p));
+    if (hex_val[p] >= '0' and hex_val[p] <= '9') b_val += (hex_val[p] - '0') * (16 ^ (1 - p));
+    else if (hex_val[p] >= 'A' and hex_val[p] <= 'F') b_val += (hex_val[p] - 'A') * (16 ^ (1 - p));
+    else if (hex_val[p] >= 'a' and hex_val[p] <= 'f') b_val += (hex_val[p] - 'a') * (16 ^ (1 - p));
     else {
       Serial.println(F("Not a HEX value"));
       return 0x00;
     }
   }
-  return 0x00;
+  return b_val;
 }
 
 void rest_admin_set() {
@@ -816,7 +816,7 @@ void setup() {
     lora_outgoing_queue[lora_outgoing_queue_idx][1] = lora_outgoing_packet_id;
     lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_GW_REBOOT;
 
-    lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis() - LORA_RETRANSMIT_TIME + 10000;
+    lora_outgoing_queue_last_tx = millis() - LORA_RETRANSMIT_TIME + 10000;
     lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] =  0;
     lora_outgoing_packet_id++;
     if (lora_outgoing_packet_id < 1) lora_outgoing_packet_id == 1; //never let it go to 0, that causes bugs
@@ -1098,7 +1098,7 @@ void update_display() {
 }
 
 void afterpacket_stuff() {
-  lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = 0;
+  //lora_outgoing_queue_last_tx = 0;
   lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] = 0;
   lora_outgoing_packet_id++;
   if (lora_outgoing_packet_id < 1) lora_outgoing_packet_id == 1; //never let it go to 0, that causes bugs
@@ -1113,7 +1113,7 @@ void send_ack(byte packet_id) {
   lora_outgoing_queue[lora_outgoing_queue_idx][3] = packet_id;
 
   //i should really just make them next_tx_millis and remaining_attempts instead of this fuckshit
-  lora_outgoing_queue_last_tx[lora_outgoing_queue_idx] = millis() - LORA_RETRANSMIT_TIME + 200; //ack only sent 1000ms after
+  //lora_outgoing_queue_last_tx = millis() - LORA_RETRANSMIT_TIME + 2600; //ack only sent 1000ms after
   lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] =  LORA_RETRANSMIT_TRIES - 1; //there is no response to ACKs so this ensures ther is only one ACK sent
   lora_outgoing_packet_id++;
   if (lora_outgoing_packet_id < 1) lora_outgoing_packet_id == 1; //never let it go to 0, that causes bugs
@@ -1127,7 +1127,7 @@ void clear_packet(byte packet_id) {
       Serial.print(F(" * Clearing Packet ID: "));
       Serial.println(lora_outgoing_queue[p][1]);
       for (uint8_t b = 0; b < 48; b++) lora_outgoing_queue[p][b] = 0; //clear packet
-      lora_outgoing_queue_last_tx[p] = 0;
+      //lora_outgoing_queue_last_tx = 0;
       lora_outgoing_queue_tx_attempts[p] = LORA_RETRANSMIT_TRIES;
     }
   }
@@ -1170,6 +1170,9 @@ void handle_lora() {
 
       if (lora_incoming_queue[p_idx][0] == LORA_MAGIC) { //if magic correct
         Serial.println(F(" * Magic Correct."));
+        
+        lora_outgoing_queue_last_tx = 0; //after getting a packet, respond immediatly
+        
         bool already_recieved = false;
         for (uint8_t i = 0; i < 16; i++) if (lora_incoming_queue[p_idx][1] == lora_last_incoming_message_IDs[i]) already_recieved = true;
 
@@ -1405,14 +1408,14 @@ void handle_lora() {
   //Serial.println(auth_state);
 
   //queue handle
-  if (lora_tx_ready) {
+  if (lora_tx_ready and millis() - lora_outgoing_queue_last_tx > LORA_RETRANSMIT_TIME) {
     for (uint8_t p_idx = 0; p_idx < 4; p_idx++) {
       bool is_empty = true;
       for (uint8_t i = 0; i < 48; i++) if (lora_outgoing_queue[p_idx][i] != 0) {
           is_empty = false;  //check for data in packet
           break;
         }
-      if (!is_empty and millis() - lora_outgoing_queue_last_tx[p_idx] > LORA_RETRANSMIT_TIME and lora_tx_ready) {
+      if (!is_empty and millis() - lora_outgoing_queue_last_tx > LORA_RETRANSMIT_TIME and lora_tx_ready) {
         Serial.println(F("Sending LoRa Packet: "));
 
         //kind of hacky way to display the tx indicator on the display. comment out if it causes visual problems
@@ -1441,11 +1444,11 @@ void handle_lora() {
         //
         Serial.println();
 
-        lora_outgoing_queue_last_tx[p_idx] = millis();
+        lora_outgoing_queue_last_tx = millis();
         lora_outgoing_queue_tx_attempts[p_idx]++;
         if (lora_outgoing_queue_tx_attempts[p_idx] >= LORA_RETRANSMIT_TRIES) {
           for (uint8_t i = 0; i < 48; i++) lora_outgoing_queue[p_idx][i] = 0; //clear packet if unsuccessful
-          lora_outgoing_queue_last_tx[p_idx] = 0;
+          //lora_outgoing_queue_last_tx = 0;
           lora_outgoing_queue_tx_attempts[p_idx] = 0;
         }
 
