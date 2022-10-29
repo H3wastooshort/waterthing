@@ -734,6 +734,8 @@ void setup() {
       pinMode(pcf, pin, OUTPUT);
       digitalWrite(pcf, pin, HIGH);
       delay(50);
+    }
+    for (uint8_t pin = 0; pin < 8; pin++) {
       digitalWrite(pcf, pin, LOW);
       delay(50);
     }
@@ -1482,6 +1484,7 @@ void read_sensors_and_clock() {
 
 
   //rain
+  //debounce input
   bool rain_condition_raw = (settings.rain_detected_on_level == digitalRead(RAIN_DETECTOR_PIN));
   static bool rain_condition_now = false;
   static bool last_changed_db_rc = false;
@@ -1495,14 +1498,23 @@ void read_sensors_and_clock() {
   static uint32_t last_rc_change = 0;
   static bool last_rain_condition = false;
 
+  //only set start/end millis on change
   if (last_rain_condition != rain_condition_now) {
     if (rain_condition_now) sensor_values.rain_start_millis = millis();
     else sensor_values.rain_end_millis = millis();
     last_rain_condition = rain_condition_now;
   }
 
-  if ((sensor_values.rain_end_millis - sensor_values.rain_start_millis > settings.rain_minutes_til_block or millis() - sensor_values.rain_start_millis > settings.rain_minutes_til_block) //if difference of current time or last rains time to rain start is big enough
-      and ((millis() - sensor_values.rain_end_millis < settings.rain_minutes_til_clear or millis() - sensor_values.rain_start_millis < settings.rain_minutes_til_clear) or rain_condition_now))
+  //TL;DR if start time is long enough ago OR end time is recent enough THEN rain is detected
+  if (
+    //if difference BETWEEN current time OR last rains time COMPARED TO rain start IS BIGGER THAN configured time
+    (sensor_values.rain_end_millis - sensor_values.rain_start_millis > (settings.rain_minutes_til_block * 60 * 1000)
+     or millis() - sensor_values.rain_start_millis > settings.rain_minutes_til_block)
+
+    and //AND (current time minus end time IS SMALLER THAN configured time OR its raining)
+    ((millis() - sensor_values.rain_end_millis < (settings.rain_minutes_til_clear * 60 * 1000)
+      /*or millis() - sensor_values.rain_start_millis < (settings.rain_minutes_til_clear*60*1000)*/)
+     or rain_condition_now))
     sensor_values.rain_detected = true;
   else sensor_values.rain_detected = false;
 }
@@ -1516,57 +1528,73 @@ void handle_serial() {
     if (controlCharacter == 'a') down_callback();
     if (controlCharacter == 's') btn_callback();
 
-    /*if (controlCharacter == 'V') { //dump all sensor values to serial
-       Serial.println(F("Sensor Values:"));
+    if (controlCharacter == 'V') { //dump all sensor values to serial
+      //Serial.println(F("Sensors:"));
 
-       Serial.print(s_star);  Serial.print(F("Low Water: "));
-       Serial.println((sensor_values.low_water) ? F("Water too low") : F("Water fine"));
-       Serial.print(s_star);  Serial.print(F("Bottom Tank Swimmer: "));
-       Serial.println((sensor_values.tank_bottom) ? F("Under Water") : F("Dry"));
-       Serial.print(s_star);  Serial.print(F("Top Tank Swimmer: "));
-       Serial.println((sensor_values.tank_top) ? F("Under Water") : F("Dry"));
-       Serial.print(s_star);  Serial.print(F("Battery Voltage: "));
-       Serial.print(sensor_values.battery_voltage );
-       Serial.print(F("V\r\n * Water flow clicks: "));
-       Serial.println(sensor_values.water_flow_clicks);
-       Serial.print(s_star);  Serial.print(s_star); Serial.print(F("Rain: "));
-       Serial.println((sensor_values.rain_detected) ? F("Detected") : F("Somewhere else"));
+      /*Serial.print(s_star);  Serial.print(F("Low Water: "));
+        Serial.println((sensor_values.low_water) ? F("Water too low") : F("Water fine"));
+        Serial.print(s_star);  Serial.print(F("Bottom Tank Swimmer: "));
+        Serial.println((sensor_values.tank_bottom) ? F("Under Water") : F("Dry"));
+        Serial.print(s_star);  Serial.print(F("Top Tank Swimmer: "));
+        Serial.println((sensor_values.tank_top) ? F("Under Water") : F("Dry"));
+        Serial.print(s_star);  Serial.print(F("Battery Voltage: "));
+        Serial.print(sensor_values.battery_voltage );
+        Serial.print(F("V\r\n * Water flow clicks: "));
+        Serial.println(sensor_values.water_flow_clicks);
+        Serial.print(s_star);  Serial.print(s_star); Serial.print(F("Rain: "));
+        Serial.println((sensor_values.rain_detected) ? F("Detected") : F("Somewhere else"));*/
 
+      /*Serial.print(s_star);  Serial.print(F("WaterLow: "));
+        Serial.println(sensor_values.low_water);
+        Serial.print(s_star);  Serial.print(F("TankBot: "));
+        Serial.println(sensor_values.tank_bottom);
+        Serial.print(s_star);  Serial.print(F("TankTop: "));
+        Serial.println(sensor_values.tank_top);
+        Serial.print(s_star);  Serial.print(F("BatV: "));
+        Serial.print(sensor_values.battery_voltage );
+        Serial.print(F("V\r\n * FlowClicks: "));
+        Serial.println(sensor_values.water_flow_clicks);*/
+      Serial.print(s_star); Serial.print(F("Rain: "));
+      Serial.println(sensor_values.rain_detected);
 
-       Serial.println(F("System: "));
+      /*Serial.println(F("System: "));
 
-       Serial.print(s_star); Serial.print(F("Reset Cause: "));
-      if (mcusr_copy & (1 << WDRF)) {
-         Serial.print(F("WATCHDOG! Firmware may be unstable!"));
-      }
-      else if (mcusr_copy & (1 << BORF)) {
-         Serial.print(F("BROWNOUT! Check your Arduino's Power Suppy!"));
-      }
-      else if (mcusr_copy & (1 << EXTRF)) {
-         Serial.print(F("External. For example the Reset Button."));
-      }
-      else if (mcusr_copy & (1 << PORF)) {
-         Serial.print(F("Power on."));
-      }
-       Serial.println();
+        // Serial.print(F("Reset Cause: "));
+        Serial.print(F("Reset: "));
 
-       Serial.print(s_star); Serial.print(F("Uptime: "));
-       Serial.print(round(millis() / 1000));
-       Serial.print('s');
-       Serial.println();
+        if (mcusr_copy & (1 << WDRF)) {
+        // Serial.print(F("WATCHDOG! Firmware may be unstable!"));
+        Serial.print(F("WATCHDOG!"));
+        }
+        else if (mcusr_copy & (1 << BORF)) {
+        // Serial.print(F("BROWNOUT! Check your Arduino's Power Suppy!"));
+        Serial.print(F("BROWNOUT!"));
+        }
+        else if (mcusr_copy & (1 << EXTRF)) {
+        // Serial.print(F("External. For example the Reset Button."));
+        Serial.print(F("External"));
+        }
+        else if (mcusr_copy & (1 << PORF)) {
+        Serial.print(F("Power on"));
+        }
+        Serial.println();*/
 
+      Serial.print(s_star); Serial.print(F("Uptime: "));
+      Serial.print(round(millis() / 1000));
+      Serial.print('s');
+      Serial.println();
 
-       Serial.print(s_star); Serial.print(F("New ADC divider: "));
-       Serial.println(settings.battery_voltage_adc_divider);
+      /*Serial.print(s_star); Serial.print(F("ADC div: "));
+        Serial.println(settings.battery_voltage_adc_divider);
 
-       Serial.print(s_star); Serial.print(F("Lora Missing: "));
-       Serial.println(component_errors.lora_missing ? F("YES") : F("No"));
+        Serial.print(s_star); Serial.print(F("Lora Missing: "));
+        Serial.println(component_errors.lora_missing ? F("YES") : F("No"));
 
-       Serial.print(s_star); Serial.print(F("LoRa Enable: "));
-       Serial.println(settings.lora_enable);
+        Serial.print(s_star); Serial.print(F("LoRa Enable: "));
+        Serial.println(settings.lora_enable);*/
 
-       Serial.println();
-      }*/
+      Serial.println();
+    }
 
     if (controlCharacter == 'G') { //generate new lora key
       for (uint8_t b = 0; b < 16; b++) settings.lora_security_key[b] = random(0, 255);
