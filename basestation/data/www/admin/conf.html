@@ -25,8 +25,8 @@
 <h2>WiFi</h2>
 <!--<label for="wifi_ssid">WiFi SSID: </label><input id="wifi_ssid" name="wifi_ssid"></input><br>
 <label for="wifi_pass">WiFi Passwort: </label><input id="wifi_pass" name="wifi_pass"></input><br>-->
-<label for="conf_ssid">Konfigurations SSID: </label><input id="conf_ssid" name="conf_ssid"></input><br>
-<label for="conf_pass">Konfigurations Passwort: </label><input id="conf_pass" name="conf_pass"></input><br>
+<label for="conf_ssid">Konfigurations SSID: </label><input id="conf_ssid" name="conf_ssid" maxlength="15" size="15"></input><br>
+<label for="conf_pass">Konfigurations Passwort: </label><input id="conf_pass" name="conf_pass" maxlength="15" size="15"></input><br>
 <button name="submit_wifi">Übermitteln</button><br>
 </div>
 </form>
@@ -62,9 +62,10 @@ Array.prototype.forEach.call(document.getElementsByClassName("lora_key"), e=> {
 <h3>Empfänger</h3>
 <label for="mail_address">Mail Empfänger: </label><input id="mail_address" name="mail_address" maxlength="31" size="31"></input><br>
 <h3>Absender</h3>
+<p>Nur SSL-Fähige Mailserver unterstützt.</p>
 <label for="smtp_server">SMTP Server: </label><input id="smtp_server" name="smtp_server" maxlength="31" size="31"></input><br>
 <label for="smtp_user">SMTP Nutername: </label><input id="smtp_user" name="smtp_user" maxlength="31" size="31"></input><br>
-<label for="smtp_pass">SMTP Passwort: </label><input id="smtp_pass" name="smtp_pass" maxlength="31" size="31"></input><br>
+<label for="smtp_pass">SMTP Passwort: </label><input id="smtp_pass" name="smtp_pass" maxlength="31" size="31" type="password"></input><br>
 <label for="smtp_port">SMTP Port: </label><input id="smtp_port" type="number" name="smtp_port"></input><br>
 <button name="submit_mail">Übermitteln</button><br>
 </div>
@@ -73,8 +74,8 @@ Array.prototype.forEach.call(document.getElementsByClassName("lora_key"), e=> {
 <form method="POST" action="/admin/settings">
 <div class="box">
 <h2>Webinterface</h2>
-<label for="web_user">Web Nutzer: </label><input id="web_user" name="web_user" maxlength="15" size="15"></input><br>
-<label for="web_pass">Web Passwort: </label><input id="web_pass" name="web_pass" maxlength="15" size="15" type="password"></input><br>
+<label for="web_user">Web Nutzer: </label><input id="web_user" name="web_user" maxlength="31" size="31"></input><br>
+<label for="web_pass">Web Passwort: </label><input id="web_pass" name="web_pass" maxlength="31" size="31" type="password"></input><br>
 <button name="submit_webui">Übermitteln</button><br>
 </div>
 </form>

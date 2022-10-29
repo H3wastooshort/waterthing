@@ -1482,29 +1482,29 @@ void read_sensors_and_clock() {
 
 
   //rain
-  bool rain_condition_now = false;
-  bool rc = (settings.rain_detected_on_level == digitalRead(RAIN_DETECTOR_PIN));
-  static bool last_changed_rc = false;
-  static uint32_t last_rc_change = 0;
-  if (rc != last_changed_rc) {
-    last_rc_change = millis();
-    last_changed_rc = rc;
+  bool rain_condition_raw = (settings.rain_detected_on_level == digitalRead(RAIN_DETECTOR_PIN));
+  static bool rain_condition_now = false;
+  static bool last_changed_db_rc = false;
+  static uint32_t last_db_rc_change = 0;
+  if (rain_condition_raw != last_changed_db_rc) {
+    last_db_rc_change = millis();
+    last_changed_db_rc = rain_condition_raw;
   }
-  if (millis() - last_rc_change > SENSOR_DEBOUNCE) rain_condition_now = rc;
+  if (millis() - last_db_rc_change > SENSOR_DEBOUNCE) rain_condition_now = rain_condition_raw;
 
+  static uint32_t last_rc_change = 0;
   static bool last_rain_condition = false;
-  if (rain_condition_now != last_rain_condition and millis() - sensor_values.rain_start_millis > 10000 and millis() - sensor_values.rain_end_millis > 10000) { //if changed set millis vars and debounce rain sensor
 
+  if (last_rain_condition != rain_condition_now) {
     if (rain_condition_now) sensor_values.rain_start_millis = millis();
     else sensor_values.rain_end_millis = millis();
-
     last_rain_condition = rain_condition_now;
-
-    if ((sensor_values.rain_end_millis - sensor_values.rain_start_millis > settings.rain_minutes_til_block or millis() - sensor_values.rain_start_millis > settings.rain_minutes_til_block) //if difference of current time or last rains time to rain start is big enough
-        and ((millis() - sensor_values.rain_end_millis < settings.rain_minutes_til_clear or millis() - sensor_values.rain_start_millis < settings.rain_minutes_til_clear) or rain_condition_now))
-      sensor_values.rain_detected = true;
-    else sensor_values.rain_detected = false;
   }
+
+  if ((sensor_values.rain_end_millis - sensor_values.rain_start_millis > settings.rain_minutes_til_block or millis() - sensor_values.rain_start_millis > settings.rain_minutes_til_block) //if difference of current time or last rains time to rain start is big enough
+      and ((millis() - sensor_values.rain_end_millis < settings.rain_minutes_til_clear or millis() - sensor_values.rain_start_millis < settings.rain_minutes_til_clear) or rain_condition_now))
+    sensor_values.rain_detected = true;
+  else sensor_values.rain_detected = false;
 }
 
 void handle_serial() {
@@ -1842,10 +1842,10 @@ void handle_lora() {
                   lora_outgoing_queue[lora_outgoing_queue_idx][1] = lora_outgoing_packet_id;
                   lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_AUTH_CHALLANGE;
                   lora_outgoing_queue[lora_outgoing_queue_idx][3] = lora_incoming_queue[p_idx][1]; //include packet id to not need ACK
-                  memcpy(&lora_outgoing_queue[lora_outgoing_queue_idx][4],&auth_challange,16);
+                  memcpy(&lora_outgoing_queue[lora_outgoing_queue_idx][4], &auth_challange, 16);
 
                   /*Serial.print(F("TX Chal: ")); //Serial.print(F("Sending Challange: "));
-                  for (uint8_t b = 0; b < 16; b++)  Serial.print(auth_challange[b], HEX);*/
+                    for (uint8_t b = 0; b < 16; b++)  Serial.print(auth_challange[b], HEX);*/
                   Serial.println();
 
                   afterpacket_stuff();

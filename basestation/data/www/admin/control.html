@@ -39,7 +39,9 @@
 <form action="/admin/control" method="POST">
 <div class="box">
 <h2>Sofort Bewässern</h2>
-<label for="call_for_water">Liter: </label><input id="call_water_field" name="call_for_water" type="number" min="0" max="999" step="1"></input><br>
+<p>Die Literzahl wird auf Tankfüllungen gerundet.<br>
+29 Liter bei einem 20 Liter Tank wären eine Füllung, also 20 Liter</p>
+<label for="call_for_water">Liter: </label><input id="call_water_field" name="call_for_water" type="number" min="0" max="255" step="1"></input><br>
 <button name="submit_add_water">Übermitteln</button><br>
 </div>
 </form>

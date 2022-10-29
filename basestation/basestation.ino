@@ -63,7 +63,7 @@ struct settings_s {
   char smtp_server[32] = {0};
   char smtp_user[32] = {0};
   char smtp_pass[32] = {0};
-  uint16_t smtp_port = 587;
+  uint16_t smtp_port = 465; //usually 465 for SSL SMTP
   char web_user[32] = "waterthing";
   char web_pass[32] = "thisisnotsecure";
   uint8_t display_brightness = 255;
@@ -330,6 +330,16 @@ void config_ap_callback(WiFiManager *myWiFiManager) {
   oled.display();
 }
 
+//web
+void set_mail_conf() {
+  email.setSMTPServer(settings.smtp_server);
+  email.setNameFrom(host_name);
+  email.setEMailFrom(settings.smtp_user);
+  email.setEMailLogin(settings.smtp_user);
+  email.setEMailPassword(settings.smtp_pass);
+  email.setSMTPPort(settings.smtp_port);
+  email.setIsSecure(false);
+}
 
 bool check_auth() {
   Serial.println(F("Authed Access Attempt"));
@@ -571,32 +581,36 @@ void rest_admin_set() {
   }
 
   if (server.hasArg("mail_address")) {
-    server.arg("mail_address").toCharArray(settings.alert_email, 32);
+    server.arg("mail_address").toCharArray(settings.alert_email, sizeof(settings.alert_email));
   }
   if (server.hasArg("smtp_server")) {
-    server.arg("smtp_server").toCharArray(settings.smtp_server, 32);
+    server.arg("smtp_server").toCharArray(settings.smtp_server, sizeof(settings.smtp_server));
   }
   if (server.hasArg("smtp_user")) {
-    server.arg("smtp_user").toCharArray(settings.smtp_user, 32);
+    server.arg("smtp_user").toCharArray(settings.smtp_user, sizeof(settings.smtp_user));
   }
   if (server.hasArg("smtp_pass")) {
-    server.arg("smtp_pass").toCharArray(settings.smtp_pass, 32);
+    server.arg("smtp_pass").toCharArray(settings.smtp_pass, sizeof(settings.smtp_pass));
   }
   if (server.hasArg("smtp_port")) {
     settings.smtp_port = server.arg("smtp_port").toInt();
   }
   if (server.hasArg("web_user")) {
-    server.arg("web_user").toCharArray(settings.web_user, 32);
+    server.arg("web_user").toCharArray(settings.web_user, sizeof(settings.web_user));
+  }
+  if (server.hasArg("web_pass")) {
+    server.arg("web_pass").toCharArray(settings.web_pass, sizeof(settings.web_pass));
   }
   if (server.hasArg("conf_ssid")) {
-    server.arg("conf_ssid").toCharArray(settings.conf_ssid, 16);
+    server.arg("conf_ssid").toCharArray(settings.conf_ssid, sizeof(settings.conf_ssid));
   }
   if (server.hasArg("conf_pass")) {
-    server.arg("conf_pass").toCharArray(settings.conf_pass, 16);
+    server.arg("conf_pass").toCharArray(settings.conf_pass, sizeof(settings.conf_pass));
   }
 
   EEPROM.put(0, settings);
   EEPROM.commit();
+  set_mail_conf();
   server.sendHeader("Refresh", "3;url=/admin/conf.html");
   server.send(200, "application/json", "{\"success\":\"ok\"}");
 }
@@ -666,21 +680,27 @@ void send_email_alert(uint8_t alert_type) { //fuck this enum shit
   switch (alert_type) { //read in first part of mail and add values
     case MAIL_ALERT_WATER: {
         msg.subject = "[WT] ACHTUNG: Wassertank Leer!";
-        msg_body_file = SPIFFS.open("/mail/de_alert_water.html", "r");
+        msg_body_file = SPIFFS.open("/mail/de_alert_wtr.html", "r");
         while (msg_body_file.available()) msg.message += msg_body_file.read();
         msg_body_file.close();
       } break;
     case MAIL_ALERT_BATTERY: {
         msg.subject = "[WT] ACHTUNG: Batterie Leer!";
-        msg_body_file = SPIFFS.open("/mail/de_alert_battery.html", "r");
+        msg_body_file = SPIFFS.open("/mail/de_alert_bat.html", "r");
         while (msg_body_file.available()) msg.message += msg_body_file.read();
         msg_body_file.close();
         msg.message += last_wt_battery_voltage;
         msg.message += 'V';
       } break;
+    case MAIL_ALERT_RADIO_SILENCE: { //not yet used
+        msg.subject = "[WT] INFO: Funkstille.";
+        msg_body_file = SPIFFS.open("/mail/de_alert_nc.html", "r");
+        while (msg_body_file.available()) msg.message += msg_body_file.read();
+        msg_body_file.close();
+      } break;
     case MAIL_ALERT_GENERAL: {
         msg.subject = "[WT] ACHTUNG: Systemfehler!";
-        msg_body_file = SPIFFS.open("/mail/de_alert_gen_fail.html", "r");
+        msg_body_file = SPIFFS.open("/mail/de_alert_gen.html", "r");
         while (msg_body_file.available()) msg.message += msg_body_file.read();
         msg_body_file.close();
         //                     XXXXTMU?
@@ -697,7 +717,7 @@ void send_email_alert(uint8_t alert_type) { //fuck this enum shit
   EMailSender::Response r = email.send(settings.alert_email, msg);
 
   Serial.print(F(" * Status: "));
-  Serial.println(r.status);
+  Serial.println(r.status ? F("OK") : F("ERROR"));
   Serial.print(F(" * Code: "));
   Serial.println(r.code);
   Serial.print(F(" * Description: "));
@@ -978,15 +998,7 @@ void setup() {
 
   //email
   Serial.println(F("E-Mail Setup..."));
-  email.setSMTPServer(settings.smtp_server);
-  email.setNameFrom(host_name);
-  email.setEMailFrom(settings.smtp_user);
-  email.setEMailLogin(settings.smtp_user);
-  email.setEMailPassword(settings.smtp_pass);
-  email.setSMTPPort(settings.smtp_port);
-  email.setIsSecure(true);
-
-  //MEM CORRUPT BETWEEN HERE
+  set_mail_conf();
 
   //webserver
   Serial.println(F("WebServer Setup..."));
@@ -1018,8 +1030,6 @@ void setup() {
 
   oled.clear();
   oled.display();
-
-  //AND HERE
 
   //PRG button interrupt
   attachInterrupt(digitalPinToInterrupt(0), disp_button_down, FALLING);
@@ -1206,6 +1216,7 @@ void handle_lora() {
                 if ((last_wt_status >> 4) && 0b0111) send_email_alert(MAIL_ALERT_GENERAL);
                 else if ((last_wt_status >> 4 ) && 0b0100) send_email_alert(MAIL_ALERT_WATER);
                 else if ((last_wt_status  >> 4) && 0b0101) send_email_alert(MAIL_ALERT_BATTERY);
+                else last_mail_alert = MAIL_ALERT_NONE;
 
               }
               break;
