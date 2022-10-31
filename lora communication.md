@@ -16,7 +16,7 @@ Packet ID increment individually on each side and rolls over to 0 when going ove
 | 250 | Ask for Auth challange | No Data | |
 | 251 | Ping | | |
 | 252 | Check Auth | [1 byte Packet ID of challange] [Auth Response 32 bytes] | Debug command to see if you have the right key without doing sth |
-| 255 | Status/Broadcast ACK | [Packet ID] | |
+| 255 | ACK | [Packet ID] | |
 
 ## Water System -> Gateway
 | Packet Type | Name | Anatomy | Description |
