@@ -1604,7 +1604,7 @@ void handle_serial() {
 
       Serial.print(s_star); Serial.print(F("AirT: "));
       Serial.print(lora_airtime / 1000); Serial.print(F("s/")); Serial.print(LORA_MAX_AIRTIME); Serial.print(F("s ("));
-      Serial.print((lora_airtime / (LORA_MAX_AIRTIME * 1000)) * 100); Serial.println(F(")%"));
+      Serial.print((lora_airtime / ((uint32_t)LORA_MAX_AIRTIME * 1000)) * 100); Serial.println(F("%)"));
 
       Serial.println();
     }
@@ -2004,6 +2004,7 @@ void handle_lora() {
           Serial.write(' ');
         }
         wdt_reset();
+        lora_tx_start_millis = millis();
         LoRa.endPacket(/*true*/false); //tx in not async mode becaus that never seems to work
         handle_lora_tx_done();
         Serial.println();

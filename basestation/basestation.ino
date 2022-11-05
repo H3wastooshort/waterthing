@@ -1092,11 +1092,11 @@ void update_display() {
             fe_string += last_lora_freq_error;
             oled.drawString(63, 38, fe_string);*/
           String airt_string = "t_TX: ";
-          airt_string += round(lora_airtime / 1000);
+          airt_string += uint16_t(lora_airtime / 1000);
           airt_string += "s/";
           airt_string += LORA_MAX_AIRTIME;
           airt_string += "s (";
-          airt_string += round((lora_airtime / (LORA_MAX_AIRTIME * 1000)) * 100);
+          airt_string += uint8_t(lora_airtime / (uint64_t)LORA_MAX_AIRTIME * 1000) * 100);
           airt_string += " % )";
           oled.drawString(63, 38, airt_string);
         }
