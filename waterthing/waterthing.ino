@@ -2,11 +2,9 @@
 
 /*
   ====IMPORTANT====
-  If you run insto space issues (you will),
-  install the Optiboot bootloader on your board (it saves about 1 kb space)
+  If you run into space issues (you will), install the Optiboot bootloader on your board (it saves about 1 kb space)
   and compile with the ATMega328P option in MiniCore (https://github.com/MCUdude/MiniCore)
-  as that has the correct space limit and can turn on LTO (Link-time optimizations)
-  to save even more space. good luck
+  as that has the correct space limit and can turn on LTO (Link-time optimizations) to save even more space. good luck
 */
 
 #include <EEPROM.h>
@@ -60,6 +58,7 @@
 #define LORA_RETRANSMIT_TRIES 5
 #define LORA_MAGIC 42
 #define LORA_TX_INTERVAL 300000 //time between beacon broadcasts in ms
+#define LORA_MAX_AIRTIME 340 //in seconds
 
 //library stuff
 LiquidCrystal_I2C lcd(0x27, 16, 2);
@@ -154,6 +153,8 @@ uint8_t lora_outgoing_queue_idx = 0; //idx where to write
 uint32_t lora_outgoing_queue_last_tx = 0;
 uint8_t lora_outgoing_queue_tx_attempts[4] = {0};
 bool lora_tx_ready = true;
+uint32_t lora_tx_start_millis = 0;
+uint32_t lora_airtime = 0; //in millis
 
 byte lora_incoming_queue[4][48] = {0}; //holds up to 4 messages that are to be sent with max 48 bits.
 uint8_t lora_incoming_queue_idx = 0; //idx where to write
@@ -261,8 +262,8 @@ int16_t literToTanks(uint16_t liters_to_convert) {
 }
 
 void lcd_print_menu_bracket(uint8_t for_menu_entry, bool ending_bracket) {
-  if (ending_bracket) lcd.print(menu_entry_cursor == for_menu_entry ? (menu_editing ? F("}") : F("]")) : F(")"));
-  else lcd.print(menu_entry_cursor == for_menu_entry ? (menu_editing ? F("{") : F("[")) : F("("));
+  if (ending_bracket) lcd.print(menu_entry_cursor == for_menu_entry ? (menu_editing ? '}' : ']') : ')');
+  else lcd.print(menu_entry_cursor == for_menu_entry ? (menu_editing ? '{' : '[') : '(');
 }
 
 
@@ -631,8 +632,9 @@ void handle_lora_packet(int packet_size) { //TODO: maybe move magic checking her
 }
 
 void handle_lora_tx_done() {
-  lora_tx_ready = true;
   LoRa.receive();
+  lora_tx_ready = true;
+  lora_airtime += millis() - lora_tx_start_millis; //add tx time
   digitalWrite(pcf, LORA_TX_LED, HIGH);
 }
 
@@ -1586,10 +1588,10 @@ void handle_serial() {
         }
         Serial.println();*/
 
-      Serial.print(s_star); Serial.print(F("Uptime: "));
-      Serial.print(round(millis() / 1000));
-      Serial.print('s');
-      Serial.println();
+      /*Serial.print(s_star); Serial.print(F("Uptime: "));
+        Serial.print(round(millis() / 1000));
+        Serial.print('s');
+        Serial.println();*/
 
       /*Serial.print(s_star); Serial.print(F("ADC div: "));
         Serial.println(settings.battery_voltage_adc_divider);
@@ -1599,6 +1601,10 @@ void handle_serial() {
 
         Serial.print(s_star); Serial.print(F("LoRa Enable: "));
         Serial.println(settings.lora_enable);*/
+
+      Serial.print(s_star); Serial.print(F("AirT: "));
+      Serial.print(lora_airtime / 1000); Serial.print(F("s/")); Serial.print(LORA_MAX_AIRTIME); Serial.print(F("s ("));
+      Serial.print((lora_airtime / (LORA_MAX_AIRTIME * 1000)) * 100); Serial.println(F(")%"));
 
       Serial.println();
     }
@@ -1776,14 +1782,14 @@ bool check_lora_auth(uint8_t packet_num, uint8_t resp_offset, byte cmd_packet_id
   }
   Serial.println();
   hash = sha.result();
-  Serial.print(s_star);  Serial.print(F("Correct Hash: "));
+  Serial.print(s_star);  Serial.print(F("Cor: "));
   for (uint8_t b = 0; b < 32; b++) {
     Serial.print(hash[b], HEX);
     Serial.print(' ');
   }
   Serial.println();
 
-  Serial.print(s_star);  Serial.print(F("Received Hash: "));
+  Serial.print(s_star);  Serial.print(F("Rcv: "));
   for (uint8_t b = 0; b < 32; b++) {
     Serial.print(auth_response[b], HEX);
     Serial.print(' ');
@@ -1860,7 +1866,7 @@ void handle_lora() {
             Serial.print(s_star);  Serial.print(F("T: ")); //Serial.print(F("Magic Correct.\r\n * Packet type: "));
             switch (lora_incoming_queue[p_idx][2]) {
               case PACKET_TYPE_ACK: {
-                  Serial.println(F("ACK"));
+                  //Serial.println(F("ACK"));
                   clear_packet(lora_incoming_queue[p_idx][3]);
                   dedup_this = false;
                   do_ack = false;
@@ -1868,7 +1874,7 @@ void handle_lora() {
                 break;
 
               case PACKET_TYPE_REQUST_CHALLANGE: {
-                  Serial.println(F("Chal. Req."));
+                  //Serial.println(F("Chal. Req."));
                   do_ack = false;
 
                   for (uint8_t b = 0; b < 16; b++) auth_challange[b] = random(0, 255); //make new challange
@@ -1888,7 +1894,7 @@ void handle_lora() {
                 break;
 
               case PACKET_TYPE_ADD_WATER: {
-                  Serial.println(F("Water Call"));
+                  //Serial.println(F("Water Call"));
 
                   last_auth_cmd_packet_id = lora_incoming_queue[p_idx][1];
                   clear_packet(lora_incoming_queue[p_idx][3]);
@@ -1909,7 +1915,7 @@ void handle_lora() {
                 break;
 
               case PACKET_TYPE_CANCEL_WATER: {
-                  Serial.println(F("Irr. Cancel"));
+                  //Serial.println(F("Irr. Cancel"));
 
                   clear_packet(lora_incoming_queue[p_idx][3]);
                   do_ack = false;
@@ -1922,7 +1928,7 @@ void handle_lora() {
                 break;
 
               case PACKET_TYPE_GW_REBOOT: {
-                  Serial.println(F("GW Reboot"));
+                  //Serial.println(F("GW Reboot"));
                   for (uint8_t i = 0; i < 16; i++) lora_last_incoming_message_IDs[i] = 0; //counter on other side reset, so we reset too
 
                 }
@@ -1951,8 +1957,23 @@ void handle_lora() {
     digitalWrite(pcf, LORA_RX_LED, HIGH);
   }
 
+  //airtime reset
+  static uint8_t last_airtime_rest_hour = 0;
+  static uint32_t last_airtime_rest_millis = 0;
+  if (component_errors.rtc_missing or component_errors.rtc_unset) { //if RTC is missing
+    if (millis() - last_airtime_rest_millis > (60 * 60 * 2 * 1000)) { //reset airtime every 2 hours by millis
+      lora_airtime = 0;
+      last_airtime_rest_millis = millis();
+    }
+  }
+  else if (last_airtime_rest_hour != current_time.Hour and millis() - last_airtime_rest_millis > (60 * 59 * 1000)) { //else reset on xx:00 time unless less than 59 minutes passed since last reset
+    last_airtime_rest_hour = current_time.Hour;
+    lora_airtime = 0;
+    last_airtime_rest_millis = millis();
+  }
+
   //queue handle
-  if (lora_tx_ready and millis() - lora_outgoing_queue_last_tx > LORA_RETRANSMIT_TIME) {
+  if ((lora_airtime < LORA_MAX_AIRTIME * 1000) and lora_tx_ready and millis() - lora_outgoing_queue_last_tx > LORA_RETRANSMIT_TIME) {
     wdt_reset();
     for (uint8_t p_idx = 0; p_idx < 4; p_idx++) {
       bool is_empty = true;
@@ -2054,7 +2075,7 @@ void handle_lora() {
     static byte last_system_state = 0xFF;
     if (((last_system_state != current_status_byte) or (millis() - last_lora_tx > LORA_TX_INTERVAL)) and state_stable) { //if there was a change or the timer ran out and the state is stable
       last_system_state = current_status_byte;
-      Serial.println(F("Made new status to be sent"));
+      //Serial.println(F("Made new status to be sent"));
       //if new state, make lora packet
       lora_outgoing_queue[lora_outgoing_queue_idx][0] = LORA_MAGIC;
       lora_outgoing_queue[lora_outgoing_queue_idx][1] = lora_outgoing_packet_id;

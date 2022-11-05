@@ -37,6 +37,10 @@ w 672 304 672 240 0
 368 608 320 608 272 0 0
 R 464 240 464 208 0 0 40 5 0 0 0.5
 x 246 199 663 202 4 16 A\sbetter\swater\ssensor\swith\sclean\soutput\sand\sschmitt-trigger.
+x 175 289 230 292 4 8 water\sresistance
+x 307 311 330 314 4 8 trimpot
+x 468 357 519 360 4 8 schmitt-trigger
+x 678 360 704 363 4 8 cleanup
 o 13 64 0 4098 10 6.4 0 4 13 3 14 0 14 3
 o 33 64 0 4098 10 6.4 1 6 33 3 35 0 35 3 34 0 34 3
 38 2 F1 0 10000 500000 -1 Water\sResistance

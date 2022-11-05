@@ -32,6 +32,7 @@
 #define LORA_RETRANSMIT_TRIES 5
 #define LORA_MAGIC 42
 #define LORA_TX_INTERVAL 300000 //time between beacon broadcasts in ms
+#define LORA_MAX_AIRTIME 340 //in seconds
 
 #define LORA_CS_PIN 18
 #define LORA_RST_PIN 14
@@ -76,6 +77,8 @@ uint8_t lora_outgoing_queue_idx = 0; //idx where to write
 uint64_t lora_outgoing_queue_last_tx = 0;
 uint8_t lora_outgoing_queue_tx_attempts[4] = {0};
 bool lora_tx_ready = true;
+uint64_t lora_tx_start_millis = 0;
+uint64_t lora_airtime = 0; //in millis
 
 byte lora_incoming_queue[4][48] = {0}; //holds up to 4 messages that are to be sent with max 48 bits.
 uint8_t lora_incoming_queue_idx = 0; //idx where to write
@@ -251,6 +254,7 @@ void handle_lora_packet(int packet_size) { //TODO: maybe move magic checking her
 
 void handle_lora_tx_done() {
   LoRa.receive();
+  lora_airtime += millis() - lora_tx_start_millis; //add tx time
   lora_tx_ready = true;
 }
 
@@ -396,6 +400,8 @@ void rest_status() {
   stuff["lora_rx"]["last_snr"] = last_lora_snr;
   stuff["lora_rx"]["last_freq_error"] = last_lora_freq_error;
   stuff["lora_rx"]["last_packet_time"] = last_recieved_packet_time;
+  stuff["lora_tx"]["airtime"] = (double)lora_airtime / 1000;
+  stuff["lora_tx"]["max_airtime"] = LORA_MAX_AIRTIME;
   stuff["gateway"]["wifi"]["ssid"] = WiFi.SSID();
   stuff["gateway"]["wifi"]["rssi"] = WiFi.RSSI();
   char json_stuff[2048];
@@ -1432,8 +1438,18 @@ void handle_lora() {
   //Serial.print(F("Auth State: "));
   //Serial.println(auth_state);
 
+  //airtime reset
+  static uint8_t last_airtime_rest_hour = 0;
+  static uint64_t last_airtime_rest_millis = 0;
+  uint8_t current_hour = ntp.getHour();
+  if (last_airtime_rest_hour != current_hour and millis() - last_airtime_rest_millis > (60 * 59 * 1000)) { //reset on xx:00 time unless less than 59 minutes passed since last reset
+    last_airtime_rest_hour = current_hour;
+    lora_airtime = 0;
+    last_airtime_rest_millis = millis();
+  }
+
   //queue handle
-  if (lora_tx_ready and millis() - lora_outgoing_queue_last_tx > LORA_RETRANSMIT_TIME) {
+  if ((lora_airtime < LORA_MAX_AIRTIME * 1000) and lora_tx_ready and millis() - lora_outgoing_queue_last_tx > LORA_RETRANSMIT_TIME) {
     for (uint8_t p_idx = 0; p_idx < 4; p_idx++) {
       bool is_empty = true;
       for (uint8_t i = 0; i < 48; i++) if (lora_outgoing_queue[p_idx][i] != 0) {
@@ -1463,6 +1479,8 @@ void handle_lora() {
           Serial.print(lora_outgoing_queue[p_idx][b], HEX);
           Serial.write(' ');
         }
+        
+        lora_tx_start_millis = millis();
         LoRa.endPacket(/*true*/false); //tx in not async mode becaus that never seems to work
         //only in not async
         handle_lora_tx_done();
