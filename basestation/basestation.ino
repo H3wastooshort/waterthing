@@ -1091,12 +1091,12 @@ void update_display() {
           /*String fe_string = "FE: ";
             fe_string += last_lora_freq_error;
             oled.drawString(63, 38, fe_string);*/
-          String airt_string = "t_TX: ";
+          String airt_string = "tTX: ";
           airt_string += uint16_t(lora_airtime / 1000);
           airt_string += "s/";
           airt_string += LORA_MAX_AIRTIME;
           airt_string += "s (";
-          airt_string += uint8_t(lora_airtime / (uint64_t)LORA_MAX_AIRTIME * 1000) * 100);
+          airt_string += uint8_t(((float)lora_airtime / ((float)LORA_MAX_AIRTIME * 1000)) * 100);
           airt_string += " % )";
           oled.drawString(63, 38, airt_string);
         }
@@ -1450,14 +1450,14 @@ void handle_lora() {
   static uint8_t last_airtime_rest_hour = 0;
   static uint64_t last_airtime_rest_millis = 0;
   uint8_t current_hour = ntp.getHours();
-  if (last_airtime_rest_hour != current_hour and millis() - last_airtime_rest_millis > (60 * 59 * 1000)) { //reset on xx:00 time unless less than 59 minutes passed since last reset
+  if (last_airtime_rest_hour != current_hour and millis() - last_airtime_rest_millis > (60 * 59 * 1000L)) { //reset on xx:00 time unless less than 59 minutes passed since last reset
     last_airtime_rest_hour = current_hour;
     lora_airtime = 0;
     last_airtime_rest_millis = millis();
   }
 
   //queue handle
-  if ((lora_airtime < LORA_MAX_AIRTIME * 1000) and lora_tx_ready and millis() - lora_outgoing_queue_last_tx > LORA_RETRANSMIT_TIME) {
+  if ((lora_airtime < LORA_MAX_AIRTIME * 1000L) and lora_tx_ready and millis() - lora_outgoing_queue_last_tx > LORA_RETRANSMIT_TIME) {
     for (uint8_t p_idx = 0; p_idx < 4; p_idx++) {
       bool is_empty = true;
       for (uint8_t i = 0; i < 48; i++) if (lora_outgoing_queue[p_idx][i] != 0) {

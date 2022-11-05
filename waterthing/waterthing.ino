@@ -1516,12 +1516,12 @@ void read_sensors_and_clock() {
   sensor_values.rain_detected =
     //if difference BETWEEN current time /*OR last rains time*/ COMPARED TO rain start IS BIGGER THAN configured time
     (/*sensor_values.rain_end_millis - sensor_values.rain_start_millis > (settings.rain_minutes_til_block * 60 * 1000)
-     or*/ millis() - sensor_values.rain_start_millis > ((uint32_t)settings.rain_minutes_til_block * 60 * 1000))
+     or*/ millis() - sensor_values.rain_start_millis > ((uint32_t)settings.rain_minutes_til_block * 60 * 1000L))
 
     and //AND
 
     //current time minus end time IS SMALLER THAN configured time OR its raining
-    ((millis() - sensor_values.rain_end_millis < ((uint32_t)settings.rain_minutes_til_clear * 60 * 1000)
+    ((millis() - sensor_values.rain_end_millis < ((uint32_t)settings.rain_minutes_til_clear * 60 * 1000L)
       /*or millis() - sensor_values.rain_start_millis < (settings.rain_minutes_til_clear*60*1000)*/)
      or rain_condition_now)
 
@@ -1602,9 +1602,15 @@ void handle_serial() {
         Serial.print(s_star); Serial.print(F("LoRa Enable: "));
         Serial.println(settings.lora_enable);*/
 
+      /*Serial.print(s_star); Serial.print(F("AirT: "));
+        Serial.print(lora_airtime / 1000); Serial.print(F("s/")); Serial.print(LORA_MAX_AIRTIME); Serial.print(F("s ("));
+        Serial.print(((float)lora_airtime / ((float)LORA_MAX_AIRTIME * 1000)) * 100); Serial.println(F("%)"));*/
+
       Serial.print(s_star); Serial.print(F("AirT: "));
-      Serial.print(lora_airtime / 1000); Serial.print(F("s/")); Serial.print(LORA_MAX_AIRTIME); Serial.print(F("s ("));
-      Serial.print((lora_airtime / ((uint32_t)LORA_MAX_AIRTIME * 1000)) * 100); Serial.println(F("%)"));
+      Serial.print(lora_airtime / 1000);
+      Serial.write('/');
+      Serial.print(LORA_MAX_AIRTIME);
+      Serial.println((lora_airtime > LORA_MAX_AIRTIME * 1000L) ? F(" USED UP") : F(" OK"));
 
       Serial.println();
     }
@@ -1961,19 +1967,19 @@ void handle_lora() {
   static uint8_t last_airtime_rest_hour = 0;
   static uint32_t last_airtime_rest_millis = 0;
   if (component_errors.rtc_missing or component_errors.rtc_unset) { //if RTC is missing
-    if (millis() - last_airtime_rest_millis > (60 * 60 * 2 * 1000)) { //reset airtime every 2 hours by millis
+    if (millis() - last_airtime_rest_millis > (60 * 60 * 2 * 1000L)) { //reset airtime every 2 hours by millis
       lora_airtime = 0;
       last_airtime_rest_millis = millis();
     }
   }
-  else if (last_airtime_rest_hour != current_time.Hour and millis() - last_airtime_rest_millis > (60 * 59 * 1000)) { //else reset on xx:00 time unless less than 59 minutes passed since last reset
+  else if (last_airtime_rest_hour != current_time.Hour and millis() - last_airtime_rest_millis > (60 * 59 * 1000L)) { //else reset on xx:00 time unless less than 59 minutes passed since last reset
     last_airtime_rest_hour = current_time.Hour;
     lora_airtime = 0;
     last_airtime_rest_millis = millis();
   }
 
   //queue handle
-  if ((lora_airtime < LORA_MAX_AIRTIME * 1000) and lora_tx_ready and millis() - lora_outgoing_queue_last_tx > LORA_RETRANSMIT_TIME) {
+  if ((lora_airtime < LORA_MAX_AIRTIME * 1000L) and lora_tx_ready and millis() - lora_outgoing_queue_last_tx > LORA_RETRANSMIT_TIME) {
     wdt_reset();
     for (uint8_t p_idx = 0; p_idx < 4; p_idx++) {
       bool is_empty = true;
