@@ -1088,9 +1088,17 @@ void update_display() {
           String snr_string = "SNR: ";
           snr_string += last_lora_snr;
           oled.drawString(63, 25, snr_string);
-          String fe_string = "FE: ";
-          fe_string += last_lora_freq_error;
-          oled.drawString(63, 38, fe_string);
+          /*String fe_string = "FE: ";
+            fe_string += last_lora_freq_error;
+            oled.drawString(63, 38, fe_string);*/
+          String airt_string = "t_TX: ";
+          airt_string += round(lora_airtime / 1000);
+          airt_string += "s/";
+          airt_string += LORA_MAX_AIRTIME;
+          airt_string += "s (";
+          airt_string += round((lora_airtime / (LORA_MAX_AIRTIME * 1000)) * 100);
+          airt_string += " % )";
+          oled.drawString(63, 38, airt_string);
         }
         break;
 
@@ -1167,7 +1175,7 @@ void handle_lora() {
         break;
       }
     if (/*!is_empty*/lora_incoming_queue[p_idx][0] == LORA_MAGIC) {
-      Serial.println(F("Incoming LoRa Packet:"));
+      Serial.println(F("Incoming LoRa Packet: "));
       Serial.print(F(" * Length: "));
       Serial.println(lora_incoming_queue_len[p_idx]);
       Serial.print(F(" * Content: "));
@@ -1179,10 +1187,10 @@ void handle_lora() {
       Serial.println();
 
       /*
-         0 -> magic
-         1 -> packet id
-         2 -> packet type
-         3... -> data
+        0 -> magic
+        1 -> packet id
+        2 -> packet type
+        3... -> data
       */
 
       if (lora_incoming_queue[p_idx][0] == LORA_MAGIC) { //if magic correct
@@ -1370,7 +1378,7 @@ void handle_lora() {
         for (uint8_t b = 0; b < 16; b++) if (last_wt_challange[b] != 0) is_empty = false;
         if (!is_empty) {
           //generate response and put in queue
-          Serial.println(F("Auth Response:"));
+          Serial.println(F("Auth Response: "));
 
           byte resulting_hash[32];
 
@@ -1441,7 +1449,7 @@ void handle_lora() {
   //airtime reset
   static uint8_t last_airtime_rest_hour = 0;
   static uint64_t last_airtime_rest_millis = 0;
-  uint8_t current_hour = ntp.getHour();
+  uint8_t current_hour = ntp.getHours();
   if (last_airtime_rest_hour != current_hour and millis() - last_airtime_rest_millis > (60 * 59 * 1000)) { //reset on xx:00 time unless less than 59 minutes passed since last reset
     last_airtime_rest_hour = current_hour;
     lora_airtime = 0;
@@ -1479,7 +1487,7 @@ void handle_lora() {
           Serial.print(lora_outgoing_queue[p_idx][b], HEX);
           Serial.write(' ');
         }
-        
+
         lora_tx_start_millis = millis();
         LoRa.endPacket(/*true*/false); //tx in not async mode becaus that never seems to work
         //only in not async
