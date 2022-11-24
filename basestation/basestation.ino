@@ -9,6 +9,7 @@
 #include <WiFi.h>
 #include <WiFiManager.h> //https://github.com/tzapu/WiFiManager
 #include <NTPClient.h> //https://github.com/arduino-libraries/NTPClient
+#include <RTClib.h> //https://github.com/adafruit/RTClib/
 #include <WebServer.h>
 #include <EMailSender.h> //https://github.com/xreef/EMailSender
 #include <SPIFFS.h>
@@ -46,12 +47,16 @@
 
 #define EEPROM_SIZE 512
 
+#define RTC_SDA_PIN 21
+#define RTC_SCL_PIN 13
+
 char host_name[18] = "WaterthingGW-XXXX"; // last 4 chars will be chip-id
 
 SSD1306Wire oled(OLED_ADDRESS, -1, -1, GEOMETRY_128_64/*, I2C_ONE, 200000*/);//sometimes I2C_ONE is not decalred, sometimes it is, idk why
 WiFiManager wm;
 WiFiUDP ntpUDP;
 NTPClient ntp(ntpUDP, "europe.pool.ntp.org", 0, 60000);
+RTC_DS1307 rtc;
 WebServer server(80);
 EMailSender email("", "", "", "", 0);
 
@@ -68,7 +73,15 @@ struct settings_s {
   char web_user[32] = "waterthing";
   char web_pass[32] = "thisisnotsecure";
   uint8_t display_brightness = 255;
+  char ntp_server[32] = "europe.pool.ntp.org";
+  uint32_t crc; //TODO: implement this
 } settings;
+
+//time
+uint64_t current_timestamp;
+bool rtc_ok = false;
+uint8_t current_hour = 0;
+uint8_t current_min = 0;
 
 //lora
 uint8_t lora_outgoing_packet_id = 1; //increments every packet
@@ -216,6 +229,21 @@ void IRAM_ATTR disp_button_down() {
   last_disp_button_down = millis();
 }
 
+//stuff
+void update_time() {
+  ntp.update();
+  if (rtc_ok and rtc.isrunning() and !ntp.isTimeSet()) { //if RTC is OK but the NTP server is not
+    DateTime tnow = rtc.now();
+    current_timestamp = tnow.unixtime();
+    current_min = tnow.minute();
+    current_hour = tnow.hour();
+  }
+  else { //ELSE if ntp ok OR if rtc and ntp bad (ntp client will still calculate time with millis)
+    current_timestamp = ntp.getEpochTime();
+    current_min = ntp.getMinutes();
+    current_hour = ntp.getHours();
+  }
+}
 
 char randomASCII() { //give random lowercase ascii
   switch (random(0, 3)) {
@@ -278,7 +306,7 @@ void draw_display_boilerplate() {
   //time on the right
   oled.setTextAlignment(TEXT_ALIGN_RIGHT);
   char time_buf[5];
-  sprintf(time_buf, "%02d:%02d", ntp.getHours(), ntp.getMinutes());
+  sprintf(time_buf, "%02d:%02d", current_hour, current_min);
   oled.drawString(127, 0, (String)time_buf);
 
   //rx/tx indicators
@@ -717,7 +745,7 @@ void send_email_alert(uint8_t alert_type) { //fuck this enum shit
   }
 
   msg.message += "\n<br><br>\nUNIX Zeist.: ";
-  msg.message += ntp.getEpochTime();
+  msg.message += current_timestamp;
   msg.message += "\n</p>\n</body>\n</html>";
 
   EMailSender::Response r = email.send(settings.alert_email, msg);
@@ -881,14 +909,15 @@ void setup() {
 
   WiFi.mode(WIFI_STA);
   WiFi.hostname(host_name);
+  wm.setConfigPortalTimeout(180);
   wm.setAPCallback(config_ap_callback);
+  wm.setClass("invert");
   if (!digitalRead(0)) {
     wm.startConfigPortal(settings.conf_ssid, settings.conf_pass);
     ESP.restart();
   }
-  if (!wm.autoConnect(settings.conf_ssid, settings.conf_pass)) {
-    ESP.restart();
-  }
+  wm.autoConnect(settings.conf_ssid, settings.conf_pass);
+
   MDNS.begin(host_name);
   MDNS.addService("http", "tcp", 80);
   oled.drawString(0, 12, F("OK"));
@@ -991,16 +1020,64 @@ void setup() {
   ArduinoOTA.begin();
   delay(100);
 
+  //rtc
+  Serial.print(F("RTC Setup... "));
+  oled.clear();
+  oled.drawString(0, 0, "RTC...");
+  oled.display();
+  Wire1.begin(RTC_SDA_PIN, RTC_SCL_PIN, 100000);
+  rtc.begin(&Wire1);
+  Wire1.beginTransmission(0x68); //change this for non ds1307 RTCs
+  if (Wire1.endTransmission() == 0) { //check if chip present
+    if (rtc.isrunning()) { //check if time set
+      rtc_ok = true;
+      oled.drawString(0, 12, F("OK"));
+      Serial.println(F("OK"));
+    }
+    else {
+      oled.drawString(0, 12, F("UNSET"));
+      Serial.println(F("UNSET"));
+    }
+  }
+  else {
+    oled.drawString(0, 12, F("MISSING"));
+    Serial.println(F("MISSING"));
+  }
+  oled.display();
+  delay(500);
+
   //ntp
-  Serial.println(F("NTP Setup..."));
+  Serial.print(F("NTP Setup..."));
   oled.clear();
   oled.drawString(0, 0, "NTP...");
   oled.display();
+  //ntp.setPoolServerName(settings.ntp_server);
   ntp.begin();
   ntp.update();
-  oled.drawString(0, 12, F("OK"));
+  if (ntp.isTimeSet()) {
+    oled.drawString(0, 12, F("OK"));
+    if (rtc_ok) rtc.adjust(DateTime(ntp.getEpochTime()));
+    Serial.println(F("OK"));
+  }
+  else if (rtc_ok) {
+    oled.drawString(0, 12, F("RTC FALLBACK"));
+    Serial.println(F("RTC FALLBACK"));
+  }
+  else {
+    oled.drawString(0, 12, F("WAIT"));
+    oled.display();
+    uint64_t ntp_wait_start_millis = millis();
+    while (!ntp.isTimeSet()) { //try getting the time or hang
+      ntp.forceUpdate();
+      if (millis() - ntp_wait_start_millis > 300000) ESP.restart(); //try for 5 mins
+      delay(1000);
+    }
+    Serial.println(F("OK"));
+  }
   oled.display();
   delay(100);
+
+  update_time();
 
   //email
   Serial.println(F("E-Mail Setup..."));
@@ -1054,7 +1131,7 @@ void update_display() {
     switch (disp_page) {
       case PAGE_STATUS: {
           String status_time = "Last Status ( ";
-          uint32_t seconds_since = ntp.getEpochTime() - last_wt_status_timestamp;
+          uint32_t seconds_since = current_timestamp - last_wt_status_timestamp;
           status_time += (seconds_since / 60) > 999 ? ">999" : (String)(int)round((seconds_since / 60));
           status_time += "m ago):";
           oled.drawString(63, 12, status_time);
@@ -1225,7 +1302,7 @@ void handle_lora() {
                 bat_b[0] = lora_incoming_queue[p_idx][4];
                 bat_b[1] = lora_incoming_queue[p_idx][5];
                 last_wt_battery_voltage = (double)bat_v / 100;
-                last_wt_status_timestamp = last_wt_battery_voltage_timestamp = ntp.getEpochTime();
+                last_wt_status_timestamp = last_wt_battery_voltage_timestamp = current_timestamp;
 
                 if ((last_wt_status >> 4) && 0b0111) send_email_alert(MAIL_ALERT_GENERAL);
                 else if ((last_wt_status >> 4 ) && 0b0100) send_email_alert(MAIL_ALERT_WATER);
@@ -1250,13 +1327,13 @@ void handle_lora() {
                 last_liters_left <<= 8;
                 last_liters_called |= lora_incoming_queue[p_idx][7];
 
-                last_wt_status_timestamp = last_wt_liters_timestamp = ntp.getEpochTime();
+                last_wt_status_timestamp = last_wt_liters_timestamp = current_timestamp;
               }
               break;
 
             case PACKET_TYPE_REBOOT: {
                 Serial.println(F("Reboot"));
-                last_wt_reboot_timestamp = ntp.getEpochTime();
+                last_wt_reboot_timestamp = current_timestamp;
                 for (uint8_t i = 0; i < 16; i++) lora_last_incoming_message_IDs[i] = 0; //counter on other side reset, so we reset too
               }
               break;
@@ -1307,7 +1384,7 @@ void handle_lora() {
             lora_last_incoming_message_IDs_idx++;
             if (lora_last_incoming_message_IDs_idx >= 16) lora_last_incoming_message_IDs_idx = 0;
           }
-          last_recieved_packet_time = ntp.getEpochTime();
+          last_recieved_packet_time = current_timestamp;
         }
         else Serial.println(F("Packet already recieved."));
         if (do_ack) send_ack(lora_incoming_queue[p_idx][1]); //respond so retransmits wont occur
@@ -1449,7 +1526,6 @@ void handle_lora() {
   //airtime reset
   static uint8_t last_airtime_rest_hour = 0;
   static uint64_t last_airtime_rest_millis = 0;
-  uint8_t current_hour = ntp.getHours();
   if (last_airtime_rest_hour != current_hour and millis() - last_airtime_rest_millis > (60 * 59 * 1000L)) { //reset on xx:00 time unless less than 59 minutes passed since last reset
     last_airtime_rest_hour = current_hour;
     lora_airtime = 0;
@@ -1515,7 +1591,7 @@ void handle_lora() {
 void loop() {
   ArduinoOTA.handle();
   server.handleClient();
-  ntp.update();
+  update_time();
 
   update_display();
   handle_lora();
