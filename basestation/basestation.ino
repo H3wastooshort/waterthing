@@ -5,13 +5,13 @@
 #include <Wire.h>
 #include "fonts.h"
 #include <OLEDDisplay.h>
-#include <SSD1306Wire.h> //https://github.com/ThingPulse/esp8266-oled-ssd1306
+#include <SSD1306Wire.h>  //https://github.com/ThingPulse/esp8266-oled-ssd1306
 #include <WiFi.h>
-#include <WiFiManager.h> //https://github.com/tzapu/WiFiManager
-#include <NTPClient.h> //https://github.com/arduino-libraries/NTPClient
-#include <RTClib.h> //https://github.com/adafruit/RTClib/
+#include <WiFiManager.h>  //https://github.com/tzapu/WiFiManager
+#include <NTPClient.h>    //https://github.com/arduino-libraries/NTPClient
+#include <RTClib.h>       //https://github.com/adafruit/RTClib/
 #include <WebServer.h>
-#include <EMailSender.h> //https://github.com/xreef/EMailSender
+#include <EMailSender.h>  //https://github.com/xreef/EMailSender
 #include <SPIFFS.h>
 #define ARDUINOJSON_USE_LONG_LONG 1
 #include <ArduinoJson.h>
@@ -27,13 +27,13 @@
 #define GREEN_LED_PIN 13
 #define BLUE_LED_PIN 21
 
-#define LORA_FREQ  869525000 //869.525mhz is allowed to be used at 100mW 10% duty cycle (360 sec an hour) in germany (NO WARRANTY ON THAT!)
-#define LORA_TX_PWR 20 // 20dbm/100mW is max
-#define LORA_RETRANSMIT_TIME 5000 //time between retransmit attempts in ms
+#define LORA_FREQ 869525000        //869.525mhz is allowed to be used at 100mW 10% duty cycle (360 sec an hour) in germany (NO WARRANTY ON THAT!)
+#define LORA_TX_PWR 20             // 20dbm/100mW is max
+#define LORA_RETRANSMIT_TIME 5000  //time between retransmit attempts in ms
 #define LORA_RETRANSMIT_TRIES 5
 #define LORA_MAGIC 42
-#define LORA_TX_INTERVAL 300000 //time between beacon broadcasts in ms
-#define LORA_MAX_AIRTIME 340 //in seconds
+#define LORA_TX_INTERVAL 300000  //time between beacon broadcasts in ms
+#define LORA_MAX_AIRTIME 340     //in seconds
 
 #define LORA_CS_PIN 18
 #define LORA_RST_PIN 14
@@ -50,9 +50,9 @@
 #define RTC_SDA_PIN 21
 #define RTC_SCL_PIN 13
 
-char host_name[18] = "WaterthingGW-XXXX"; // last 4 chars will be chip-id
+char host_name[18] = "WaterthingGW-XXXX";  // last 4 chars will be chip-id
 
-SSD1306Wire oled(OLED_ADDRESS, -1, -1, GEOMETRY_128_64/*, I2C_ONE, 200000*/);//sometimes I2C_ONE is not decalred, sometimes it is, idk why
+SSD1306Wire oled(OLED_ADDRESS, -1, -1, GEOMETRY_128_64 /*, I2C_ONE, 200000*/);  //sometimes I2C_ONE is not decalred, sometimes it is, idk why
 WiFiManager wm;
 WiFiUDP ntpUDP;
 NTPClient ntp(ntpUDP, "europe.pool.ntp.org", 0, 60000);
@@ -64,17 +64,17 @@ EMailSender email("", "", "", "", 0);
 struct settings_s {
   char conf_ssid[16] = "WaterthingGW";
   char conf_pass[16] = "CHANGE_ME_42";
-  uint8_t lora_security_key[16] = {0};
+  uint8_t lora_security_key[16] = { 0 };
   char alert_email[32] = "max.mustermann@example.com";
-  char smtp_server[32] = {0};
-  char smtp_user[32] = {0};
-  char smtp_pass[32] = {0};
-  uint16_t smtp_port = 465; //usually 465 for SSL SMTP
+  char smtp_server[32] = { 0 };
+  char smtp_user[32] = { 0 };
+  char smtp_pass[32] = { 0 };
+  uint16_t smtp_port = 465;  //usually 465 for SSL SMTP
   char web_user[32] = "waterthing";
   char web_pass[32] = "thisisnotsecure";
   uint8_t display_brightness = 255;
   char ntp_server[32] = "europe.pool.ntp.org";
-  uint32_t crc; //TODO: implement this
+  uint32_t crc;  //TODO: implement this
 } settings;
 
 //time
@@ -84,23 +84,23 @@ uint8_t current_hour = 0;
 uint8_t current_min = 0;
 
 //lora
-uint8_t lora_outgoing_packet_id = 1; //increments every packet
-byte lora_outgoing_queue[4][48] = {0}; //holds up to 4 messages that are to be sent with max 48 bits. first byte is magic, 2nd message id, 3nd is message type, rest is data. if all 0, no message in slot. set to 0 after up to 0 retransmits
-uint8_t lora_outgoing_queue_idx = 0; //idx where to write
+uint8_t lora_outgoing_packet_id = 1;      //increments every packet
+byte lora_outgoing_queue[4][48] = { 0 };  //holds up to 4 messages that are to be sent with max 48 bits. first byte is magic, 2nd message id, 3nd is message type, rest is data. if all 0, no message in slot. set to 0 after up to 0 retransmits
+uint8_t lora_outgoing_queue_idx = 0;      //idx where to write
 uint64_t lora_outgoing_queue_last_tx = 0;
-uint8_t lora_outgoing_queue_tx_attempts[4] = {0};
+uint8_t lora_outgoing_queue_tx_attempts[4] = { 0 };
 bool lora_tx_ready = true;
 uint64_t lora_tx_start_millis = 0;
-uint64_t lora_airtime = 0; //in millis
+uint64_t lora_airtime = 0;  //in millis
 
-byte lora_incoming_queue[4][48] = {0}; //holds up to 4 messages that are to be sent with max 48 bits.
-uint8_t lora_incoming_queue_idx = 0; //idx where to write
-uint16_t lora_incoming_queue_len[4] = {0}; //lengths of recieved packages
-byte lora_last_incoming_message_IDs[16] = {0};
+byte lora_incoming_queue[4][48] = { 0 };      //holds up to 4 messages that are to be sent with max 48 bits.
+uint8_t lora_incoming_queue_idx = 0;          //idx where to write
+uint16_t lora_incoming_queue_len[4] = { 0 };  //lengths of recieved packages
+byte lora_last_incoming_message_IDs[16] = { 0 };
 uint8_t lora_last_incoming_message_IDs_idx = 0;
 
 //shared stuff start
-enum lora_packet_types_ws_to_gw { //water system to gateway
+enum lora_packet_types_ws_to_gw {  //water system to gateway
   PACKET_TYPE_STATUS = 0,
   PACKET_TYPE_WATER = 1,
   PACKET_TYPE_TEST = 69,
@@ -113,7 +113,7 @@ enum lora_packet_types_ws_to_gw { //water system to gateway
   PACKET_TYPE_CMD_OK = 255,
 };
 
-enum lora_packet_types_gw_to_ws { //gateway to water system
+enum lora_packet_types_gw_to_ws {  //gateway to water system
   PACKET_TYPE_CURRENT_TIME = 0,
   PACKET_TYPE_ADD_WATER = 1,
   PACKET_TYPE_CANCEL_WATER = 2,
@@ -154,12 +154,12 @@ uint8_t gw_to_ws_packet_type_to_length(uint8_t pt) {
 int16_t last_lora_rssi = 0xFFFF;
 int16_t last_lora_snr = 0xFFFF;
 int32_t last_lora_freq_error = 0xFFFFFFFF;
-uint64_t last_recieved_packet_time = 0; //time in unix timestamp
+uint64_t last_recieved_packet_time = 0;  //time in unix timestamp
 
-byte last_wt_status = 0xFF; //left bytes main status, right 4 bytes extra status
+byte last_wt_status = 0xFF;  //left bytes main status, right 4 bytes extra status
 uint64_t last_wt_status_timestamp = 0;
-uint16_t last_liters_left = 0xFFFF; //0xFFFF means not known, 0x0000 means done
-uint16_t last_liters_called = 0xFFFF; //0xFFFF means not known, 0x0000 means done
+uint16_t last_liters_left = 0xFFFF;    //0xFFFF means not known, 0x0000 means done
+uint16_t last_liters_called = 0xFFFF;  //0xFFFF means not known, 0x0000 means done
 uint64_t last_wt_liters_timestamp = 0;
 float last_wt_battery_voltage = -1;
 uint64_t last_wt_battery_voltage_timestamp = 0;
@@ -167,17 +167,17 @@ uint64_t last_wt_reboot_timestamp = 0;
 
 //authed lora cmds
 enum auth_state_e {
-  AUTH_STEP_IDLE = 0, //wait for entry in lora_auth_cmd_queue
+  AUTH_STEP_IDLE = 0,  //wait for entry in lora_auth_cmd_queue
   AUTH_STEP_TX_CHALLANGE_REQUEST = 1,
   AUTH_STEP_WAIT_CHALLANGE = 2,
   AUTH_STEP_TX_ANSWER = 3,
   AUTH_STEP_WAIT_CMD_SUCCESS = 4,
 } auth_state;
-byte last_wt_challange[16] = {0}; //if all 0, not valid/non recieved
-byte lora_auth_cmd_queue[4][16] = {0}; //the data part of all authed commands to be sent.
+byte last_wt_challange[16] = { 0 };       //if all 0, not valid/non recieved
+byte lora_auth_cmd_queue[4][16] = { 0 };  //the data part of all authed commands to be sent.
 uint8_t lora_auth_cmd_queue_idx = 0;
-uint8_t lora_auth_packet_processing = 255; //255 means invalid
-byte last_auth_cmd_response = 0; //0 means invalid
+uint8_t lora_auth_packet_processing = 255;  //255 means invalid
+byte last_auth_cmd_response = 0;            //0 means invalid
 byte last_auth_challange_packet_id = 0xFF;
 uint64_t last_auth_packet_millis = 0;
 
@@ -185,37 +185,40 @@ uint64_t last_auth_packet_millis = 0;
 char web_login_cookies[256][32];
 uint8_t web_login_cookies_idx = 0;
 
-std::map<byte, String> status_to_text {
+std::map<byte, String> status_to_text{
   // SSSSEEEE
-  {0b11111111, "Unknown"},
-  {0b00000000, "Idle"},
-  {0b00000001, "Off"},
-  {0b00000010, "Done Today"},
-  {0b00000011, "Too Rainy"},
-  {0b00010000, "Pumping"},
-  {0b00100000, "Emptying"},
-  {0b00110000, "Afterdrain"},
-  {0b01000000, "NO WATER"},
-  {0b01010000, "LOW BAT."},
-  {0b01100000, "NO TIME"},
-  {0b01110000, "GEN. FAIL"},
-  {0b01111000, "TS FAIL"},
-  {0b01110110, "RTC FAIL"},
-  {0b01110100, "RTC FAIL"},
-  {0b01110010, "RTC UNSET"},
-  {0b01111100, "TS+RTC FAIL"},
-  {0b01111110, "TS+RTC FAIL"},
-  {0b01111010, "TS+RTC FAIL"}
+  { 0b11111111, "Unknown" },
+  { 0b00000000, "Idle" },
+  { 0b00000001, "Off" },
+  { 0b00000010, "Done Today" },
+  { 0b00000011, "Too Rainy" },
+  { 0b00010000, "Pumping" },
+  { 0b00100000, "Emptying" },
+  { 0b00110000, "Afterdrain" },
+  { 0b01000000, "NO WATER" },
+  { 0b01010000, "LOW BAT." },
+  { 0b01100000, "NO TIME" },
+  { 0b01110000, "GEN. FAIL" },
+  { 0b01111000, "TS FAIL" },
+  { 0b01110110, "RTC FAIL" },
+  { 0b01110100, "RTC FAIL" },
+  { 0b01110010, "RTC UNSET" },
+  { 0b01111100, "TS+RTC FAIL" },
+  { 0b01111110, "TS+RTC FAIL" },
+  { 0b01111010, "TS+RTC FAIL" }
 };
 
 //display
-enum gw_page_e {PAGE_STATUS = 0, PAGE_WT = 1, PAGE_LORA = 2, PAGE_WIFI = 3};
+enum gw_page_e { PAGE_STATUS = 0,
+                 PAGE_WT = 1,
+                 PAGE_LORA = 2,
+                 PAGE_WIFI = 3 };
 uint8_t disp_page = 0;
 std::map<uint8_t, String> gw_page_to_text{
-  {PAGE_STATUS, "Stat"},
-  {PAGE_WT, "WT"},
-  {PAGE_LORA, "LoRa"},
-  {PAGE_WIFI, "WiFi"}
+  { PAGE_STATUS, "Stat" },
+  { PAGE_WT, "WT" },
+  { PAGE_LORA, "LoRa" },
+  { PAGE_WIFI, "WiFi" }
 };
 uint8_t rx_indicator_blink = 0;
 //uint8_t tx_indicator_blink = 0;
@@ -232,20 +235,19 @@ void IRAM_ATTR disp_button_down() {
 //stuff
 void update_time() {
   ntp.update();
-  if (rtc_ok and rtc.isrunning() and !ntp.isTimeSet()) { //if RTC is OK but the NTP server is not
+  if (rtc_ok and rtc.isrunning() and !ntp.isTimeSet()) {  //if RTC is OK but the NTP server is not
     DateTime tnow = rtc.now();
     current_timestamp = tnow.unixtime();
     current_min = tnow.minute();
     current_hour = tnow.hour();
-  }
-  else { //ELSE if ntp ok OR if rtc and ntp bad (ntp client will still calculate time with millis)
+  } else {  //ELSE if ntp ok OR if rtc and ntp bad (ntp client will still calculate time with millis)
     current_timestamp = ntp.getEpochTime();
     current_min = ntp.getMinutes();
     current_hour = ntp.getHours();
   }
 }
 
-char randomASCII() { //give random lowercase ascii
+char randomASCII() {  //give random lowercase ascii
   switch (random(0, 3)) {
     default:
     case 0:
@@ -262,9 +264,9 @@ char randomASCII() { //give random lowercase ascii
   }
 }
 
-void handle_lora_packet(int packet_size) { //TODO: maybe move magic checking here
-  if (packet_size <= 48) { //3840 is an erronious recieve
-    for (uint8_t b = 0; b < 48; b++) lora_incoming_queue[lora_incoming_queue_idx][b] = 0; //firstly clear
+void handle_lora_packet(int packet_size) {                                                 //TODO: maybe move magic checking here
+  if (packet_size <= 48) {                                                                 //3840 is an erronious recieve
+    for (uint8_t b = 0; b < 48; b++) lora_incoming_queue[lora_incoming_queue_idx][b] = 0;  //firstly clear
 
     for (uint8_t b = 0; (b < min(packet_size, 48)) and LoRa.available(); b++) {
       lora_incoming_queue[lora_incoming_queue_idx][b] = LoRa.read();
@@ -277,23 +279,23 @@ void handle_lora_packet(int packet_size) { //TODO: maybe move magic checking her
     lora_incoming_queue_idx++;
     if (lora_incoming_queue_idx >= 4) lora_incoming_queue_idx = 0;
   }
-  LoRa.flush(); //clear packet if for some reason the is anything left
+  LoRa.flush();  //clear packet if for some reason the is anything left
 }
 
 void handle_lora_tx_done() {
   LoRa.receive();
-  lora_airtime += millis() - lora_tx_start_millis; //add tx time
+  lora_airtime += millis() - lora_tx_start_millis;  //add tx time
   lora_tx_ready = true;
 }
 
 //display
 uint8_t alive_line_pos = 125;
-bool alive_line_dir = false; //false towards left, true towards right
+bool alive_line_dir = false;  //false towards left, true towards right
 void draw_display_boilerplate() {
   oled.clear();
   oled.setColor(WHITE);
   oled.setFont(Lato_Thin_8);
-  oled.drawRect(0, 11, 127, 42); //content outline
+  oled.drawRect(0, 11, 127, 42);  //content outline
 
   //page number
   oled.setTextAlignment(TEXT_ALIGN_LEFT);
@@ -312,38 +314,35 @@ void draw_display_boilerplate() {
   //rx/tx indicators
   oled.setTextAlignment(TEXT_ALIGN_LEFT);
   uint8_t bottom_pos = 0;
-  oled.drawString(bottom_pos , 55, "RX");
+  oled.drawString(bottom_pos, 55, "RX");
   bottom_pos += oled.getStringWidth("RX") + 2;
   if (rx_indicator_blink > 0) {
     oled.fillRect(bottom_pos, 55, 8, 8);
     rx_indicator_blink--;
-  }
-  else  oled.drawRect(bottom_pos, 55, 8, 8);
+  } else oled.drawRect(bottom_pos, 55, 8, 8);
   bottom_pos += 8 + 4;
-  oled.drawString(bottom_pos , 55, "TX");
+  oled.drawString(bottom_pos, 55, "TX");
   bottom_pos += oled.getStringWidth("TX") + 2;
   tx_indicator_pos = bottom_pos;
   //if (tx_indicator_blink > 0) {
   if (!lora_tx_ready) {
     oled.fillRect(bottom_pos, 55, 8, 8);
     //tx_indicator_blink--;
-  }
-  else  oled.drawRect(bottom_pos, 55, 8, 8);
+  } else oled.drawRect(bottom_pos, 55, 8, 8);
   bottom_pos += 8 + 4;
-  oled.drawString(bottom_pos , 55, "WEB");
+  oled.drawString(bottom_pos, 55, "WEB");
   bottom_pos += oled.getStringWidth("WEB") + 2;
   if (web_indicator_blink > 0) {
     oled.fillRect(bottom_pos, 55, 8, 8);
     web_indicator_blink--;
-  }
-  else  oled.drawRect(bottom_pos, 55, 8, 8);
+  } else oled.drawRect(bottom_pos, 55, 8, 8);
   bottom_pos += 8 + 4;
 
   //moving line to show its alive
   alive_line_pos += alive_line_dir ? 1 : -1;
   if (alive_line_pos >= 125) alive_line_dir = false;
   if (alive_line_pos <= bottom_pos) alive_line_dir = true;
-  oled.drawLine(alive_line_pos , 55, alive_line_pos, 63);
+  oled.drawLine(alive_line_pos, 55, alive_line_pos, 63);
 }
 
 void config_ap_callback(WiFiManager *myWiFiManager) {
@@ -382,7 +381,7 @@ bool check_auth() {
     uint16_t lc_start = cookie_header.indexOf("login_cookie=");
     uint16_t lc_end = cookie_header.substring(lc_start).indexOf("; ");
     if (lc_end == 0) lc_end = cookie_header.length() - lc_start;
-    const char* login_cookie = cookie_header.substring(lc_start + 13, lc_end).c_str();
+    const char *login_cookie = cookie_header.substring(lc_start + 13, lc_end).c_str();
 
     //Serial.print(F(" * Header: "));
     //Serial.println(cookie_header);
@@ -392,18 +391,17 @@ bool check_auth() {
     //Serial.println(login_cookie.length());
 
     if (strlen(login_cookie) == 31) {
-      for (uint16_t c = 0; c < 256; c++) { //check if login cookie valid
+      for (uint16_t c = 0; c < 256; c++) {  //check if login cookie valid
         //Serial.print(F(" * Cookie Candidate: "));
         //Serial.println(correct_l_cookie);
 
-        if (strcmp(login_cookie, (const char*)web_login_cookies[c]) == 0) {
+        if (strcmp(login_cookie, (const char *)web_login_cookies[c]) == 0) {
           authed = true;
           break;
         }
       }
     }
-  }
-  else Serial.println(F(" * Cookie Header Missing"));
+  } else Serial.println(F(" * Cookie Header Missing"));
 
   Serial.print(F(" * "));
   Serial.println(authed ? F("SUCCESS") : F("FAIL"));
@@ -474,14 +472,13 @@ void rest_login() {
     web_login_cookies[web_login_cookies_idx][31] = 0;
     String cookiestring = "login_cookie=";
     cookiestring += web_login_cookies[web_login_cookies_idx];
-    cookiestring += "; Path=/admin/; SameSite=Strict; Max-Age=86400"; //cookie kept for a day
+    cookiestring += "; Path=/admin/; SameSite=Strict; Max-Age=86400";  //cookie kept for a day
 
     server.sendHeader("Set-Cookie", cookiestring);
     if (!server.hasArg("plain")) server.sendHeader("Refresh", "3;url=/admin/control.html");
     server.send(200, "application/json", "{\"success\":\"Authenticated\",\"login_cookie\":\"" + cookiestring + "\"}");
     Serial.println(F(" * SUCCESS"));
-  }
-  else {
+  } else {
     if (!server.hasArg("plain")) server.sendHeader("Refresh", "5;url=/admin/login.html");
     server.send(403, "application/json", "{\"error\":\"Credentials invalid.\"}");
     Serial.println(F(" * FAIL"));
@@ -545,7 +542,8 @@ void rest_control_status() {
   uint8_t left_q = 0;
   for (uint8_t p = 0; p < 4; p++) {
     bool is_empty = true;
-    for (uint8_t b = 0; b < 16; b++) if (lora_auth_cmd_queue[p][b] != 0) is_empty = false;
+    for (uint8_t b = 0; b < 16; b++)
+      if (lora_auth_cmd_queue[p][b] != 0) is_empty = false;
     if (!is_empty) left_q++;
   }
 
@@ -584,8 +582,8 @@ void rest_admin_get() {
   server.send(status_code, "application/json", buf);
 }
 
-byte hexs_to_byte(const String& s) { //hex string to byte. take 1 byte of hex in string form, returns byte
-  char hex_val[3]; //3rd is \0
+byte hexs_to_byte(const String &s) {  //hex string to byte. take 1 byte of hex in string form, returns byte
+  char hex_val[3];                    //3rd is \0
   s.toCharArray(hex_val, 3);
   byte b_val = 0;
   for (uint8_t p = 0; p < 2; p++) {
@@ -650,7 +648,8 @@ void rest_admin_set() {
 }
 
 void rest_debug() {
-  Serial.println(F("DEBUG REST CALLED")); delay(10);
+  Serial.println(F("DEBUG REST CALLED"));
+  delay(10);
   //web_indicator_blink += 1;
   if (!check_auth()) {
     server.send(403, "application/json", "{\"error\":403}");
@@ -677,14 +676,17 @@ void rest_debug() {
 
   //lora queues
   stuff["lora_tx"]["next_packet_id"] = lora_outgoing_packet_id;
-  for (uint8_t i = 0; i < 4; i++) for (uint8_t b = 0; b < 48; b++) stuff["lora_tx"]["send_queue"]["entries"][i][b] = lora_outgoing_queue[i][b];
+  for (uint8_t i = 0; i < 4; i++)
+    for (uint8_t b = 0; b < 48; b++) stuff["lora_tx"]["send_queue"]["entries"][i][b] = lora_outgoing_queue[i][b];
   for (uint8_t i = 0; i < 4; i++) stuff["lora_tx"]["send_queue"]["entry_attempts"][i] = lora_outgoing_queue_tx_attempts[i];
 
-  for (uint8_t i = 0; i < 4; i++) for (uint8_t b = 0; b < 16; b++) stuff["lora_tx"]["auth_send_queue"]["entries"][i][b] = lora_auth_cmd_queue[i][b];
+  for (uint8_t i = 0; i < 4; i++)
+    for (uint8_t b = 0; b < 16; b++) stuff["lora_tx"]["auth_send_queue"]["entries"][i][b] = lora_auth_cmd_queue[i][b];
   stuff["lora_tx"]["auth_state"] = auth_state;
 
   for (uint8_t i = 0; i < 16; i++) stuff["lora_rx"]["last_packet_IDs"][i] = lora_last_incoming_message_IDs[i];
-  for (uint8_t i = 0; i < 4; i++) for (uint8_t b = 0; b < 48; b++) stuff["lora_rx"]["recive_queue"]["entries"][i][b] = lora_incoming_queue[i][b];
+  for (uint8_t i = 0; i < 4; i++)
+    for (uint8_t b = 0; b < 48; b++) stuff["lora_rx"]["recive_queue"]["entries"][i][b] = lora_incoming_queue[i][b];
   for (uint8_t i = 0; i < 4; i++) stuff["lora_rx"]["recive_queue"]["entry_len"][i] = lora_incoming_queue_len[i];
 
   char buf[4096];
@@ -699,10 +701,10 @@ enum mail_alert_enum {
   MAIL_ALERT_RADIO_SILENCE = 2,
   MAIL_ALERT_GENERAL = 3,
   MAIL_ALERT_NONE = 255
-}; //function wont take enum as arg, gonna use uint8_t
+};  //function wont take enum as arg, gonna use uint8_t
 
 uint8_t last_mail_alert = MAIL_ALERT_NONE;
-void send_email_alert(uint8_t alert_type) { //fuck this enum shit
+void send_email_alert(uint8_t alert_type) {  //fuck this enum shit
   if (alert_type == last_mail_alert) return;
   last_mail_alert = alert_type;
 
@@ -711,28 +713,35 @@ void send_email_alert(uint8_t alert_type) { //fuck this enum shit
   File msg_body_file;
   msg.mime = "text/html";
 
-  switch (alert_type) { //read in first part of mail and add values
-    case MAIL_ALERT_WATER: {
+  switch (alert_type) {  //read in first part of mail and add values
+    case MAIL_ALERT_WATER:
+      {
         msg.subject = "[WT] ACHTUNG: Wassertank Leer!";
         msg_body_file = SPIFFS.open("/mail/de_alert_wtr.html", "r");
         while (msg_body_file.available()) msg.message += msg_body_file.read();
         msg_body_file.close();
-      } break;
-    case MAIL_ALERT_BATTERY: {
+      }
+      break;
+    case MAIL_ALERT_BATTERY:
+      {
         msg.subject = "[WT] ACHTUNG: Batterie Leer!";
         msg_body_file = SPIFFS.open("/mail/de_alert_bat.html", "r");
         while (msg_body_file.available()) msg.message += msg_body_file.read();
         msg_body_file.close();
         msg.message += last_wt_battery_voltage;
         msg.message += 'V';
-      } break;
-    case MAIL_ALERT_RADIO_SILENCE: { //not yet used
+      }
+      break;
+    case MAIL_ALERT_RADIO_SILENCE:
+      {  //not yet used
         msg.subject = "[WT] INFO: Funkstille.";
         msg_body_file = SPIFFS.open("/mail/de_alert_nc.html", "r");
         while (msg_body_file.available()) msg.message += msg_body_file.read();
         msg_body_file.close();
-      } break;
-    case MAIL_ALERT_GENERAL: {
+      }
+      break;
+    case MAIL_ALERT_GENERAL:
+      {
         msg.subject = "[WT] ACHTUNG: Systemfehler!";
         msg_body_file = SPIFFS.open("/mail/de_alert_gen.html", "r");
         while (msg_body_file.available()) msg.message += msg_body_file.read();
@@ -741,7 +750,8 @@ void send_email_alert(uint8_t alert_type) { //fuck this enum shit
         if (last_wt_status & 0b00001000) msg.message += " * Tanksensoren Werte Unsinnig";
         if (last_wt_status & 0b00000100) msg.message += " * RTC fehlt.";
         if (last_wt_status & 0b00000010) msg.message += " * RTC nicht eingestellt.";
-      } break;
+      }
+      break;
   }
 
   msg.message += "\n<br><br>\nUNIX Zeist.: ";
@@ -770,7 +780,7 @@ void setup() {
   delay(50);
   Serial.begin(115200);
 
-  sprintf(host_name, "WaterthingGW-%04X", (uint16_t)ESP.getEfuseMac()); //last part of MAC
+  sprintf(host_name, "WaterthingGW-%04X", (uint16_t)ESP.getEfuseMac());  //last part of MAC
 
   //oled
   Serial.println(F("OLED Setup..."));
@@ -783,7 +793,7 @@ void setup() {
   oled.setContrast(settings.display_brightness);
   oled.flipScreenVertically();
   oled.setColor(WHITE);
-  oled.fillRect(0, 0, 128, 64); //able to see dead pixels
+  oled.fillRect(0, 0, 128, 64);  //able to see dead pixels
   oled.display();
   delay(100);
   //====dumb cool effect, you can comment this out====
@@ -791,11 +801,13 @@ void setup() {
   oled.setTextAlignment(TEXT_ALIGN_CENTER);
   String boot_msg = "Waterthing Gateway";
   uint8_t boot_msg_pos = 64;
-  for (uint16_t i = 0; i < 2048; i++) { //dumb cool effect, you can comment this out
-    if (!digitalRead(0)) { //skippable with PRG button
-      while (!digitalRead(0));;
-      delay(50);//bounce
-      break; //exit
+  for (uint16_t i = 0; i < 2048; i++) {  //dumb cool effect, you can comment this out
+    if (!digitalRead(0)) {               //skippable with PRG button
+      while (!digitalRead(0))
+        ;
+      ;
+      delay(50);  //bounce
+      break;      //exit
     }
 
     //lines
@@ -803,7 +815,7 @@ void setup() {
     oled.drawLine(random(-200, 200), random(-200, 200), random(-200, 200), random(-200, 200));
 
     //text
-    if (i > 1024) { //after 1024 draw slowed
+    if (i > 1024) {  //after 1024 draw slowed
       if (i % 8 and boot_msg_pos > 24) {
         oled.setColor(BLACK);
         oled.drawString(63, boot_msg_pos, boot_msg);
@@ -831,12 +843,11 @@ void setup() {
   oled.setColor(WHITE);
   oled.display();
 
-  if (EEPROM.begin(EEPROM_SIZE) and digitalRead(0)) { //hold GPIO0 low to reset conf at boot
+  if (EEPROM.begin(EEPROM_SIZE) and digitalRead(0)) {  //hold GPIO0 low to reset conf at boot
     EEPROM.get(0, settings);
     oled.drawString(0, 12, F("OK"));
     oled.display();
-  }
-  else {
+  } else {
     EEPROM.put(0, settings);
     EEPROM.commit();
     oled.drawString(0, 12, F("Initialized"));
@@ -851,14 +862,14 @@ void setup() {
   oled.drawString(0, 0, "LoRa...");
   oled.display();
   LoRa.setPins(LORA_CS_PIN, LORA_RST_PIN, LORA_DIO0_PIN);
-  LoRa.setSPIFrequency(1E6); //1mhz is way fast
+  LoRa.setSPIFrequency(1E6);  //1mhz is way fast
   if (LoRa.begin(LORA_FREQ)) {
     LoRa.idle();
     LoRa.setSyncWord(0x12);
     LoRa.setTxPower(LORA_TX_PWR);
     LoRa.setSpreadingFactor(12);
     LoRa.setSignalBandwidth(125E3);
-    LoRa.setCodingRate4(8); //sf,bw,cr make a data rate of 366 bits per sec or 45,75 bytes per sec
+    LoRa.setCodingRate4(8);  //sf,bw,cr make a data rate of 366 bits per sec or 45,75 bytes per sec
     LoRa.enableCrc();
     //LoRa.onTxDone(handle_lora_tx_done); //uncomment when async fixed
     //LoRa.onReceive(handle_lora_packet);
@@ -872,18 +883,17 @@ void setup() {
     lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_GW_REBOOT;
 
     lora_outgoing_queue_last_tx = millis() - LORA_RETRANSMIT_TIME + 10000;
-    lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] =  0;
+    lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] = 0;
     lora_outgoing_packet_id++;
-    if (lora_outgoing_packet_id < 1) lora_outgoing_packet_id == 1; //never let it go to 0, that causes bugs
+    if (lora_outgoing_packet_id < 1) lora_outgoing_packet_id == 1;  //never let it go to 0, that causes bugs
     lora_outgoing_queue_idx++;
     if (lora_outgoing_queue_idx >= 4) lora_outgoing_queue_idx = 0;
 
 
     oled.drawString(0, 12, F("OK"));
     oled.display();
-  }
-  else {
-    oled.drawString(0, 12 , F("ERROR"));
+  } else {
+    oled.drawString(0, 12, F("ERROR"));
     oled.display();
     Serial.println(F("LoRa not detected!"));
     while (true) delay(10);
@@ -931,90 +941,90 @@ void setup() {
   oled.display();
   ArduinoOTA.setHostname(host_name);
   ArduinoOTA
-  .onStart([]() {
-    String ota_type;
-    if (ArduinoOTA.getCommand() == U_FLASH)
-      ota_type = "sketch";
-    else // U_SPIFFS
-      ota_type = "filesystem";
+    .onStart([]() {
+      String ota_type;
+      if (ArduinoOTA.getCommand() == U_FLASH)
+        ota_type = "sketch";
+      else  // U_SPIFFS
+        ota_type = "filesystem";
 
 
-    oled.clear();
-    oled.setFont(Lato_Thin_24);
-    oled.setTextAlignment(TEXT_ALIGN_CENTER);
-    oled.drawString(63, 0, "OTA:");
-    oled.drawString(63, 31, ota_type);
-    oled.display();
-    Serial.println("Start updating " + ota_type);
-    delay(1000);
-  })
-  .onEnd([]() {
-    digitalWrite(LED_BUILTIN, HIGH);
-    oled.clear();
-    oled.setFont(Lato_Thin_24);
-    oled.setTextAlignment(TEXT_ALIGN_CENTER);
-    oled.drawString(63, 31, "OTA OK!");
-    oled.display();
-    Serial.println("\nEnd");
-    delay(1000);
-    digitalWrite(LED_BUILTIN, LOW);
-  })
-  .onProgress([](unsigned int progress, unsigned int total) {
-    static bool led_flip = false;
-    digitalWrite(LED_BUILTIN, led_flip);
-    led_flip = !led_flip;
+      oled.clear();
+      oled.setFont(Lato_Thin_24);
+      oled.setTextAlignment(TEXT_ALIGN_CENTER);
+      oled.drawString(63, 0, "OTA:");
+      oled.drawString(63, 31, ota_type);
+      oled.display();
+      Serial.println("Start updating " + ota_type);
+      delay(1000);
+    })
+    .onEnd([]() {
+      digitalWrite(LED_BUILTIN, HIGH);
+      oled.clear();
+      oled.setFont(Lato_Thin_24);
+      oled.setTextAlignment(TEXT_ALIGN_CENTER);
+      oled.drawString(63, 31, "OTA OK!");
+      oled.display();
+      Serial.println("\nEnd");
+      delay(1000);
+      digitalWrite(LED_BUILTIN, LOW);
+    })
+    .onProgress([](unsigned int progress, unsigned int total) {
+      static bool led_flip = false;
+      digitalWrite(LED_BUILTIN, led_flip);
+      led_flip = !led_flip;
 
-    /*static uint8_t skipper = 0;
+      /*static uint8_t skipper = 0;
       if (skipper == 0) skipper = 16;
       else {
       skipper--;
       return;
       }*/
-    oled.clear();
-    oled.setTextAlignment(TEXT_ALIGN_CENTER);
-    String progress1_str;
-    progress1_str += progress;
-    progress1_str += '/';
-    progress1_str += total;
-    String progress2_str;
-    uint8_t progress_percent = round(((float)progress / (float)total * 100));
-    progress2_str += progress_percent;
-    progress2_str += '%';
-    oled.setFont(Lato_Thin_12);
-    oled.drawString(63, 0, progress1_str);
-    oled.setFont(Lato_Thin_24);
-    oled.drawString(63, 16, progress2_str);
-    oled.drawProgressBar(0, 63 - 16, 127, 16, progress_percent);
-    oled.display();
+      oled.clear();
+      oled.setTextAlignment(TEXT_ALIGN_CENTER);
+      String progress1_str;
+      progress1_str += progress;
+      progress1_str += '/';
+      progress1_str += total;
+      String progress2_str;
+      uint8_t progress_percent = round(((float)progress / (float)total * 100));
+      progress2_str += progress_percent;
+      progress2_str += '%';
+      oled.setFont(Lato_Thin_12);
+      oled.drawString(63, 0, progress1_str);
+      oled.setFont(Lato_Thin_24);
+      oled.drawString(63, 16, progress2_str);
+      oled.drawProgressBar(0, 63 - 16, 127, 16, progress_percent);
+      oled.display();
 
-    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
-  })
-  .onError([](ota_error_t error) {
-    digitalWrite(LED_BUILTIN, LOW);
-    oled.clear();
-    oled.setFont(Lato_Thin_24);
-    oled.setTextAlignment(TEXT_ALIGN_CENTER);
-    String ota_err;
-    oled.drawString(63, 0, "Error:");
-    if (error == OTA_AUTH_ERROR) ota_err = F("Auth");
-    else if (error == OTA_BEGIN_ERROR) ota_err = F("Begin");
-    else if (error == OTA_CONNECT_ERROR) ota_err = F("Connect");
-    else if (error == OTA_RECEIVE_ERROR) ota_err = F("Recieve");
-    else if (error == OTA_END_ERROR) ota_err = F("End");
-    oled.drawString(63, 31, ota_err);
+      Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+    })
+    .onError([](ota_error_t error) {
+      digitalWrite(LED_BUILTIN, LOW);
+      oled.clear();
+      oled.setFont(Lato_Thin_24);
+      oled.setTextAlignment(TEXT_ALIGN_CENTER);
+      String ota_err;
+      oled.drawString(63, 0, "Error:");
+      if (error == OTA_AUTH_ERROR) ota_err = F("Auth");
+      else if (error == OTA_BEGIN_ERROR) ota_err = F("Begin");
+      else if (error == OTA_CONNECT_ERROR) ota_err = F("Connect");
+      else if (error == OTA_RECEIVE_ERROR) ota_err = F("Recieve");
+      else if (error == OTA_END_ERROR) ota_err = F("End");
+      oled.drawString(63, 31, ota_err);
 
-    Serial.printf("Error[%u]: ", error);
-    if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
-    else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
-    else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
-    else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
-    else if (error == OTA_END_ERROR) Serial.println("End Failed");
+      Serial.printf("Error[%u]: ", error);
+      if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
+      else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+      else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+      else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+      else if (error == OTA_END_ERROR) Serial.println("End Failed");
 
-    oled.display();
+      oled.display();
 
-    delay(5000);
-    digitalWrite(LED_BUILTIN, HIGH);
-  });
+      delay(5000);
+      digitalWrite(LED_BUILTIN, HIGH);
+    });
   oled.drawString(0, 12, F("OK"));
   oled.display();
   ArduinoOTA.begin();
@@ -1027,19 +1037,17 @@ void setup() {
   oled.display();
   Wire1.begin(RTC_SDA_PIN, RTC_SCL_PIN, 100000);
   rtc.begin(&Wire1);
-  Wire1.beginTransmission(0x68); //change this for non ds1307 RTCs
-  if (Wire1.endTransmission() == 0) { //check if chip present
-    if (rtc.isrunning()) { //check if time set
+  Wire1.beginTransmission(0x68);       //change this for non ds1307 RTCs
+  if (Wire1.endTransmission() == 0) {  //check if chip present
+    if (rtc.isrunning()) {             //check if time set
       rtc_ok = true;
       oled.drawString(0, 12, F("OK"));
       Serial.println(F("OK"));
-    }
-    else {
+    } else {
       oled.drawString(0, 12, F("UNSET"));
       Serial.println(F("UNSET"));
     }
-  }
-  else {
+  } else {
     oled.drawString(0, 12, F("MISSING"));
     Serial.println(F("MISSING"));
   }
@@ -1058,18 +1066,16 @@ void setup() {
     oled.drawString(0, 12, F("OK"));
     if (rtc_ok) rtc.adjust(DateTime(ntp.getEpochTime()));
     Serial.println(F("OK"));
-  }
-  else if (rtc_ok) {
+  } else if (rtc_ok) {
     oled.drawString(0, 12, F("RTC FALLBACK"));
     Serial.println(F("RTC FALLBACK"));
-  }
-  else {
+  } else {
     oled.drawString(0, 12, F("WAIT"));
     oled.display();
     uint64_t ntp_wait_start_millis = millis();
-    while (!ntp.isTimeSet()) { //try getting the time or hang
+    while (!ntp.isTimeSet()) {  //try getting the time or hang
       ntp.forceUpdate();
-      if (millis() - ntp_wait_start_millis > 300000) ESP.restart(); //try for 5 mins
+      if (millis() - ntp_wait_start_millis > 300000) ESP.restart();  //try for 5 mins
       delay(1000);
     }
     Serial.println(F("OK"));
@@ -1089,8 +1095,8 @@ void setup() {
   oled.drawString(0, 0, "WebServer...");
   oled.display();
   SPIFFS.begin();
-  const char * headerkeys[] = {"User-Agent", "Cookie"} ;
-  size_t headerkeyssize = sizeof(headerkeys) / sizeof(char*);
+  const char *headerkeys[] = { "User-Agent", "Cookie" };
+  size_t headerkeyssize = sizeof(headerkeys) / sizeof(char *);
   server.collectHeaders(headerkeys, headerkeyssize);
   server.on("/rest", HTTP_GET, rest_status);
   server.on("/admin/login", HTTP_GET, rest_login_get);
@@ -1100,12 +1106,13 @@ void setup() {
   server.on("/admin/settings", HTTP_POST, rest_admin_set);
   server.on("/admin/settings", HTTP_GET, rest_admin_get);
   server.on("/admin/debug", HTTP_GET, rest_debug);
-  server.on("/", []() { //redirect to index
+  server.on("/", []() {  //redirect to index
     server.sendHeader("Location", "/index.html");
     server.send(300, "text/html", "<a href=\"/index.html\">click here</a>");
   });
   server.serveStatic("/", SPIFFS, "/www/");
-  for (uint16_t c; c < 256; c++) for (uint8_t b = 0; b < 31; b++) web_login_cookies[c][b] = randomASCII();
+  for (uint16_t c; c < 256; c++)
+    for (uint8_t b = 0; b < 31; b++) web_login_cookies[c][b] = randomASCII();
   server.begin();
   oled.drawString(0, 12, F("OK"));
   oled.display();
@@ -1129,7 +1136,8 @@ void update_display() {
     oled.setTextAlignment(TEXT_ALIGN_CENTER);
 
     switch (disp_page) {
-      case PAGE_STATUS: {
+      case PAGE_STATUS:
+        {
           String status_time = "Last Status ( ";
           uint32_t seconds_since = current_timestamp - last_wt_status_timestamp;
           status_time += (seconds_since / 60) > 999 ? ">999" : (String)(int)round((seconds_since / 60));
@@ -1140,12 +1148,13 @@ void update_display() {
         }
         break;
 
-      case PAGE_WT: {
+      case PAGE_WT:
+        {
           String volt_string = "Battery: ";
           volt_string += last_wt_battery_voltage;
           volt_string += 'V';
           oled.drawString(63, 12, volt_string);
-          if ((last_wt_status && 0b00010000) or (last_wt_status && 0b00100000)) { //only show while watering
+          if ((last_wt_status && 0b00010000) or (last_wt_status && 0b00100000)) {  //only show while watering
             String water_string = "";
             water_string += last_liters_left;
             water_string += " L left";
@@ -1158,7 +1167,8 @@ void update_display() {
         }
         break;
 
-      case PAGE_LORA: {
+      case PAGE_LORA:
+        {
           String rssi_string = "RSSI: ";
           rssi_string += last_lora_rssi;
           oled.drawString(63, 12, rssi_string);
@@ -1179,7 +1189,8 @@ void update_display() {
         }
         break;
 
-      case PAGE_WIFI: {
+      case PAGE_WIFI:
+        {
           String ip_string = "IP: ";
           ip_string += WiFi.localIP().toString();
           oled.drawString(63, 12, ip_string);
@@ -1187,7 +1198,7 @@ void update_display() {
           ssid_string += WiFi.SSID();
           oled.drawString(63, 25, ssid_string);
           String rssi_string = "RSSI: ";
-          rssi_string +=  WiFi.RSSI();
+          rssi_string += WiFi.RSSI();
           oled.drawString(63, 38, rssi_string);
         }
         break;
@@ -1203,7 +1214,7 @@ void afterpacket_stuff() {
   //lora_outgoing_queue_last_tx = 0;
   lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] = 0;
   lora_outgoing_packet_id++;
-  if (lora_outgoing_packet_id < 1) lora_outgoing_packet_id == 1; //never let it go to 0, that causes bugs
+  if (lora_outgoing_packet_id < 1) lora_outgoing_packet_id == 1;  //never let it go to 0, that causes bugs
   lora_outgoing_queue_idx++;
   if (lora_outgoing_queue_idx >= 4) lora_outgoing_queue_idx = 0;
 }
@@ -1216,9 +1227,9 @@ void send_ack(byte packet_id) {
 
   //i should really just make them next_tx_millis and remaining_attempts instead of this fuckshit
   //lora_outgoing_queue_last_tx = millis() - LORA_RETRANSMIT_TIME + 2600; //ack only sent 1000ms after
-  lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] =  LORA_RETRANSMIT_TRIES - 1; //there is no response to ACKs so this ensures ther is only one ACK sent
+  lora_outgoing_queue_tx_attempts[lora_outgoing_queue_idx] = LORA_RETRANSMIT_TRIES - 1;  //there is no response to ACKs so this ensures ther is only one ACK sent
   lora_outgoing_packet_id++;
-  if (lora_outgoing_packet_id < 1) lora_outgoing_packet_id == 1; //never let it go to 0, that causes bugs
+  if (lora_outgoing_packet_id < 1) lora_outgoing_packet_id == 1;  //never let it go to 0, that causes bugs
   lora_outgoing_queue_idx++;
   if (lora_outgoing_queue_idx >= 4) lora_outgoing_queue_idx = 0;
 }
@@ -1228,7 +1239,7 @@ void clear_packet(byte packet_id) {
     if (packet_id == lora_outgoing_queue[p][1]) {
       Serial.print(F(" * Clearing Packet ID: "));
       Serial.println(lora_outgoing_queue[p][1]);
-      for (uint8_t b = 0; b < 48; b++) lora_outgoing_queue[p][b] = 0; //clear packet
+      for (uint8_t b = 0; b < 48; b++) lora_outgoing_queue[p][b] = 0;  //clear packet
       //lora_outgoing_queue_last_tx = 0;
       lora_outgoing_queue_tx_attempts[p] = LORA_RETRANSMIT_TRIES;
     }
@@ -1239,7 +1250,7 @@ void handle_lora() {
   uint32_t last_lora_tx = 0;
 
   //recieve
-  auto possible_packet_size = LoRa.parsePacket(); //the onRecieve() callback seems to just cause an interrupt wich is too long for the ESP so i am doing it this way
+  auto possible_packet_size = LoRa.parsePacket();  //the onRecieve() callback seems to just cause an interrupt wich is too long for the ESP so i am doing it this way
   if (possible_packet_size > 0) {
     Serial.println(F("Possible packet incoming."));
     handle_lora_packet(possible_packet_size);
@@ -1247,11 +1258,12 @@ void handle_lora() {
 
   for (uint8_t p_idx = 0; p_idx < 4; p_idx++) {
     bool is_empty = true;
-    for (uint8_t i = 0; i < 48; i++) if (lora_incoming_queue[p_idx][i] != 0) {
+    for (uint8_t i = 0; i < 48; i++)
+      if (lora_incoming_queue[p_idx][i] != 0) {
         is_empty = false;  //check for data in packet
         break;
       }
-    if (/*!is_empty*/lora_incoming_queue[p_idx][0] == LORA_MAGIC) {
+    if (/*!is_empty*/ lora_incoming_queue[p_idx][0] == LORA_MAGIC) {
       Serial.println(F("Incoming LoRa Packet: "));
       Serial.print(F(" * Length: "));
       Serial.println(lora_incoming_queue_len[p_idx]);
@@ -1270,20 +1282,22 @@ void handle_lora() {
         3... -> data
       */
 
-      if (lora_incoming_queue[p_idx][0] == LORA_MAGIC) { //if magic correct
+      if (lora_incoming_queue[p_idx][0] == LORA_MAGIC) {  //if magic correct
         Serial.println(F(" * Magic Correct."));
 
-        lora_outgoing_queue_last_tx = 0; //after getting a packet, respond immediatly
+        lora_outgoing_queue_last_tx = 0;  //after getting a packet, respond immediatly
 
         bool already_recieved = false;
-        for (uint8_t i = 0; i < 16; i++) if (lora_incoming_queue[p_idx][1] == lora_last_incoming_message_IDs[i]) already_recieved = true;
+        for (uint8_t i = 0; i < 16; i++)
+          if (lora_incoming_queue[p_idx][1] == lora_last_incoming_message_IDs[i]) already_recieved = true;
 
         bool do_ack = true;
         if (!already_recieved) {
           bool dedup_this = true;
           Serial.print(F(" * Packet type: "));
           switch (lora_incoming_queue[p_idx][2]) {
-            case PACKET_TYPE_WS_ACK: {
+            case PACKET_TYPE_WS_ACK:
+              {
                 Serial.println(F("WS ACK"));
                 clear_packet(lora_incoming_queue[p_idx][3]);
                 dedup_this = false;
@@ -1291,12 +1305,13 @@ void handle_lora() {
               }
               break;
 
-            case PACKET_TYPE_STATUS: {
+            case PACKET_TYPE_STATUS:
+              {
                 Serial.println(F("Status"));
                 last_wt_status = lora_incoming_queue[p_idx][3];
 
                 union {
-                  uint16_t bat_v =  0;
+                  uint16_t bat_v = 0;
                   byte bat_b[2];
                 };
                 bat_b[0] = lora_incoming_queue[p_idx][4];
@@ -1305,14 +1320,14 @@ void handle_lora() {
                 last_wt_status_timestamp = last_wt_battery_voltage_timestamp = current_timestamp;
 
                 if ((last_wt_status >> 4) && 0b0111) send_email_alert(MAIL_ALERT_GENERAL);
-                else if ((last_wt_status >> 4 ) && 0b0100) send_email_alert(MAIL_ALERT_WATER);
-                else if ((last_wt_status  >> 4) && 0b0101) send_email_alert(MAIL_ALERT_BATTERY);
+                else if ((last_wt_status >> 4) && 0b0100) send_email_alert(MAIL_ALERT_WATER);
+                else if ((last_wt_status >> 4) && 0b0101) send_email_alert(MAIL_ALERT_BATTERY);
                 else last_mail_alert = MAIL_ALERT_NONE;
-
               }
               break;
 
-            case PACKET_TYPE_WATER: {
+            case PACKET_TYPE_WATER:
+              {
                 Serial.println(F("Water"));
 
                 last_wt_status = lora_incoming_queue[p_idx][3];
@@ -1331,26 +1346,27 @@ void handle_lora() {
               }
               break;
 
-            case PACKET_TYPE_REBOOT: {
+            case PACKET_TYPE_REBOOT:
+              {
                 Serial.println(F("Reboot"));
                 last_wt_reboot_timestamp = current_timestamp;
-                for (uint8_t i = 0; i < 16; i++) lora_last_incoming_message_IDs[i] = 0; //counter on other side reset, so we reset too
+                for (uint8_t i = 0; i < 16; i++) lora_last_incoming_message_IDs[i] = 0;  //counter on other side reset, so we reset too
               }
               break;
 
-            case PACKET_TYPE_AUTH_CHALLANGE: {
+            case PACKET_TYPE_AUTH_CHALLANGE:
+              {
                 Serial.println(F("Challange"));
 
                 last_auth_packet_millis = millis();
                 clear_packet(lora_incoming_queue[p_idx][3]);
 
-                memcpy(last_wt_challange, &lora_incoming_queue[p_idx][4], 16); //save challange, should have starrted using memcpy a while ago tbh...
+                memcpy(last_wt_challange, &lora_incoming_queue[p_idx][4], 16);  //save challange, should have starrted using memcpy a while ago tbh...
 
                 if (auth_state == AUTH_STEP_WAIT_CHALLANGE) {
                   last_auth_challange_packet_id = lora_incoming_queue[p_idx][1];
-                  do_ack = false; //only skip ack packet if successful
-                }
-                else Serial.println(F("Not waiting for a Challange."));
+                  do_ack = false;  //only skip ack packet if successful
+                } else Serial.println(F("Not waiting for a Challange."));
               }
               break;
 
@@ -1370,7 +1386,8 @@ void handle_lora() {
               }
               break;
 
-            case PACKET_TYPE_TEST: {
+            case PACKET_TYPE_TEST:
+              {
                 Serial.println(F("Test"));
               }
               break;
@@ -1385,9 +1402,8 @@ void handle_lora() {
             if (lora_last_incoming_message_IDs_idx >= 16) lora_last_incoming_message_IDs_idx = 0;
           }
           last_recieved_packet_time = current_timestamp;
-        }
-        else Serial.println(F("Packet already recieved."));
-        if (do_ack) send_ack(lora_incoming_queue[p_idx][1]); //respond so retransmits wont occur
+        } else Serial.println(F("Packet already recieved."));
+        if (do_ack) send_ack(lora_incoming_queue[p_idx][1]);  //respond so retransmits wont occur
       }
 
       for (uint8_t i = 0; i < 48; i++) lora_incoming_queue[p_idx][i] = 0;
@@ -1406,20 +1422,22 @@ void handle_lora() {
   }
 
 
-  if (millis() - last_auth_packet_millis > 30000) {//give up afer hearing nothing for 30 seconds
-    for (uint8_t b = 0; b < 16; b++) lora_auth_cmd_queue[lora_auth_packet_processing][b] = 0; //clear authed packet
+  if (millis() - last_auth_packet_millis > 30000) {                                            //give up afer hearing nothing for 30 seconds
+    for (uint8_t b = 0; b < 16; b++) lora_auth_cmd_queue[lora_auth_packet_processing][b] = 0;  //clear authed packet
 
-    lora_auth_packet_processing = 255; //no more packet in process
-    for (uint8_t b = 0; b < 16; b++) last_wt_challange[b] = 0; //invalid because used
+    lora_auth_packet_processing = 255;                          //no more packet in process
+    for (uint8_t b = 0; b < 16; b++) last_wt_challange[b] = 0;  //invalid because used
 
     auth_state = AUTH_STEP_IDLE;
   }
 
   switch (auth_state) {
-    case AUTH_STEP_IDLE: {
+    case AUTH_STEP_IDLE:
+      {
         for (uint8_t p = 0; p < 4; p++) {
           bool is_valid = false;
-          for (uint8_t b = 0; b < 16; b++) if (lora_auth_cmd_queue[p][b] != 0) is_valid = true;
+          for (uint8_t b = 0; b < 16; b++)
+            if (lora_auth_cmd_queue[p][b] != 0) is_valid = true;
           if (is_valid) {
             lora_auth_packet_processing = p;
 
@@ -1428,15 +1446,16 @@ void handle_lora() {
             lora_outgoing_queue[lora_outgoing_queue_idx][2] = PACKET_TYPE_REQUST_CHALLANGE;
             afterpacket_stuff();
 
-            last_auth_packet_millis = millis(); //so that it does not get killed right away
+            last_auth_packet_millis = millis();  //so that it does not get killed right away
             auth_state = AUTH_STEP_TX_CHALLANGE_REQUEST;
             break;
           }
         }
       }
       break;
-    case AUTH_STEP_TX_CHALLANGE_REQUEST: {
-        if (lora_auth_packet_processing >= 4) { //just in case an invalid request is made
+    case AUTH_STEP_TX_CHALLANGE_REQUEST:
+      {
+        if (lora_auth_packet_processing >= 4) {  //just in case an invalid request is made
           auth_state = AUTH_STEP_IDLE;
           break;
         }
@@ -1445,14 +1464,16 @@ void handle_lora() {
         if (true) auth_state = AUTH_STEP_WAIT_CHALLANGE;
       }
       break;
-    case AUTH_STEP_WAIT_CHALLANGE: {
-        if (lora_auth_packet_processing >= 4) {//just in case
+    case AUTH_STEP_WAIT_CHALLANGE:
+      {
+        if (lora_auth_packet_processing >= 4) {  //just in case
           auth_state = AUTH_STEP_IDLE;
           break;
         }
 
         bool is_empty = true;
-        for (uint8_t b = 0; b < 16; b++) if (last_wt_challange[b] != 0) is_empty = false;
+        for (uint8_t b = 0; b < 16; b++)
+          if (last_wt_challange[b] != 0) is_empty = false;
         if (!is_empty) {
           //generate response and put in queue
           Serial.println(F("Auth Response: "));
@@ -1464,14 +1485,14 @@ void handle_lora() {
           mbedtls_md_init(&hash_ctx);
           mbedtls_md_setup(&hash_ctx, mbedtls_md_info_from_type(md_type), 0);
           mbedtls_md_starts(&hash_ctx);
-          mbedtls_md_update(&hash_ctx, (const unsigned char *) last_wt_challange, 16);
+          mbedtls_md_update(&hash_ctx, (const unsigned char *)last_wt_challange, 16);
           Serial.print(F(" * Challange: "));
           for (uint8_t b = 0; b < 16; b++) {
             Serial.print(last_wt_challange[b], HEX);
             Serial.write(' ');
           }
           Serial.println();
-          mbedtls_md_update(&hash_ctx, (const unsigned char *) settings.lora_security_key, 16);
+          mbedtls_md_update(&hash_ctx, (const unsigned char *)settings.lora_security_key, 16);
           Serial.print(F(" * Key: "));
           for (uint8_t b = 0; b < 16; b++) {
             Serial.print(settings.lora_security_key[b], HEX);
@@ -1484,11 +1505,11 @@ void handle_lora() {
           lora_outgoing_queue[lora_outgoing_queue_idx][0] = LORA_MAGIC;
           lora_outgoing_queue[lora_outgoing_queue_idx][1] = lora_outgoing_packet_id;
           lora_outgoing_queue[lora_outgoing_queue_idx][2] = lora_auth_cmd_queue[lora_auth_packet_processing][0];
-          lora_outgoing_queue[lora_outgoing_queue_idx][3] = last_auth_challange_packet_id; //anclude ACKing
+          lora_outgoing_queue[lora_outgoing_queue_idx][3] = last_auth_challange_packet_id;  //anclude ACKing
 
-          memcpy(&lora_outgoing_queue[lora_outgoing_queue_idx][4], &lora_auth_cmd_queue[lora_auth_packet_processing][1], 16); //append authed data
-          uint8_t hash_begin_pos = gw_to_ws_packet_type_to_length(lora_auth_cmd_queue[lora_auth_packet_processing][0]) - 32/*minus hash*/ + 3/*overhead bytes*/;
-          if (hash_begin_pos + 32 >= 48) Serial.println(F("Packet too big to fit with hash!")); //anti mem corrupt
+          memcpy(&lora_outgoing_queue[lora_outgoing_queue_idx][4], &lora_auth_cmd_queue[lora_auth_packet_processing][1], 16);  //append authed data
+          uint8_t hash_begin_pos = gw_to_ws_packet_type_to_length(lora_auth_cmd_queue[lora_auth_packet_processing][0]) - 32 /*minus hash*/ + 3 /*overhead bytes*/;
+          if (hash_begin_pos + 32 >= 48) Serial.println(F("Packet too big to fit with hash!"));  //anti mem corrupt
           else {
             memcpy(&lora_outgoing_queue[lora_outgoing_queue_idx][hash_begin_pos], &resulting_hash, sizeof(resulting_hash));
             Serial.print(F(" * Hash: "));
@@ -1502,20 +1523,22 @@ void handle_lora() {
 
           afterpacket_stuff();
 
-          for (uint8_t b = 0; b < 16; b++) lora_auth_cmd_queue[lora_auth_packet_processing][b] = 0; //clear authed packet
+          for (uint8_t b = 0; b < 16; b++) lora_auth_cmd_queue[lora_auth_packet_processing][b] = 0;  //clear authed packet
 
-          lora_auth_packet_processing = 255; //no more packet in process
-          for (uint8_t b = 0; b < 16; b++) last_wt_challange[b] = 0; //invalid because used
+          lora_auth_packet_processing = 255;                          //no more packet in process
+          for (uint8_t b = 0; b < 16; b++) last_wt_challange[b] = 0;  //invalid because used
           auth_state = AUTH_STEP_TX_ANSWER;
         };
       }
       break;
-    case AUTH_STEP_TX_ANSWER: {
+    case AUTH_STEP_TX_ANSWER:
+      {
         //wait for tx done (if async works).
         if (true) auth_state = AUTH_STEP_WAIT_CMD_SUCCESS;
       }
       break;
-    case AUTH_STEP_WAIT_CMD_SUCCESS: {
+    case AUTH_STEP_WAIT_CMD_SUCCESS:
+      {
         //state is changed to next by receive/decode code
       }
       break;
@@ -1526,7 +1549,7 @@ void handle_lora() {
   //airtime reset
   static uint8_t last_airtime_rest_hour = 0;
   static uint64_t last_airtime_rest_millis = 0;
-  if (last_airtime_rest_hour != current_hour and millis() - last_airtime_rest_millis > (60 * 59 * 1000L)) { //reset on xx:00 time unless less than 59 minutes passed since last reset
+  if (last_airtime_rest_hour != current_hour and millis() - last_airtime_rest_millis > (60 * 59 * 1000L)) {  //reset on xx:00 time unless less than 59 minutes passed since last reset
     last_airtime_rest_hour = current_hour;
     lora_airtime = 0;
     last_airtime_rest_millis = millis();
@@ -1536,7 +1559,8 @@ void handle_lora() {
   if ((lora_airtime < LORA_MAX_AIRTIME * 1000L) and lora_tx_ready and millis() - lora_outgoing_queue_last_tx > LORA_RETRANSMIT_TIME) {
     for (uint8_t p_idx = 0; p_idx < 4; p_idx++) {
       bool is_empty = true;
-      for (uint8_t i = 0; i < 48; i++) if (lora_outgoing_queue[p_idx][i] != 0) {
+      for (uint8_t i = 0; i < 48; i++)
+        if (lora_outgoing_queue[p_idx][i] != 0) {
           is_empty = false;  //check for data in packet
           break;
         }
@@ -1549,10 +1573,10 @@ void handle_lora() {
         oled.display();
 
         lora_tx_ready = false;
-        LoRa.idle(); //no recieving while transmitting!
+        LoRa.idle();  //no recieving while transmitting!
         LoRa.beginPacket();
 
-        uint8_t lora_bytes = gw_to_ws_packet_type_to_length(lora_outgoing_queue[p_idx][2]) + 3 ; // check 2nd byte (packet type), get data length and add 3 for magic + packet id+ packett type
+        uint8_t lora_bytes = gw_to_ws_packet_type_to_length(lora_outgoing_queue[p_idx][2]) + 3;  // check 2nd byte (packet type), get data length and add 3 for magic + packet id+ packett type
         Serial.print(F(" * Length: "));
         Serial.println(lora_bytes);
 
@@ -1565,7 +1589,7 @@ void handle_lora() {
         }
 
         lora_tx_start_millis = millis();
-        LoRa.endPacket(/*true*/false); //tx in not async mode becaus that never seems to work
+        LoRa.endPacket(/*true*/ false);  //tx in not async mode becaus that never seems to work
         //only in not async
         handle_lora_tx_done();
         //
@@ -1574,7 +1598,7 @@ void handle_lora() {
         lora_outgoing_queue_last_tx = millis();
         lora_outgoing_queue_tx_attempts[p_idx]++;
         if (lora_outgoing_queue_tx_attempts[p_idx] >= LORA_RETRANSMIT_TRIES) {
-          for (uint8_t i = 0; i < 48; i++) lora_outgoing_queue[p_idx][i] = 0; //clear packet if unsuccessful
+          for (uint8_t i = 0; i < 48; i++) lora_outgoing_queue[p_idx][i] = 0;  //clear packet if unsuccessful
           //lora_outgoing_queue_last_tx = 0;
           lora_outgoing_queue_tx_attempts[p_idx] = 0;
         }
