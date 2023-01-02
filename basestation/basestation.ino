@@ -430,6 +430,9 @@ void rest_status() {
   stuff["lora_tx"]["max_airtime"] = LORA_MAX_AIRTIME;
   stuff["gateway"]["wifi"]["ssid"] = WiFi.SSID();
   stuff["gateway"]["wifi"]["rssi"] = WiFi.RSSI();
+  stuff["gateway"]["time"]["now"] = current_timestamp;
+  stuff["gateway"]["time"]["rtc_ok"] = rtc_ok;
+  stuff["gateway"]["time"]["ntp_ok"] = ntp.isTimeSet();
   char json_stuff[2048];
   serializeJsonPretty(stuff, json_stuff);
   server.sendHeader("Refresh", "10");
@@ -1478,6 +1481,7 @@ void handle_lora() {
           //generate response and put in queue
           Serial.println(F("Auth Response: "));
 
+          uint8_t hash_begin_pos = gw_to_ws_packet_type_to_length(lora_auth_cmd_queue[lora_auth_packet_processing][0]) - 32 /*minus hash*/ + 3 /*overhead bytes*/;
           byte resulting_hash[32];
 
           mbedtls_md_context_t hash_ctx;
@@ -1485,6 +1489,7 @@ void handle_lora() {
           mbedtls_md_init(&hash_ctx);
           mbedtls_md_setup(&hash_ctx, mbedtls_md_info_from_type(md_type), 0);
           mbedtls_md_starts(&hash_ctx);
+
           mbedtls_md_update(&hash_ctx, (const unsigned char *)last_wt_challange, 16);
           Serial.print(F(" * Challange: "));
           for (uint8_t b = 0; b < 16; b++) {
@@ -1492,6 +1497,7 @@ void handle_lora() {
             Serial.write(' ');
           }
           Serial.println();
+
           mbedtls_md_update(&hash_ctx, (const unsigned char *)settings.lora_security_key, 16);
           Serial.print(F(" * Key: "));
           for (uint8_t b = 0; b < 16; b++) {
@@ -1499,17 +1505,25 @@ void handle_lora() {
             Serial.write(' ');
           }
           Serial.println();
+
+          mbedtls_md_update(&hash_ctx, (const unsigned char *) &lora_auth_cmd_queue[lora_auth_packet_processing][1], hash_begin_pos - 1);
+          Serial.print(F(" * Data: "));
+          for (uint8_t b = 0; b < hash_begin_pos - 1; b++) {
+            Serial.print(lora_auth_cmd_queue[lora_auth_packet_processing][1 + b], HEX);
+            Serial.write(' ');
+          }
+          Serial.println();
+
           mbedtls_md_finish(&hash_ctx, resulting_hash);
           mbedtls_md_free(&hash_ctx);
 
           lora_outgoing_queue[lora_outgoing_queue_idx][0] = LORA_MAGIC;
           lora_outgoing_queue[lora_outgoing_queue_idx][1] = lora_outgoing_packet_id;
           lora_outgoing_queue[lora_outgoing_queue_idx][2] = lora_auth_cmd_queue[lora_auth_packet_processing][0];
-          lora_outgoing_queue[lora_outgoing_queue_idx][3] = last_auth_challange_packet_id;  //anclude ACKing
+          lora_outgoing_queue[lora_outgoing_queue_idx][3] = last_auth_challange_packet_id;  //include ACKing
 
           memcpy(&lora_outgoing_queue[lora_outgoing_queue_idx][4], &lora_auth_cmd_queue[lora_auth_packet_processing][1], 16);  //append authed data
-          uint8_t hash_begin_pos = gw_to_ws_packet_type_to_length(lora_auth_cmd_queue[lora_auth_packet_processing][0]) - 32 /*minus hash*/ + 3 /*overhead bytes*/;
-          if (hash_begin_pos + 32 >= 48) Serial.println(F("Packet too big to fit with hash!"));  //anti mem corrupt
+          if (hash_begin_pos + 32 >= 48) Serial.println(F("Packet too big to fit with hash!"));                                //anti mem corrupt
           else {
             memcpy(&lora_outgoing_queue[lora_outgoing_queue_idx][hash_begin_pos], &resulting_hash, sizeof(resulting_hash));
             Serial.print(F(" * Hash: "));
@@ -1621,4 +1635,5 @@ void loop() {
   handle_lora();
 
   delay(5);
+
 }

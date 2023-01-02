@@ -629,6 +629,15 @@ void handle_lora_tx_done() {
   digitalWrite(pcf, LORA_TX_LED, HIGH);
 }
 
+void array_hexprint(uint8_t* arr, uint8_t len) {
+  for (uint8_t b = 0; b < len; b++) {
+    if (arr[b] < 0x10) Serial.write('0');
+    Serial.print(arr[b], HEX);
+    Serial.write(' ');
+  }
+  Serial.println();
+}
+
 void setup() {
   wdt_enable(WDTO_8S);
 
@@ -1492,7 +1501,7 @@ void read_sensors_and_clock() {
     //if difference BETWEEN current time /*OR last rains time*/ COMPARED TO rain start IS BIGGER THAN configured time
     (/*sensor_values.rain_end_millis - sensor_values.rain_start_millis > (settings.rain_minutes_til_block * 60 * 1000)
      or*/
-       millis() - sensor_values.rain_start_millis
+     millis() - sensor_values.rain_start_millis
      > ((uint32_t)settings.rain_minutes_til_block * 60 * 1000L))
 
     and  //AND
@@ -1603,13 +1612,8 @@ void handle_serial() {
     }
 
     if (controlCharacter == 'K') {  //generate new lora key
-      //Serial.print(F("LoRa Key: "));
-      for (uint8_t b = 0; b < 16; b++) {
-        if (settings.lora_security_key[b] < 0x10) Serial.write('0');
-        Serial.print(settings.lora_security_key[b], HEX);
-        Serial.write(' ');
-      }
-      Serial.println();
+                                    //Serial.print(F("LoRa Key: "));
+      array_hexprint(settings.lora_security_key, 16);
     }
 
     /*if (controlCharacter == 'P') {
@@ -1760,19 +1764,21 @@ bool check_lora_auth(uint8_t packet_num, uint8_t resp_offset, byte cmd_packet_id
   sha.write(auth_challange, 16);
   Serial.print(s_star);
   Serial.print(F("Chal: "));
-  for (uint8_t b = 0; b < 16; b++) {
-    Serial.print(auth_challange[b], HEX);
-    Serial.write(' ');
-  }
+  array_hexprint(auth_challange, 16);
   Serial.println();
+
   sha.write(settings.lora_security_key, 16);
-  Serial.print(s_star);
+  /*Serial.print(s_star);
   Serial.print(F("Key: "));
-  for (uint8_t b = 0; b < 16; b++) {
-    Serial.print(settings.lora_security_key[b], HEX);
-    Serial.write(' ');
-  }
+  array_hexprint(settings.lora_security_key,16);
+  */
+
+  sha.write(&lora_incoming_queue[packet_num][4], resp_offset - 4);
+  Serial.print(s_star);
+  Serial.print(F("Dat: "));
+  array_hexprint(&lora_incoming_queue[packet_num][4], resp_offset - 4);
   Serial.println();
+
   hash = sha.result();
   Serial.print(s_star);
   Serial.print(F("Cor: "));
@@ -1845,10 +1851,7 @@ void handle_lora() {
         Serial.println(lora_incoming_queue_len[p_idx]);
         Serial.print(s_star);
         Serial.print(F("C: "));  //Serial.print(F("Content: "));
-        for (uint8_t b = 0; b < min(lora_incoming_queue_len[p_idx], 48); b++) {
-          Serial.print(lora_incoming_queue[p_idx][b], HEX);
-          Serial.write(' ');
-        }
+        array_hexprint(lora_incoming_queue[p_idx], min(lora_incoming_queue_len[p_idx], 48));
         Serial.println();
 
         if (lora_incoming_queue[p_idx][0] == LORA_MAGIC) {  //if magic correct
