@@ -661,7 +661,7 @@ void setup() {
   pinMode(ENCODER_DT_PIN, INPUT_PULLUP);
   pinMode(BTN_PIN, INPUT_PULLUP);
 
-  set_status_led(1, 1, 0);
+  set_status_led(1, 1, 1);
 
   Serial.begin(9600);
   ////noser Serial.println(F("H3 Bewässerungssystem\nhttps://blog.hacker3000.cf/waterthing.php"));
@@ -1292,7 +1292,7 @@ void update_display() {
     case STATUS_IDLE:
       if (settings.tank_capacity > 0 ? irrigation_timer.fillings_to_irrigate == 0 : irrigation_timer.liters_to_pump == 0) set_status_led(1, 0, 1);  //turned off
       else if (irrigation_timer.last_watering_day == current_time.Day) set_status_led(0, 1, 0);                                                     //done
-      else if (sensor_values.rain_detected) set_status_led(1, 0, 1);                                                                                //rain
+      else if (sensor_values.rain_detected) set_status_led(1, 1, 0);                                                                                //rain
       else set_status_led(0, 1, 0);                                                                                                                 //waiting
       break;
     case STATUS_AFTERDRAIN:
