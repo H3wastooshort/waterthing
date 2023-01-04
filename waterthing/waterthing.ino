@@ -211,7 +211,7 @@ uint8_t gw_to_ws_packet_type_to_length(uint8_t pt) {
     case PACKET_TYPE_CURRENT_TIME: return 0; break;
     case PACKET_TYPE_ADD_WATER: return 35; break;
     case PACKET_TYPE_CANCEL_WATER: return 33; break;
-    case PACKET_TYPE_SET_TIMER: return 36; break;
+    case PACKET_TYPE_SET_TIMER: return 37; break;
     case PACKET_TYPE_GW_REBOOT: return 0; break;
   }
 }
@@ -1774,7 +1774,7 @@ bool check_lora_auth(uint8_t packet_num, uint8_t resp_offset /*TODO: get this fr
   array_hexprint(settings.lora_security_key,16);
   */
 
-  sha.write(lora_incoming_queue[packet_num][2]);                    //write packet type
+  sha.write(&lora_incoming_queue[packet_num][2], 1);                //write packet type
   sha.write(&lora_incoming_queue[packet_num][4], resp_offset - 4);  //from the 4th byte (3protocol and 1ack before) read for (distance from hash begin)
   Serial.print(s_star);
   Serial.print(F("Dat: "));

@@ -146,7 +146,7 @@ uint8_t gw_to_ws_packet_type_to_length(uint8_t pt) {
     case PACKET_TYPE_CURRENT_TIME: return 0; break;
     case PACKET_TYPE_ADD_WATER: return 35; break;
     case PACKET_TYPE_CANCEL_WATER: return 33; break;
-    case PACKET_TYPE_SET_TIMER: return 36; break;
+    case PACKET_TYPE_SET_TIMER: return 37; break;
     case PACKET_TYPE_GW_REBOOT: return 0; break;
   }
 }
@@ -1533,10 +1533,12 @@ void handle_lora() {
           }
           Serial.println();
 
-          mbedtls_md_update(&hash_ctx, (const unsigned char *)&lora_auth_cmd_queue[lora_auth_packet_processing][0], hash_begin_pos);
+          uint8_t dat_len = gw_to_ws_packet_type_to_length(lora_auth_cmd_queue[lora_auth_packet_processing][0]) - 32 - 1;
+          mbedtls_md_update(&hash_ctx, (const unsigned char *)&lora_auth_cmd_queue[lora_auth_packet_processing][0], 1);
+          mbedtls_md_update(&hash_ctx, (const unsigned char *)&lora_auth_cmd_queue[lora_auth_packet_processing][1], dat_len);
           Serial.print(F(" * Data: "));
-          for (uint8_t b = 0; b < hash_begin_pos; b++) {
-            Serial.print(lora_auth_cmd_queue[lora_auth_packet_processing][b], HEX);
+          for (uint8_t b = 0; b < dat_len; b++) {
+            Serial.print(lora_auth_cmd_queue[lora_auth_packet_processing][b + 1], HEX);
             Serial.write(' ');
           }
           Serial.println();
