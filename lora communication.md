@@ -7,11 +7,12 @@ Magic Number is just 42
 Packet ID increment individually on each side and rolls over to 0 when going over 255
 
 ## Gateway -> Water System
-| Packet Type | Name | Anatomy | Description |
+| Packet Type | Name | Anatomy | Description / Comment |
 | ----------- | ---- | ------- | ----------- |
 | 0 | Current Time | [1 byte Packet ID of 230 time req] [UNIX Timestamp 32bit] | yes Y2K38, i'll just add the 60-something years when it rolls over to 1970 |
 | 1 | Add Water to Irrigate | [1 byte Packet ID of challange] [Liters 2 bytes] [Auth Response 32 bytes] | |
 | 2 | Cancel Irrigation | [1 byte Packet ID of challange] [Auth Response 32 bytes] | |
+| 3 | Set Irrigation Timer | [1 byte Packet ID of challange] [Hour 1 byte] [Minute 1 byte] [Liters 2 bytes] [Auth Response 32 bytes] | |
 | 241 | Reboot Notification | No Data | Packet sent once on boot |
 | 250 | Ask for Auth challange | No Data | |
 | 251 | Ping | | |
@@ -19,7 +20,7 @@ Packet ID increment individually on each side and rolls over to 0 when going ove
 | 255 | ACK | [Packet ID] | |
 
 ## Water System -> Gateway
-| Packet Type | Name | Anatomy | Description |
+| Packet Type | Name | Anatomy | Description / Comment |
 | ----------- | ---- | ------- | ----------- |
 | 0 | System Status | [4+4 bit status] [2 byte fixed point battery voltage]| Used to broadcast system state like STATUS_IDLE. Left 4 bits are system state, right 4 ones are more info (for ex in idle: alread watered, turned off, etc). fixed point battery voltage is a uint16_t divided by 100. max value would be 65.535V |
 | 1 | Watering State | [4+4 bit status] [2 byte unsigned int: liters left] [2 byte unsigned int: liters called] | broadcasts watering state if currently watering |
@@ -34,7 +35,7 @@ Packet ID increment individually on each side and rolls over to 0 when going ove
 
 ## Ground Sensor -> Water System
 **JUST AN IDEA. PROBABLY WON'T HAPPEN**
-| Packet Type | Name | Anatomy | Description |
+| Packet Type | Name | Anatomy | Description / Comment |
 | ----------- | ---- | ------- | ----------- |
 | 100 | Ground Data | [Sensor ID 1 byte] [Wetness 1 byte] | ground wetness is 0%-100% in 0.5% steps (so 0-200 in the wetness byte) |
 

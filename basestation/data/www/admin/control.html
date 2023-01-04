@@ -53,6 +53,16 @@
 </div>
 </form>
 
+<form action="/admin/control" method="POST">
+<div class="box">
+<h2>Timer Einstellen</h2>
+<label for="set_timer_hour">Stunde: </label><input id="set_timer_hour" name="set_timer_hour" type="number" min="0" max="23" step="1"></input><br>
+<label for="set_timer_minute">Minute: </label><input id="set_timer_minute" name="set_timer_minute" type="number" min="0" max="59" step="1"></input><br>
+<label for="set_timer_liters">Liter: </label><input id="set_timer_liters" name="set_timer_liters" type="number" min="0" max="999" step="1"></input><br>
+<button name="set_timer">Übermitteln</button><br>
+</div>
+</form>
+
 <script>
 //js in here replaces form submit that loads page with a fetch() that turns the box red/green on success/fail but does not reload page
 </script>

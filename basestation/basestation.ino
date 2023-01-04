@@ -117,6 +117,7 @@ enum lora_packet_types_gw_to_ws {  //gateway to water system
   PACKET_TYPE_CURRENT_TIME = 0,
   PACKET_TYPE_ADD_WATER = 1,
   PACKET_TYPE_CANCEL_WATER = 2,
+  PACKET_TYPE_SET_TIMER = 3,
   PACKET_TYPE_GW_REBOOT = 241,
   PACKET_TYPE_REQUST_CHALLANGE = 250,
   PACKET_TYPE_ACK = 255
@@ -145,6 +146,7 @@ uint8_t gw_to_ws_packet_type_to_length(uint8_t pt) {
     case PACKET_TYPE_CURRENT_TIME: return 0; break;
     case PACKET_TYPE_ADD_WATER: return 35; break;
     case PACKET_TYPE_CANCEL_WATER: return 33; break;
+    case PACKET_TYPE_SET_TIMER: return 36; break;
     case PACKET_TYPE_GW_REBOOT: return 0; break;
   }
 }
@@ -517,10 +519,10 @@ void rest_control() {
     lora_auth_cmd_queue_idx++;
     if (lora_auth_cmd_queue_idx >= 4) lora_auth_cmd_queue_idx = 0;
 
-    resp["success"] = "queued water call command";
+    resp["success"] = "queued <water call> command";
   }
 
-  if (req["cancel_water"] == true or server.hasArg("cancel_water")) {
+  else if (req["cancel_water"] == true or server.hasArg("cancel_water")) {
     for (uint8_t b = 0; b < 16; b++) lora_auth_cmd_queue[lora_auth_cmd_queue_idx][b] = 0;
 
     lora_auth_cmd_queue[lora_auth_cmd_queue_idx][0] = PACKET_TYPE_CANCEL_WATER;
@@ -528,7 +530,32 @@ void rest_control() {
     lora_auth_cmd_queue_idx++;
     if (lora_auth_cmd_queue_idx >= 4) lora_auth_cmd_queue_idx = 0;
 
-    resp["success"] = "queued cancel command";
+    resp["success"] = "queued <cancel> command";
+  }
+
+  else if (req["set_timer"].is<uint16_t>() or server.hasArg("set_timer")) {
+    for (uint8_t b = 0; b < 16; b++) lora_auth_cmd_queue[lora_auth_cmd_queue_idx][b] = 0;
+    union {
+      uint16_t liters = 0;
+      byte liters_b[2];
+    };
+    liters = server.hasArg("plain") ? req["set_timer"]["liters"] : server.arg("set_timer_liters").toInt();
+
+    lora_auth_cmd_queue[lora_auth_cmd_queue_idx][0] = PACKET_TYPE_ADD_WATER;
+    lora_auth_cmd_queue[lora_auth_cmd_queue_idx][1] = server.hasArg("plain") ? req["set_timer"]["hour"] : server.arg("set_timer_hour").toInt();
+    lora_auth_cmd_queue[lora_auth_cmd_queue_idx][2] = server.hasArg("plain") ? req["set_timer"]["minute"] : server.arg("set_timer_minute").toInt();
+    lora_auth_cmd_queue[lora_auth_cmd_queue_idx][3] = liters_b[0];
+    lora_auth_cmd_queue[lora_auth_cmd_queue_idx][4] = liters_b[1];
+
+    lora_auth_cmd_queue_idx++;
+    if (lora_auth_cmd_queue_idx >= 4) lora_auth_cmd_queue_idx = 0;
+
+    resp["success"] = "queued <set timer> command";
+  }
+
+  else {
+    server.send(400, "application/json", "{\"error\":\"no command\"");
+    return;
   }
 
   if (!server.hasArg("plain")) server.sendHeader("Refresh", "3;url=/admin/control.html");
@@ -922,7 +949,7 @@ void setup() {
 
   WiFi.mode(WIFI_STA);
   WiFi.hostname(host_name);
-  wm.setConfigPortalTimeout(180);
+  wm.setConfigPortalTimeout(60);
   wm.setAPCallback(config_ap_callback);
   wm.setClass("invert");
   if (!digitalRead(0)) {
@@ -1506,10 +1533,10 @@ void handle_lora() {
           }
           Serial.println();
 
-          mbedtls_md_update(&hash_ctx, (const unsigned char *) &lora_auth_cmd_queue[lora_auth_packet_processing][1], hash_begin_pos - 1);
+          mbedtls_md_update(&hash_ctx, (const unsigned char *)&lora_auth_cmd_queue[lora_auth_packet_processing][0], hash_begin_pos);
           Serial.print(F(" * Data: "));
-          for (uint8_t b = 0; b < hash_begin_pos - 1; b++) {
-            Serial.print(lora_auth_cmd_queue[lora_auth_packet_processing][1 + b], HEX);
+          for (uint8_t b = 0; b < hash_begin_pos; b++) {
+            Serial.print(lora_auth_cmd_queue[lora_auth_packet_processing][b], HEX);
             Serial.write(' ');
           }
           Serial.println();
@@ -1635,5 +1662,4 @@ void loop() {
   handle_lora();
 
   delay(5);
-
 }

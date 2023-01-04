@@ -182,6 +182,7 @@ enum lora_packet_types_gw_to_ws {  //gateway to water system
   PACKET_TYPE_CURRENT_TIME = 0,
   PACKET_TYPE_ADD_WATER = 1,
   PACKET_TYPE_CANCEL_WATER = 2,
+  PACKET_TYPE_SET_TIMER = 3,
   PACKET_TYPE_GW_REBOOT = 241,
   PACKET_TYPE_REQUST_CHALLANGE = 250,
   PACKET_TYPE_ACK = 255
@@ -210,6 +211,7 @@ uint8_t gw_to_ws_packet_type_to_length(uint8_t pt) {
     case PACKET_TYPE_CURRENT_TIME: return 0; break;
     case PACKET_TYPE_ADD_WATER: return 35; break;
     case PACKET_TYPE_CANCEL_WATER: return 33; break;
+    case PACKET_TYPE_SET_TIMER: return 36; break;
     case PACKET_TYPE_GW_REBOOT: return 0; break;
   }
 }
@@ -218,7 +220,6 @@ uint8_t gw_to_ws_packet_type_to_length(uint8_t pt) {
 //auth stuff
 byte auth_challange[16] = { 0 };  //all 0 means invalid
 byte last_auth_cr_packet_id = 0xFF;
-byte last_auth_cmd_packet_id = 0xFF;
 
 //global menu variables
 int8_t menu_page = 0;          // 0-> main page, 1 -> Timer Setup, 2 -> Tank Setup, 3 -> Clock Setup
@@ -1490,7 +1491,7 @@ void read_sensors_and_clock() {
   //only set start/end millis on change
   if (last_rain_condition != rain_condition_now) {
     if (rain_condition_now) {
-      //dont set rain_start while currently detecting rain so that a short interruption of the signal does un-detect it for the til_block time
+      //dont set rain_start while currently detecting rain so that a short interruption of the signal does not un-detect it for the til_block time
       if (!sensor_values.rain_detected) sensor_values.rain_start_millis = millis();
     } else sensor_values.rain_end_millis = millis();
     last_rain_condition = rain_condition_now;
@@ -1593,14 +1594,14 @@ void handle_serial() {
         Serial.print(lora_airtime / 1000); Serial.print(F("s/")); Serial.print(LORA_MAX_AIRTIME); Serial.print(F("s ("));
         Serial.print(((float)lora_airtime / ((float)LORA_MAX_AIRTIME * 1000)) * 100); Serial.println(F("%)"));*/
 
-      Serial.print(s_star);
+      /*Serial.print(s_star);
       Serial.print(F("AirT: "));
       Serial.print(lora_airtime / 1000);
       Serial.write('/');
       Serial.print(LORA_MAX_AIRTIME);
       Serial.println((lora_airtime > LORA_MAX_AIRTIME * 1000L) ? F(" USED UP") : F(" OK"));
 
-      Serial.println();
+      Serial.println();*/
     }
 
     if (controlCharacter == 'G') {  //generate new lora key
@@ -1612,7 +1613,7 @@ void handle_serial() {
     }
 
     if (controlCharacter == 'K') {  //generate new lora key
-                                    //Serial.print(F("LoRa Key: "));
+      Serial.print(F("LoRa Key: "));
       array_hexprint(settings.lora_security_key, 16);
     }
 
@@ -1737,7 +1738,7 @@ void afterpacket_stuff() {
   if (lora_outgoing_queue_idx >= 4) lora_outgoing_queue_idx = 0;
 }
 
-bool check_lora_auth(uint8_t packet_num, uint8_t resp_offset, byte cmd_packet_id) {  //resp always 32bytes
+bool check_lora_auth(uint8_t packet_num, uint8_t resp_offset /*TODO: get this from packet type length -32 -3*/, byte cmd_packet_id) {  //resp always 32bytes, no need for its length
   Serial.println(F("Checking Auth:"));
   bool chal_valid = false;
   for (uint8_t b = 0; b < 16; b++)
@@ -1773,7 +1774,8 @@ bool check_lora_auth(uint8_t packet_num, uint8_t resp_offset, byte cmd_packet_id
   array_hexprint(settings.lora_security_key,16);
   */
 
-  sha.write(&lora_incoming_queue[packet_num][4], resp_offset - 4);
+  sha.write(lora_incoming_queue[packet_num][2]);                    //write packet type
+  sha.write(&lora_incoming_queue[packet_num][4], resp_offset - 4);  //from the 4th byte (3protocol and 1ack before) read for (distance from hash begin)
   Serial.print(s_star);
   Serial.print(F("Dat: "));
   array_hexprint(&lora_incoming_queue[packet_num][4], resp_offset - 4);
@@ -1901,7 +1903,6 @@ void handle_lora() {
                 {
                   //Serial.println(F("Water Call"));
 
-                  last_auth_cmd_packet_id = lora_incoming_queue[p_idx][1];
                   clear_packet(lora_incoming_queue[p_idx][3]);
                   do_ack = false;
 
@@ -1930,6 +1931,46 @@ void handle_lora() {
 
                   tank_fillings_remaining = 0;
                   system_state = STATUS_IDLE;
+                }
+                break;
+
+              case PACKET_TYPE_SET_TIMER:
+                {
+                  //Serial.println(F("Set Timer:"));
+
+                  clear_packet(lora_incoming_queue[p_idx][3]);
+                  do_ack = false;
+
+                  if (!check_lora_auth(p_idx, 8, lora_incoming_queue[p_idx][1])) break;
+
+                  union {
+                    uint16_t liters = 0;
+                    byte liters_b[2];
+                  };
+                  liters_b[0] = lora_incoming_queue[p_idx][6];
+                  liters_b[1] = lora_incoming_queue[p_idx][7];
+
+                  irrigation_timer.liters_to_pump = liters;
+                  irrigation_timer.fillings_to_irrigate = literToTanks(liters);
+
+                  irrigation_timer.start_hour = lora_incoming_queue[p_idx][4];
+                  irrigation_timer.start_minute = lora_incoming_queue[p_idx][5];
+
+                  EEPROM.put(0 + sizeof(settings), irrigation_timer);
+
+                  /*Serial.print(s_star);
+                  Serial.print(F("H: "));
+                  Serial.println(irrigation_timer.start_hour);
+                  Serial.print(s_star);
+                  Serial.print(F("M: "));
+                  Serial.println(irrigation_timer.start_minute);
+                  Serial.print(s_star);
+                  Serial.print(F("L: "));
+                  Serial.println(irrigation_timer.liters_to_pump);
+                  Serial.print(s_star);
+                  Serial.print(F("T: "));
+                  Serial.println(irrigation_timer.fillings_to_irrigate);
+                  Serial.println();*/
                 }
                 break;
 
