@@ -1938,9 +1938,6 @@ void handle_lora() {
                 {
                   //Serial.println(F("Set Timer:"));
 
-                  clear_packet(lora_incoming_queue[p_idx][3]);
-                  do_ack = false;
-
                   if (!check_lora_auth(p_idx, 8, lora_incoming_queue[p_idx][1])) break;
 
                   union {
@@ -1957,6 +1954,9 @@ void handle_lora() {
                   irrigation_timer.start_minute = lora_incoming_queue[p_idx][5];
 
                   EEPROM.put(0 + sizeof(settings), irrigation_timer);
+
+                  clear_packet(lora_incoming_queue[p_idx][3]);
+                  do_ack = false;
 
                   /*Serial.print(s_star);
                   Serial.print(F("H: "));

@@ -522,7 +522,7 @@ void rest_control() {
     resp["success"] = "queued <water call> command";
   }
 
-  else if (req["cancel_water"] == true or server.hasArg("cancel_water")) {
+  else if (req["cancel_water"] or server.hasArg("cancel_water")) {
     for (uint8_t b = 0; b < 16; b++) lora_auth_cmd_queue[lora_auth_cmd_queue_idx][b] = 0;
 
     lora_auth_cmd_queue[lora_auth_cmd_queue_idx][0] = PACKET_TYPE_CANCEL_WATER;
@@ -533,7 +533,7 @@ void rest_control() {
     resp["success"] = "queued <cancel> command";
   }
 
-  else if (req["set_timer"].is<uint16_t>() or server.hasArg("set_timer")) {
+  else if (req["set_timer"] or server.hasArg("set_timer")) {
     for (uint8_t b = 0; b < 16; b++) lora_auth_cmd_queue[lora_auth_cmd_queue_idx][b] = 0;
     union {
       uint16_t liters = 0;
@@ -541,7 +541,7 @@ void rest_control() {
     };
     liters = server.hasArg("plain") ? req["set_timer"]["liters"] : server.arg("set_timer_liters").toInt();
 
-    lora_auth_cmd_queue[lora_auth_cmd_queue_idx][0] = PACKET_TYPE_ADD_WATER;
+    lora_auth_cmd_queue[lora_auth_cmd_queue_idx][0] = PACKET_TYPE_SET_TIMER;
     lora_auth_cmd_queue[lora_auth_cmd_queue_idx][1] = server.hasArg("plain") ? req["set_timer"]["hour"] : server.arg("set_timer_hour").toInt();
     lora_auth_cmd_queue[lora_auth_cmd_queue_idx][2] = server.hasArg("plain") ? req["set_timer"]["minute"] : server.arg("set_timer_minute").toInt();
     lora_auth_cmd_queue[lora_auth_cmd_queue_idx][3] = liters_b[0];
