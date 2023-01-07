@@ -1482,7 +1482,7 @@ void read_sensors_and_clock() {
     last_db_rc_change = millis();
     last_changed_db_rc = rain_condition_raw;
   }
-  if (millis() - last_db_rc_change > SENSOR_DEBOUNCE) rain_condition_now = rain_condition_raw;
+  if (millis() - last_db_rc_change > SENSOR_DEBOUNCE * 10) rain_condition_now = rain_condition_raw;
 
 
   static uint32_t last_rc_change = 0;
@@ -1493,6 +1493,7 @@ void read_sensors_and_clock() {
     if (rain_condition_now) {
       //dont set rain_start while currently detecting rain so that a short interruption of the signal does not un-detect it for the til_block time
       if (!sensor_values.rain_detected) sensor_values.rain_start_millis = millis();
+
     } else sensor_values.rain_end_millis = millis();
     last_rain_condition = rain_condition_now;
   }
@@ -1500,16 +1501,17 @@ void read_sensors_and_clock() {
   //TL;DR if start time is long enough ago OR end time is recent enough THEN rain is detected
   sensor_values.rain_detected =
     //if difference BETWEEN current time /*OR last rains time*/ COMPARED TO rain start IS BIGGER THAN configured time
-    (/*sensor_values.rain_end_millis - sensor_values.rain_start_millis > (settings.rain_minutes_til_block * 60 * 1000)
+    (/*sensor_values.rain_end_millis - sensor_values.rain_start_millis > (settings.rain_minutes_til_block * 60L * 1000L)
      or*/
-     millis() - sensor_values.rain_start_millis
-     > ((uint32_t)settings.rain_minutes_til_block * 60 * 1000L))
+     millis() - (uint32_t)sensor_values.rain_start_millis
+     > ((uint32_t)settings.rain_minutes_til_block * 60L * 1000L))
 
     and  //AND
 
     //current time minus end time IS SMALLER THAN configured time OR its raining
-    ((millis() - sensor_values.rain_end_millis < ((uint32_t)settings.rain_minutes_til_clear * 60 * 1000L)
-      /*or millis() - sensor_values.rain_start_millis < (settings.rain_minutes_til_clear*60*1000)*/)
+    ((millis() - sensor_values.rain_end_millis
+      < ((uint32_t)settings.rain_minutes_til_clear * 60L * 1000L)
+      /*or millis() - sensor_values.rain_start_millis < (settings.rain_minutes_til_clear*60L*1000L)*/)
      or rain_condition_now)
 
     and settings.block_water_after_rain;  //AND rain is set to block irrigation
@@ -1550,9 +1552,16 @@ void handle_serial() {
         Serial.print(sensor_values.battery_voltage );
         Serial.print(F("V\r\n * FlowClicks: "));
         Serial.println(sensor_values.water_flow_clicks);*/
+
+      /*Serial.print(s_star);
+      Serial.print("Rain: ");
+      Serial.println(sensor_values.rain_detected);*/
+      /*Serial.print(s_star);
+      Serial.print("RS: ");
+      Serial.println(sensor_values.rain_start_millis);
       Serial.print(s_star);
-      Serial.print(F("Rain: "));
-      Serial.println(sensor_values.rain_detected);
+      Serial.print("RE: ");
+      Serial.println(sensor_values.rain_end_millis);*/
 
       /*Serial.println(F("System: "));
 
