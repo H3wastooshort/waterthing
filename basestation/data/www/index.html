@@ -80,9 +80,10 @@ function update_status() {
 				break;
 			
 			case 1:
-				if (data.status.extra & 0b0100) status_extra.innerText = "Tanksensor Fehler";
+				if (data.status.extra & 0b1000) status_extra.innerText = "Tanksensor Fehler";
 				if (data.status.extra & 0b0100) status_extra.innerText = "RTC Fehlt";
 				if (data.status.extra & 0b0010) status_extra.innerText = "RTC Nicht eingestellt";
+				if (data.status.extra & 0b0001) status_extra.innerText = "Pumpen Timeout";
 				break;
 		}
 		

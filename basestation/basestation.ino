@@ -201,13 +201,17 @@ std::map<byte, String> status_to_text{
   { 0b01010000, "LOW BAT." },
   { 0b01100000, "NO TIME" },
   { 0b01110000, "GEN. FAIL" },
+  { 0b01110001, "PUMP FAIL" },
   { 0b01111000, "TS FAIL" },
   { 0b01110110, "RTC FAIL" },
   { 0b01110100, "RTC FAIL" },
   { 0b01110010, "RTC UNSET" },
   { 0b01111100, "TS+RTC FAIL" },
   { 0b01111110, "TS+RTC FAIL" },
-  { 0b01111010, "TS+RTC FAIL" }
+  { 0b01111010, "TS+RTC FAIL" },
+  { 0b01111101, "TOTAL FAIL" },
+  { 0b01111111, "TOTAL FAIL" },
+  { 0b01111011, "TOTAL FAIL" }
 };
 
 //display
@@ -777,9 +781,10 @@ void send_email_alert(uint8_t alert_type) {  //fuck this enum shit
         while (msg_body_file.available()) msg.message += msg_body_file.read();
         msg_body_file.close();
         //                     XXXXTMU?
-        if (last_wt_status & 0b00001000) msg.message += " * Tanksensoren Werte Unsinnig";
+        if (last_wt_status & 0b00001000) msg.message += " * Tanksensorwerte Unsinnig!";
         if (last_wt_status & 0b00000100) msg.message += " * RTC fehlt.";
         if (last_wt_status & 0b00000010) msg.message += " * RTC nicht eingestellt.";
+        if (last_wt_status & 0b00000010) msg.message += " * Pumpen Timeout!";
       }
       break;
   }

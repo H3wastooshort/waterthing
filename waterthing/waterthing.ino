@@ -94,8 +94,9 @@ struct settings_s {
   uint16_t rain_minutes_til_clear = 60;  //if its not rainf or at least this time, watering will resume as normal
   bool block_water_after_rain = false;
   byte lora_security_key[16];
-  uint8_t lora_enable = 0;  //0=off, 1=broadcast only, 2=control
-  //maybe verify with a crc32 here
+  uint8_t lora_enable = 0;   //0=off, 1=broadcast only, 2=control
+  uint8_t pump_timeout = 0;  //in minutes. if filling the tank takes longer than this value, the system goes into a fail state
+  //uint32_t crc; //maybe verify with a crc32 here
 } settings;
 
 struct i_timer_s {
@@ -112,6 +113,7 @@ struct c_error_s {
   bool rtc_unset = false;
   bool tank_sensors_irrational = false;
   bool lora_missing = false;
+  bool pump_timed_out = false;
 } component_errors;
 
 //enums for easier code reading
@@ -144,6 +146,7 @@ struct sensor_s {
 
 uint16_t tank_fillings_remaining = 0;  //if over 0, run pumping stuff til 0. is in tank fillings normally, in liters in direct mode
 uint64_t cycle_finish_millis = 0xFFFFFFFF;
+uint32_t pumping_start_millis = 0;  //0 if never started
 
 //lora variables
 // it would have been a better idea to have an outgoing and incoming array with structs in it instead of multiple for each attribute
@@ -243,15 +246,16 @@ enum pages_enum {
   PAGE_TIMER = 3,
   PAGE_LORA = 4,
   PAGE_TANK = 5,
-  PAGE_CLOCK1 = 6,
-  PAGE_CLOCK2 = 7,
-  PAGE_BATTERY = 8,
-  PAGE_SENSORS = 9
+  PAGE_PUMP = 6,
+  PAGE_CLOCK1 = 7,
+  PAGE_CLOCK2 = 8,
+  PAGE_BATTERY = 9,
+  PAGE_SENSORS = 10
 };
 
-#define N_OF_PAGES 10
-const char* page_names[N_OF_PAGES] = { "Status", "Manuell", "Regen", "Timer", "LoRa", "Tank", "Uhrzeit", "Datum", "Akku", "Sensor" };
-const uint8_t page_max_cursor[N_OF_PAGES] = { 0, 1, 3, 3, 3, 2, 3, 3, 2, 3 };
+#define N_OF_PAGES 11
+const char* page_names[N_OF_PAGES] = { "Status", "Manuell", "Regen", "Timer", "LoRa", "Tank", "Pumpe", "Uhrzeit", "Datum", "Akku", "Sensor" };
+const uint8_t page_max_cursor[N_OF_PAGES] = { 0, 1, 3, 3, 3, 2, 1, 3, 3, 2, 3 };
 
 int16_t literToTanks(uint16_t liters_to_convert) {
   if (liters_to_convert % settings.tank_capacity == 0) {
@@ -362,6 +366,16 @@ void change_menu_entry(bool dir) {  //true is up
       }
       break;
 
+    case PAGE_PUMP:
+      switch (menu_entry_cursor) {
+        case 1:
+          settings.pump_timeout += dir ? 1 : -1;
+          if (settings.pump_timeout > 250) settings.pump_timeout = 250;
+          if (settings.pump_timeout < 0) settings.pump_timeout = 0;
+          break;
+      }
+      break;
+
     case PAGE_CLOCK1:
       switch (menu_entry_cursor) {
         case 1:
@@ -452,6 +466,7 @@ void edit_change_callback() {
         }
       }
       break;
+
     case PAGE_RAIN:
       switch (menu_entry_cursor) {
         case 1:
@@ -466,6 +481,7 @@ void edit_change_callback() {
           break;
       }
       break;
+
     case PAGE_TIMER:
       if (!menu_editing) {  //if leaving edit mode
         if (menu_entry_cursor > 0) {
@@ -478,6 +494,7 @@ void edit_change_callback() {
         }
       }
       break;
+
     case PAGE_LORA:
       if (menu_entry_cursor == 3) {
         for (uint8_t b = 0; b < 16; b++) settings.lora_security_key[b] = random(0, 255);
@@ -492,7 +509,9 @@ void edit_change_callback() {
         menu_editing = false;
       }
       break;
+
     case PAGE_TANK:
+    case PAGE_PUMP:
     case PAGE_BATTERY:
       if (!menu_editing) {  //if leaving edit mode
         if (menu_entry_cursor > 0) {
@@ -500,6 +519,7 @@ void edit_change_callback() {
         }
       }
       break;
+
     case PAGE_CLOCK1:
       break;
     case PAGE_CLOCK2:
@@ -701,10 +721,10 @@ void setup() {
     lcd.createChar(GFX_ID_NO_WATER, gfx_no_water);
     lcd.createChar(GFX_ID_FILL, gfx_fill);
     lcd.createChar(GFX_ID_DRAIN, gfx_drain);*/
-  lcd.createChar(GFX_ID_STATUS, gfx_error);
+  /*lcd.createChar(GFX_ID_STATUS, gfx_error);
   lcd.createChar(GFX_ID_DYN_1, gfx_error);
   lcd.createChar(GFX_ID_DYN_2, gfx_error);
-  lcd.createChar(GFX_ID_DYN_3, gfx_error);
+  lcd.createChar(GFX_ID_DYN_3, gfx_error);*/
   lcd.createChar(GFX_ID_UML_S, gfx_uml_s);
   lcd.createChar(GFX_ID_UML_A, gfx_uml_a);
   lcd.createChar(GFX_ID_UML_O, gfx_uml_o);
@@ -712,11 +732,12 @@ void setup() {
   delay(50);
   lcd.clear();
   lcd.home();
-  lcd.print(F("Bew\x05sserungs"));
+  /*lcd.print(F("Bew\x05sserungs"));
   lcd.setCursor(0, 1);
   lcd.print(F("System by H3"));
-  delay(1000); /*
-  lcd.clear();
+  delay(1000);*/
+
+  /*lcd.clear();
   lcd.home();
   lcd.print(F("Blog-Artikel/Doku"));
   lcd.setCursor(0, 1);
@@ -982,9 +1003,7 @@ void update_display() {
             lcd.print(settings.tank_capacity > 0 ? irrigation_timer.fillings_to_irrigate : irrigation_timer.liters_to_pump);
             break;
           case STATUS_PUMPING:
-            lcd.print(F("F"));
-            lcd.write(byte(GFX_ID_UML_U));
-            lcd.print(F("lle Tank  "));
+            lcd.print(F("F\x07lle Tank  "));
             lcd.print(tank_fillings_remaining);
             lcd.print(F("/"));
             lcd.print(settings.tank_capacity > 0 ? irrigation_timer.fillings_to_irrigate : irrigation_timer.liters_to_pump);
@@ -1016,6 +1035,11 @@ void update_display() {
           case STATUS_GENERAL_FAIL:
             bool no_error_desc_found = true;
 
+            if (component_errors.pump_timed_out) {
+              lcd.print(F("Pump "));
+              no_error_desc_found = false;
+            }
+
             if (component_errors.tank_sensors_irrational) {  //tank sensor error
               lcd.print(F("TS "));
               no_error_desc_found = false;
@@ -1035,7 +1059,7 @@ void update_display() {
         }
         break;
       case PAGE_MAN:
-        if (tank_fillings_remaining == 0) {
+        if (tank_fillings_remaining == 0 and system_state == STATUS_IDLE) {
           lcd.print(F("Gie\x04\x65 "));
           lcd_print_menu_bracket(1, false);
           lcd.print(page_1_irrigate_order);
@@ -1139,6 +1163,21 @@ void update_display() {
           lcd_print_menu_bracket(2, true);
         }
         disp_pad = 0;
+        break;
+
+      case PAGE_PUMP:
+        lcd.createChar(GFX_ID_DYN_1, gfx_clock);
+        lcd.setCursor(0, 1);  //this is needed so the disp takes the custom char
+
+        lcd.write(byte(GFX_ID_DYN_1));
+        lcd.write('!');
+        lcd_print_menu_bracket(1, false);
+        if (settings.pump_timeout < 10) lcd.print(0);
+        if (settings.pump_timeout < 100) lcd.print(0);
+        lcd.print(settings.pump_timeout);
+        lcd.print(F("min"));
+        lcd_print_menu_bracket(1, true);
+        disp_pad = 5;
         break;
 
       case PAGE_LORA:
@@ -1340,6 +1379,7 @@ void handle_pump_stuff() {
 
       if (tank_fillings_remaining > 0 and !sensor_values.low_water) {
         sensor_values.water_flow_clicks = 0;
+        pumping_start_millis = millis();
         system_state = STATUS_PUMPING;
       }
 
@@ -1355,6 +1395,7 @@ void handle_pump_stuff() {
       digitalWrite(VALVE_PIN, !CONTROL_RELAY_INVERTED);
       if (tank_fillings_remaining > 0) {
         sensor_values.water_flow_clicks = 0;  //return if for some reason there is more irrigation commanded
+        pumping_start_millis = millis();
         system_state = STATUS_PUMPING;
       }
       if (millis() - cycle_finish_millis > (uint64_t(settings.afterdrain_time) * 60L * 1000L)) system_state = STATUS_IDLE;
@@ -1374,6 +1415,7 @@ void handle_pump_stuff() {
           cycle_finish_millis = millis();
           system_state = STATUS_AFTERDRAIN;
         } else {
+          pumping_start_millis = millis();
           system_state = STATUS_PUMPING;
         }
       }
@@ -1382,7 +1424,12 @@ void handle_pump_stuff() {
     case STATUS_PUMPING:
       digitalWrite(PUMP_PIN, !CONTROL_RELAY_INVERTED);
       digitalWrite(VALVE_PIN, CONTROL_RELAY_INVERTED);
-      if (settings.tank_capacity > 0) {
+      if ((settings.pump_timeout > 0) and (millis() - pumping_start_millis > uint32_t(settings.pump_timeout) * 60L * 1000L)) {
+        component_errors.pump_timed_out = true;
+        system_state = STATUS_GENERAL_FAIL;
+      }
+
+      else if (settings.tank_capacity > 0) {
         if (sensor_values.tank_top or sensor_values.low_water) {
           system_state = STATUS_EMPTYING;
         }
@@ -1418,8 +1465,9 @@ void handle_pump_stuff() {
     case STATUS_GENERAL_FAIL:
       digitalWrite(PUMP_PIN, CONTROL_RELAY_INVERTED);
       digitalWrite(VALVE_PIN, CONTROL_RELAY_INVERTED);
+      /*no returning from pump timeout*/
       if (((sensor_values.tank_top) <= (sensor_values.tank_bottom)) or (settings.tank_capacity == 0)) component_errors.tank_sensors_irrational = false;  //if the top sensor is the same or lower than the bottom sensor, its fine
-      if (!component_errors.rtc_missing and !component_errors.tank_sensors_irrational) system_state = STATUS_IDLE;
+      if (!component_errors.rtc_missing and !component_errors.tank_sensors_irrational and !component_errors.pump_timed_out) system_state = STATUS_IDLE;
       break;
   }
 }
@@ -1526,10 +1574,10 @@ void handle_serial() {
     if (controlCharacter == 'a') down_callback();
     if (controlCharacter == 's') btn_callback();
 
-    if (controlCharacter == 'V') {  //dump all sensor values to serial
-      //Serial.println(F("Sensors:"));
+    //if (controlCharacter == 'V') {  //dump all sensor values to serial
+    //Serial.println(F("Sensors:"));
 
-      /*Serial.print(s_star);  Serial.print(F("Low Water: "));
+    /*Serial.print(s_star);  Serial.print(F("Low Water: "));
         Serial.println((sensor_values.low_water) ? F("Water too low") : F("Water fine"));
         Serial.print(s_star);  Serial.print(F("Bottom Tank Swimmer: "));
         Serial.println((sensor_values.tank_bottom) ? F("Under Water") : F("Dry"));
@@ -1542,7 +1590,7 @@ void handle_serial() {
         Serial.print(s_star);  Serial.print(s_star); Serial.print(F("Rain: "));
         Serial.println((sensor_values.rain_detected) ? F("Detected") : F("Somewhere else"));*/
 
-      /*Serial.print(s_star);  Serial.print(F("WaterLow: "));
+    /*Serial.print(s_star);  Serial.print(F("WaterLow: "));
         Serial.println(sensor_values.low_water);
         Serial.print(s_star);  Serial.print(F("TankBot: "));
         Serial.println(sensor_values.tank_bottom);
@@ -1553,17 +1601,17 @@ void handle_serial() {
         Serial.print(F("V\r\n * FlowClicks: "));
         Serial.println(sensor_values.water_flow_clicks);*/
 
-      /*Serial.print(s_star);
+    /*Serial.print(s_star);
       Serial.print("Rain: ");
       Serial.println(sensor_values.rain_detected);*/
-      /*Serial.print(s_star);
+    /*Serial.print(s_star);
       Serial.print("RS: ");
       Serial.println(sensor_values.rain_start_millis);
       Serial.print(s_star);
       Serial.print("RE: ");
       Serial.println(sensor_values.rain_end_millis);*/
 
-      /*Serial.println(F("System: "));
+    /*Serial.println(F("System: "));
 
         // Serial.print(F("Reset Cause: "));
         Serial.print(F("Reset: "));
@@ -1585,12 +1633,12 @@ void handle_serial() {
         }
         Serial.println();*/
 
-      /*Serial.print(s_star); Serial.print(F("Uptime: "));
+    /*Serial.print(s_star); Serial.print(F("Uptime: "));
         Serial.print(round(millis() / 1000));
         Serial.print('s');
         Serial.println();*/
 
-      /*Serial.print(s_star); Serial.print(F("ADC div: "));
+    /*Serial.print(s_star); Serial.print(F("ADC div: "));
         Serial.println(settings.battery_voltage_adc_divider);
 
         Serial.print(s_star); Serial.print(F("Lora Missing: "));
@@ -1599,11 +1647,11 @@ void handle_serial() {
         Serial.print(s_star); Serial.print(F("LoRa Enable: "));
         Serial.println(settings.lora_enable);*/
 
-      /*Serial.print(s_star); Serial.print(F("AirT: "));
+    /*Serial.print(s_star); Serial.print(F("AirT: "));
         Serial.print(lora_airtime / 1000); Serial.print(F("s/")); Serial.print(LORA_MAX_AIRTIME); Serial.print(F("s ("));
         Serial.print(((float)lora_airtime / ((float)LORA_MAX_AIRTIME * 1000)) * 100); Serial.println(F("%)"));*/
 
-      /*Serial.print(s_star);
+    /*Serial.print(s_star);
       Serial.print(F("AirT: "));
       Serial.print(lora_airtime / 1000);
       Serial.write('/');
@@ -1611,7 +1659,7 @@ void handle_serial() {
       Serial.println((lora_airtime > LORA_MAX_AIRTIME * 1000L) ? F(" USED UP") : F(" OK"));
 
       Serial.println();*/
-    }
+    //}
 
     if (controlCharacter == 'G') {  //generate new lora key
       for (uint8_t b = 0; b < 16; b++) settings.lora_security_key[b] = random(0, 255);
@@ -1622,7 +1670,7 @@ void handle_serial() {
     }
 
     if (controlCharacter == 'K') {  //generate new lora key
-      Serial.print(F("LoRa Key: "));
+      //Serial.print(F("LoRa Key: "));
       array_hexprint(settings.lora_security_key, 16);
     }
 
@@ -1748,7 +1796,7 @@ void afterpacket_stuff() {
 }
 
 bool check_lora_auth(uint8_t packet_num, uint8_t resp_offset /*TODO: get this from packet type length -32 -3*/, byte cmd_packet_id) {  //resp always 32bytes, no need for its length
-  Serial.println(F("Checking Auth:"));
+  Serial.println(F("Auth:"));
   bool chal_valid = false;
   for (uint8_t b = 0; b < 16; b++)
     if (auth_challange[b] != 0) chal_valid = true;
@@ -2106,7 +2154,7 @@ void handle_lora() {
         current_status_byte <<= 1;
         current_status_byte |= uint8_t(component_errors.rtc_unset);
         current_status_byte <<= 1;
-        current_status_byte |= uint8_t(0);  //lora missing does not make sanse so i will reserve this for the future
+        current_status_byte |= uint8_t(component_errors.pump_timed_out);
         break;
 
       default:
