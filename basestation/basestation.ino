@@ -780,7 +780,7 @@ void send_email_alert(uint8_t alert_type) {  //fuck this enum shit
         msg_body_file = SPIFFS.open("/mail/de_alert_gen.html", "r");
         while (msg_body_file.available()) msg.message += msg_body_file.read();
         msg_body_file.close();
-        //                     XXXXTMU?
+        //                     XXXXTMU
         if (last_wt_status & 0b00001000) msg.message += " * Tanksensorwerte Unsinnig!";
         if (last_wt_status & 0b00000100) msg.message += " * RTC fehlt.";
         if (last_wt_status & 0b00000010) msg.message += " * RTC nicht eingestellt.";

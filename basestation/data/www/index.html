@@ -71,19 +71,21 @@ function update_status() {
 	.then(response => response.json())
 	.then(data => {
 		status_main.innerText = ms_to_text[data.status.state];
-		status_extra.innerText = "";
+		status_extra.innerHTML = "";
 		switch (data.status.state) {
 			case 0:
-				if (data.status.extra & 0b0001) status_extra.innerText = "Ausgeschaltet";
-				else if (data.status.extra & 0b0010) status_extra.innerText = "Fertig für Heute";
-				else if (data.status.extra & 0b0100) status_extra.innerText = "Regen erkannt";
+				switch (data.status.extra) {
+					case 1: status_extra.innerHTML += "Ausgeschaltet<br>";
+					case 2: status_extra.innerHTML += "Fertig für Heute<br>";
+					case 3: status_extra.innerHTML += "Regen erkannt<br>";
+				}
 				break;
 			
-			case 1:
-				if (data.status.extra & 0b1000) status_extra.innerText = "Tanksensor Fehler";
-				if (data.status.extra & 0b0100) status_extra.innerText = "RTC Fehlt";
-				if (data.status.extra & 0b0010) status_extra.innerText = "RTC Nicht eingestellt";
-				if (data.status.extra & 0b0001) status_extra.innerText = "Pumpen Timeout";
+			case 7:
+				if ((data.status.extra & 0b1000) > 0) status_extra.innerHTML += "Tanksensor Fehler<br>";
+				if ((data.status.extra & 0b0100) > 0) status_extra.innerHTML += "RTC Fehlt<br>";
+				if ((data.status.extra & 0b0010) > 0) status_extra.innerHTML += "RTC Nicht eingestellt<br>";
+				if ((data.status.extra & 0b0001) > 0) status_extra.innerHTML += "Pumpen Timeout<br>";
 				break;
 		}
 		
