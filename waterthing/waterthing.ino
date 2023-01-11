@@ -1557,12 +1557,18 @@ void read_sensors_and_clock() {
     and  //AND
 
     //current time minus end time IS SMALLER THAN configured time OR its raining
-    ((millis() - sensor_values.rain_end_millis
-      < ((uint32_t)settings.rain_minutes_til_clear * 60L * 1000L)
-      /*or millis() - sensor_values.rain_start_millis < (settings.rain_minutes_til_clear*60L*1000L)*/)
-     or rain_condition_now)
+    (
+      (
+        (millis() - sensor_values.rain_end_millis
+         < (uint32_t)settings.rain_minutes_til_clear * 60L * 1000L)
+         
+        and (sensor_values.rain_end_millis - sensor_values.rain_start_millis > settings.rain_minutes_til_block * 60L * 1000L))
 
-    and settings.block_water_after_rain;  //AND rain is set to block irrigation
+      /*or (millis() - sensor_values.rain_start_millis < (settings.rain_minutes_til_clear * 60L * 1000L) * /)*/
+      or rain_condition_now)
+
+    and settings.block_water_after_rain  //AND rain is set to block irrigation
+    ;
 }
 
 void handle_serial() {
@@ -1606,10 +1612,10 @@ void handle_serial() {
       Serial.println(sensor_values.rain_detected);*/
       //Serial.print(s_star);
       //Serial.print("RS: ");
-      //Serial.println(sensor_values.rain_start_millis);
+      Serial.println(sensor_values.rain_start_millis);
       //Serial.print(s_star);
       //Serial.print("RE: ");
-      //Serial.println(sensor_values.rain_end_millis);
+      Serial.println(sensor_values.rain_end_millis);
 
       /*Serial.println(F("System: "));
 
