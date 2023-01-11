@@ -139,8 +139,8 @@ struct sensor_s {
   bool tank_top = false;
   bool rain_detected = false;
   uint32_t water_flow_clicks = 0;
-  uint32_t rain_start_millis = 0;
-  uint32_t rain_end_millis = 0;
+  uint32_t rain_start_millis = 0xFFFFFFFF;
+  uint32_t rain_end_millis = 0xFFFFFFFF;
   float battery_voltage = 0;
 } sensor_values;
 
@@ -1570,14 +1570,14 @@ void handle_serial() {
     //digitalWrite(pcf, ACTIVITY_LED, LOW);
     uint8_t controlCharacter = Serial.read();
 
-    if (controlCharacter == 'd') up_callback();
+    /*if (controlCharacter == 'd') up_callback();
     if (controlCharacter == 'a') down_callback();
-    if (controlCharacter == 's') btn_callback();
+    if (controlCharacter == 's') btn_callback();*/
 
-    //if (controlCharacter == 'V') {  //dump all sensor values to serial
-    //Serial.println(F("Sensors:"));
+    if (controlCharacter == 'V') {  //dump all sensor values to serial
+      //Serial.println(F("Sensors:"));
 
-    /*Serial.print(s_star);  Serial.print(F("Low Water: "));
+      /*Serial.print(s_star);  Serial.print(F("Low Water: "));
         Serial.println((sensor_values.low_water) ? F("Water too low") : F("Water fine"));
         Serial.print(s_star);  Serial.print(F("Bottom Tank Swimmer: "));
         Serial.println((sensor_values.tank_bottom) ? F("Under Water") : F("Dry"));
@@ -1590,7 +1590,7 @@ void handle_serial() {
         Serial.print(s_star);  Serial.print(s_star); Serial.print(F("Rain: "));
         Serial.println((sensor_values.rain_detected) ? F("Detected") : F("Somewhere else"));*/
 
-    /*Serial.print(s_star);  Serial.print(F("WaterLow: "));
+      /*Serial.print(s_star);  Serial.print(F("WaterLow: "));
         Serial.println(sensor_values.low_water);
         Serial.print(s_star);  Serial.print(F("TankBot: "));
         Serial.println(sensor_values.tank_bottom);
@@ -1601,17 +1601,17 @@ void handle_serial() {
         Serial.print(F("V\r\n * FlowClicks: "));
         Serial.println(sensor_values.water_flow_clicks);*/
 
-    /*Serial.print(s_star);
+      /*Serial.print(s_star);
       Serial.print("Rain: ");
       Serial.println(sensor_values.rain_detected);*/
-    /*Serial.print(s_star);
-      Serial.print("RS: ");
-      Serial.println(sensor_values.rain_start_millis);
-      Serial.print(s_star);
-      Serial.print("RE: ");
-      Serial.println(sensor_values.rain_end_millis);*/
+      //Serial.print(s_star);
+      //Serial.print("RS: ");
+      //Serial.println(sensor_values.rain_start_millis);
+      //Serial.print(s_star);
+      //Serial.print("RE: ");
+      //Serial.println(sensor_values.rain_end_millis);
 
-    /*Serial.println(F("System: "));
+      /*Serial.println(F("System: "));
 
         // Serial.print(F("Reset Cause: "));
         Serial.print(F("Reset: "));
@@ -1633,12 +1633,12 @@ void handle_serial() {
         }
         Serial.println();*/
 
-    /*Serial.print(s_star); Serial.print(F("Uptime: "));
+      /*Serial.print(s_star); Serial.print(F("Uptime: "));
         Serial.print(round(millis() / 1000));
         Serial.print('s');
         Serial.println();*/
 
-    /*Serial.print(s_star); Serial.print(F("ADC div: "));
+      /*Serial.print(s_star); Serial.print(F("ADC div: "));
         Serial.println(settings.battery_voltage_adc_divider);
 
         Serial.print(s_star); Serial.print(F("Lora Missing: "));
@@ -1647,11 +1647,11 @@ void handle_serial() {
         Serial.print(s_star); Serial.print(F("LoRa Enable: "));
         Serial.println(settings.lora_enable);*/
 
-    /*Serial.print(s_star); Serial.print(F("AirT: "));
+      /*Serial.print(s_star); Serial.print(F("AirT: "));
         Serial.print(lora_airtime / 1000); Serial.print(F("s/")); Serial.print(LORA_MAX_AIRTIME); Serial.print(F("s ("));
         Serial.print(((float)lora_airtime / ((float)LORA_MAX_AIRTIME * 1000)) * 100); Serial.println(F("%)"));*/
 
-    /*Serial.print(s_star);
+      /*Serial.print(s_star);
       Serial.print(F("AirT: "));
       Serial.print(lora_airtime / 1000);
       Serial.write('/');
@@ -1659,7 +1659,7 @@ void handle_serial() {
       Serial.println((lora_airtime > LORA_MAX_AIRTIME * 1000L) ? F(" USED UP") : F(" OK"));
 
       Serial.println();*/
-    //}
+    }
 
     if (controlCharacter == 'G') {  //generate new lora key
       for (uint8_t b = 0; b < 16; b++) settings.lora_security_key[b] = random(0, 255);
