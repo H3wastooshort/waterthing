@@ -376,6 +376,9 @@ void set_mail_conf() {
   email.setEMailPassword(settings.smtp_pass);
   email.setSMTPPort(settings.smtp_port);
   email.setIsSecure(false);
+
+  email.setEHLOCommand(true);
+  //email.setAdditionalResponseLineOnHELO(2);  //only use on versions without auto-add.resp.l.. works for german mailer GMX. you probably have to figure out your value by setting it higher, uncommenting EMAIL_SENDER_DEBUG in EMailSenderKey.h and reducing it when error says so
 }
 
 bool check_auth() {
@@ -608,8 +611,8 @@ void rest_admin_get() {
   resp["mail"]["smtp_user"] = settings.smtp_user;
   //resp["mail"]["smtp_pass"] = settings.smtp_pass;
   resp["mail"]["smtp_port"] = settings.smtp_port;
-  resp["mail"]["web_user"] = settings.web_user;
-  //resp["mail"]["web_pass"] = settings.web_pass;
+  resp["web"]["user"] = settings.web_user;
+  //resp["web"]["pass"] = settings.web_pass;
 
   char buf[2048];
   serializeJson(resp, buf);
@@ -752,7 +755,7 @@ void send_email_alert(uint8_t alert_type) {  //fuck this enum shit
       {
         msg.subject = "[WT] ACHTUNG: Wassertank Leer!";
         msg_body_file = SPIFFS.open("/mail/de_alert_wtr.html", "r");
-        while (msg_body_file.available()) msg.message += msg_body_file.read();
+        while (msg_body_file.available()) msg.message += (char)msg_body_file.read();
         msg_body_file.close();
       }
       break;
@@ -760,7 +763,7 @@ void send_email_alert(uint8_t alert_type) {  //fuck this enum shit
       {
         msg.subject = "[WT] ACHTUNG: Batterie Leer!";
         msg_body_file = SPIFFS.open("/mail/de_alert_bat.html", "r");
-        while (msg_body_file.available()) msg.message += msg_body_file.read();
+        while (msg_body_file.available()) msg.message += (char)msg_body_file.read();
         msg_body_file.close();
         msg.message += last_wt_battery_voltage;
         msg.message += 'V';
@@ -770,7 +773,7 @@ void send_email_alert(uint8_t alert_type) {  //fuck this enum shit
       {  //not yet used
         msg.subject = "[WT] INFO: Funkstille.";
         msg_body_file = SPIFFS.open("/mail/de_alert_nc.html", "r");
-        while (msg_body_file.available()) msg.message += msg_body_file.read();
+        while (msg_body_file.available()) msg.message += (char)msg_body_file.read();
         msg_body_file.close();
       }
       break;
@@ -778,13 +781,16 @@ void send_email_alert(uint8_t alert_type) {  //fuck this enum shit
       {
         msg.subject = "[WT] ACHTUNG: Systemfehler!";
         msg_body_file = SPIFFS.open("/mail/de_alert_gen.html", "r");
-        while (msg_body_file.available()) msg.message += msg_body_file.read();
+        while (msg_body_file.available()) msg.message += (char)msg_body_file.read();
         msg_body_file.close();
+
+        msg.message += "<ul>";
         //                     XXXXTMU
-        if (last_wt_status & 0b00001000) msg.message += " * Tanksensorwerte Unsinnig!";
-        if (last_wt_status & 0b00000100) msg.message += " * RTC fehlt.";
-        if (last_wt_status & 0b00000010) msg.message += " * RTC nicht eingestellt.";
-        if (last_wt_status & 0b00000010) msg.message += " * Pumpen Timeout!";
+        if (last_wt_status & 0b00001000) msg.message += "<li>Tanksensorwerte Unsinnig!</li>";
+        if (last_wt_status & 0b00000100) msg.message += "<li>RTC fehlt.</li>";
+        if (last_wt_status & 0b00000010) msg.message += "<li>RTC nicht eingestellt.</li>";
+        if (last_wt_status & 0b00000001) msg.message += "<li>Pumpen Timeout!</li>";
+        msg.message += "</ul>";
       }
       break;
   }
