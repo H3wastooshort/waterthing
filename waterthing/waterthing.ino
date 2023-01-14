@@ -57,7 +57,7 @@
 #define LORA_RETRANSMIT_TIME 5000  //time between retransmit attempts in ms
 #define LORA_RETRANSMIT_TRIES 5
 #define LORA_MAGIC 42
-#define LORA_TX_INTERVAL 300000  //time between beacon broadcasts in ms
+#define LORA_TX_INTERVAL 1800000  //time between beacon broadcasts in ms (30min)
 #define LORA_MAX_AIRTIME 340     //in seconds
 
 //library stuff
