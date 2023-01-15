@@ -1360,9 +1360,9 @@ void handle_lora() {
                 last_wt_battery_voltage = (double)bat_v / 100;
                 last_wt_status_timestamp = last_wt_battery_voltage_timestamp = current_timestamp;
 
-                if ((last_wt_status >> 4) && 0b0111) send_email_alert(MAIL_ALERT_GENERAL);
-                else if ((last_wt_status >> 4) && 0b0100) send_email_alert(MAIL_ALERT_WATER);
-                else if ((last_wt_status >> 4) && 0b0101) send_email_alert(MAIL_ALERT_BATTERY);
+                if ((last_wt_status >> 4) == 7) send_email_alert(MAIL_ALERT_GENERAL);
+                else if ((last_wt_status >> 4) == 4) send_email_alert(MAIL_ALERT_WATER);
+                else if ((last_wt_status >> 4) == 5) send_email_alert(MAIL_ALERT_BATTERY);
                 else last_mail_alert = MAIL_ALERT_NONE;
               }
               break;
