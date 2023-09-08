@@ -1,6 +1,20 @@
 # waterthing
- Wierd Garden Watering system
- 
+Wierd Garden Watering system
+
+# very bad build guide
+## controller
+1. 3d print the case parts for the controller or come up with your own
+2. put the parts in position and hotglue and screw them down
+3. connect the components according to the schematic. the schematic is not the definitive way to do it though but rather a reflection of the current state of my build.
+   the LoRa and LED module are optional.
+4. upload the sketch and check if everything powers up and works
+5. go mad because you cant find *tht one error*
+##gateway
+1. (optional) print case and attach ESP32 LoRa Board 
+2. connect antenna
+3. upload sketch
+4. connect to config AP and input WiFi credentials
+
 # all shit blow this is outdated, just ignore it i will fix it some day....
 
 ## pump concept
